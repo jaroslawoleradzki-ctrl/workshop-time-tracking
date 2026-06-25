@@ -596,7 +596,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                   setValidationError('');
                 }}
               >
-                {workTypes.map(t => (
+                {Array.isArray(workTypes) && workTypes.map(t => (
                   <option key={t.code} value={t.code}>
                     {t.code} - {t.name}
                   </option>
@@ -742,7 +742,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {dayEntries.map(entry => (
+                  {Array.isArray(dayEntries) && dayEntries.map(entry => (
                     <tr key={entry.id} style={{ 
                       backgroundColor: editingReportId === entry.id ? 'var(--primary-glow)' : 'transparent' 
                     }}>

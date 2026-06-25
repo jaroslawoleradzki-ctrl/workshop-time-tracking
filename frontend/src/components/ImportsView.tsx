@@ -283,7 +283,7 @@ export default function ImportsView({ token }: ImportsViewProps) {
                 <div style={{ color: 'var(--danger-color)' }}>Błędne (pominięte): <strong>{uploadResult.errorRows}</strong></div>
               </div>
 
-              {uploadResult.errorsLog && uploadResult.errorsLog.length > 0 && (
+              {uploadResult.errorsLog && Array.isArray(uploadResult.errorsLog) && uploadResult.errorsLog.length > 0 && (
                 <div style={{ marginTop: '0.75rem' }}>
                   <div style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Log błędów wierszy:</div>
                   <div style={{ 
@@ -319,13 +319,13 @@ export default function ImportsView({ token }: ImportsViewProps) {
 
           {loadingHistory ? (
             <div style={{ padding: '2rem 0', textAlign: 'center' }}>Ładowanie logów...</div>
-          ) : importHistory.length === 0 ? (
+          ) : (Array.isArray(importHistory) ? importHistory : []).length === 0 ? (
             <div style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--text-muted)' }}>
               Brak historii importu danych.
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '420px', overflowY: 'auto', paddingRight: '0.25rem' }}>
-              {importHistory.map(log => {
+              {Array.isArray(importHistory) && importHistory.map(log => {
                 const badgeClass = log.status === 'success' ? 'badge-open' : log.status === 'partial' ? 'badge-suspended' : 'badge-closed';
                 const typeLabel = log.importType === 'employees' ? 'Pracownicy' : 'Zlecenia';
                 return (
@@ -348,9 +348,9 @@ export default function ImportsView({ token }: ImportsViewProps) {
                       <div>Data: <strong>{new Date(log.createdAt).toLocaleString('pl-PL')}</strong></div>
                     </div>
                     
-                    {log.errorsLog && (log.errorsLog as string[]).length > 0 && (
+                    {Array.isArray(log.errorsLog) && log.errorsLog.length > 0 && (
                       <details style={{ marginTop: '0.5rem', cursor: 'pointer' }}>
-                        <summary style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--danger-color)' }}>Pokaż błędy ({ (log.errorsLog as string[]).length })</summary>
+                        <summary style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--danger-color)' }}>Pokaż błędy ({ log.errorsLog.length })</summary>
                         <div style={{ 
                           fontSize: '0.75rem', 
                           backgroundColor: 'var(--bg-secondary)', 
@@ -361,7 +361,7 @@ export default function ImportsView({ token }: ImportsViewProps) {
                           maxHeight: '80px',
                           overflowY: 'auto'
                         }}>
-                          { (log.errorsLog as string[]).map((err, i) => <div key={i} style={{ color: 'var(--danger-color)' }}>{err}</div>) }
+                          { log.errorsLog.map((err, i) => <div key={i} style={{ color: 'var(--danger-color)' }}>{err}</div>) }
                         </div>
                       </details>
                     )}

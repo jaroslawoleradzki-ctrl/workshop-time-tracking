@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import packageJson from '../package.json';
 import { 
   BarChart3, 
   Clock, 
@@ -31,6 +32,20 @@ export interface UserSession {
   fullName: string;
 }
 
+// Intercept all fetch requests globally to handle 401/403 errors
+const originalFetch = window.fetch;
+window.fetch = async (...args) => {
+  const response = await originalFetch(...args);
+  if (response.status === 401 || response.status === 403) {
+    const url = typeof args[0] === 'string' ? args[0] : (args[0] as any).url;
+    if (url && !url.includes('/api/auth/login')) {
+      const event = new CustomEvent('auth-error', { detail: { status: response.status } });
+      window.dispatchEvent(event);
+    }
+  }
+  return response;
+};
+
 function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [user, setUser] = useState<UserSession | null>(
@@ -46,6 +61,22 @@ function App() {
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  // Listen for global auth errors (401/403)
+  useEffect(() => {
+    const handleAuthError = () => {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('user');
+      setToken(null);
+      setUser(null);
+      setLoginError('Sesja wygasła, zaloguj się ponownie');
+    };
+
+    window.addEventListener('auth-error', handleAuthError);
+    return () => window.removeEventListener('auth-error', handleAuthError);
+  }, []);
 
   // Sync theme with body data-theme attribute
   useEffect(() => {
@@ -110,6 +141,8 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
     setToken(null);
     setUser(null);
   };
@@ -119,8 +152,8 @@ function App() {
     return (
       <div className="modal-overlay" style={{ background: 'var(--bg-primary)' }}>
         <div className="modal-content" style={{ maxWidth: '400px', padding: '2.5rem' }}>
-          <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
-            <span style={{ fontSize: '3rem' }}>⚙️</span>
+          <div style={{ textAlign: 'center', marginBottom: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <img src="/pv-logo.png" alt="P.V. Logo" className="login-logo" />
             <h1 style={{ marginTop: '0.5rem', fontFamily: 'var(--font-header)', fontWeight: 800 }}>
               WARSZTAT
             </h1>
@@ -166,10 +199,13 @@ function App() {
             </button>
           </form>
 
-          <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', marginTop: '1.25rem' }}>
             <button className="theme-toggle" onClick={toggleTheme}>
               {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
             </button>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              Wersja v{packageJson.version}
+            </span>
           </div>
         </div>
       </div>
@@ -218,7 +254,7 @@ function App() {
       {/* Top Navbar */}
       <header className="navbar">
         <div className="navbar-brand">
-          <span className="brand-logo">⚙️</span>
+          <img src="/pv-logo.png" alt="P.V. Logo" className="brand-logo" />
           <span className="brand-title">WARSZTAT</span>
         </div>
 
@@ -261,7 +297,7 @@ function App() {
             ))}
           </nav>
           <div style={{ marginTop: 'auto', fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-            System Ewidencji Czasu Pracy v1.0
+            System Ewidencji Czasu Pracy v{packageJson.version}
           </div>
         </aside>
 

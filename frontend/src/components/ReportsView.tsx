@@ -66,6 +66,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
   }, [activeReportTab, dateFrom, dateTo, filterEmployeeId, filterOrderId, filterOrderNum, filterStatus, filterAccount]);
 
   const fetchReportData = async () => {
+    setReportData([]); // Clear previous data to prevent rendering crashes
     setLoading(true);
     try {
       const headers = { 'Authorization': `Bearer ${token}` };
@@ -99,9 +100,10 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
       const res = await fetch(`${url}?${params.toString()}`, { headers });
       if (!res.ok) throw new Error();
       const data = await res.json();
-      setReportData(data);
+      setReportData(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Błąd wczytywania raportu:', err);
+      setReportData([]);
     } finally {
       setLoading(false);
     }
@@ -166,12 +168,13 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
     let headers: string[] = [];
     let rows: any[][] = [];
     let filename = '';
+    const safeReportData = Array.isArray(reportData) ? reportData : [];
 
     switch (activeReportTab) {
       case 'by-order':
         filename = 'Raport_godzin_wg_zlecen.csv';
         headers = ['Numer zlecenia', 'Nazwa produktu', 'Numer produktu', 'Estymata (h)', 'Rzeczywiste (h)', 'Odchylenie (h)', 'Wykorzystanie (%)', 'Status'];
-        rows = reportData.map(o => [
+        rows = safeReportData.map(o => [
           o.orderNumber,
           o.productName,
           o.productNumber,
@@ -185,17 +188,17 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
       case 'by-employee':
         filename = 'Raport_miesieczny_pracownicy.csv';
         headers = ['Pracownik', 'G', 'NDR', 'NS', 'UW', 'UOK', 'UŻ', 'L4', 'Suma'];
-        rows = reportData.map(r => [r.employeeName, r.G, r.NDR, r.NS, r.UW, r.UOK, r.UŻ, r.L4, r.suma]);
+        rows = safeReportData.map(r => [r.employeeName, r.G, r.NDR, r.NS, r.UW, r.UOK, r.UŻ, r.L4, r.suma]);
         break;
       case 'by-account':
         filename = 'Raport_kont_ksiegowych.csv';
         headers = ['Data', 'Konto księgowe', 'Pracownik', 'Zlecenie', 'Produkt', 'Godziny', 'Kod czasu'];
-        rows = reportData.map(r => [r.date, r.accountingAccount, r.employeeName, r.orderNumber, r.productName, r.hours, r.workTimeTypeCode]);
+        rows = safeReportData.map(r => [r.date, r.accountingAccount, r.employeeName, r.orderNumber, r.productName, r.hours, r.workTimeTypeCode]);
         break;
       case 'detailed':
         filename = 'Raport_szczegolowy_czasu_pracy.csv';
         headers = ['Data', 'Pracownik', 'Zlecenie', 'Numer produktu', 'Nazwa produktu', 'Konto księgowe', 'Godziny', 'Typ czasu', 'Wprowadził', 'Data wpisu'];
-        rows = reportData.map(r => [r.date, r.employeeName, r.orderNumber, r.productNumber, r.productName, r.accountingAccount, r.hours, r.workTimeTypeCode, r.creatorName, r.createdAt]);
+        rows = safeReportData.map(r => [r.date, r.employeeName, r.orderNumber, r.productNumber, r.productName, r.accountingAccount, r.hours, r.workTimeTypeCode, r.creatorName, r.createdAt]);
         break;
     }
 
@@ -425,7 +428,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {reportData.map((row, idx) => {
+                  {Array.isArray(reportData) && reportData.map((row, idx) => {
                     const devVal = row.deviation;
                     const devStyle = devVal < 0 ? { color: 'var(--danger-color)', fontWeight: 600 } : { color: 'var(--success-color)' };
                     const useVal = row.percent;
@@ -438,9 +441,9 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                         <td style={{ fontWeight: 'bold' }}>{row.orderNumber}</td>
                         <td>{row.productName}</td>
                         <td><code>{row.productNumber}</code></td>
-                        <td style={{ textAlign: 'right' }}>{row.estimatedHours.toFixed(1)} h</td>
-                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{row.actualHours.toFixed(1)} h</td>
-                        <td style={{ textAlign: 'right', ...devStyle }}>{devVal.toFixed(1)} h</td>
+                        <td style={{ textAlign: 'right' }}>{(Number(row.estimatedHours) || 0).toFixed(1)} h</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{(Number(row.actualHours) || 0).toFixed(1)} h</td>
+                        <td style={{ textAlign: 'right', ...devStyle }}>{(Number(devVal) || 0).toFixed(1)} h</td>
                         <td style={{ textAlign: 'right' }}>
                           <span className={`badge ${useBadge}`}>{Math.round(useVal)}%</span>
                         </td>
@@ -474,18 +477,18 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {reportData.map((row, idx) => (
+                  {Array.isArray(reportData) && reportData.map((row, idx) => (
                     <tr key={idx}>
                       <td style={{ fontWeight: 'bold' }}>{row.employeeName}</td>
-                      <td style={{ textAlign: 'right' }}>{row.G.toFixed(1)} h</td>
-                      <td style={{ textAlign: 'right' }}>{row.NDR.toFixed(1)} h</td>
-                      <td style={{ textAlign: 'right' }}>{row.NS.toFixed(1)} h</td>
-                      <td style={{ textAlign: 'right' }}>{row.UW.toFixed(1)} h</td>
-                      <td style={{ textAlign: 'right' }}>{row.UOK.toFixed(1)} h</td>
-                      <td style={{ textAlign: 'right' }}>{row.UŻ.toFixed(1)} h</td>
-                      <td style={{ textAlign: 'right' }}>{row.L4.toFixed(1)} h</td>
+                      <td style={{ textAlign: 'right' }}>{(Number(row.G) || 0).toFixed(1)} h</td>
+                      <td style={{ textAlign: 'right' }}>{(Number(row.NDR) || 0).toFixed(1)} h</td>
+                      <td style={{ textAlign: 'right' }}>{(Number(row.NS) || 0).toFixed(1)} h</td>
+                      <td style={{ textAlign: 'right' }}>{(Number(row.UW) || 0).toFixed(1)} h</td>
+                      <td style={{ textAlign: 'right' }}>{(Number(row.UOK) || 0).toFixed(1)} h</td>
+                      <td style={{ textAlign: 'right' }}>{(Number(row.UŻ) || 0).toFixed(1)} h</td>
+                      <td style={{ textAlign: 'right' }}>{(Number(row.L4) || 0).toFixed(1)} h</td>
                       <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--primary-color)' }}>
-                        {row.suma.toFixed(1)} h
+                        {(Number(row.suma) || 0).toFixed(1)} h
                       </td>
                     </tr>
                   ))}
@@ -509,14 +512,14 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {reportData.map((row, idx) => (
+                  {Array.isArray(reportData) && reportData.map((row, idx) => (
                     <tr key={idx}>
                       <td>{row.date}</td>
                       <td><code>{row.accountingAccount}</code></td>
                       <td style={{ fontWeight: 600 }}>{row.employeeName}</td>
                       <td style={{ fontWeight: 'bold' }}>{row.orderNumber}</td>
                       <td>{row.productName}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{row.hours.toFixed(1)} h</td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{(Number(row.hours) || 0).toFixed(1)} h</td>
                       <td>
                         <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>{row.workTimeTypeCode}</span>
                       </td>
@@ -544,7 +547,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {reportData.map((row) => (
+                  {Array.isArray(reportData) && reportData.map((row) => (
                     <tr key={row.id}>
                       <td style={{ whiteSpace: 'nowrap' }}>{row.date}</td>
                       <td style={{ fontWeight: 600 }}>{row.employeeName}</td>
@@ -561,7 +564,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                         )}
                       </td>
                       <td><code>{row.accountingAccount}</code></td>
-                      <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '0.95rem' }}>{row.hours.toFixed(1)} h</td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '0.95rem' }}>{(Number(row.hours) || 0).toFixed(1)} h</td>
                       <td>
                         <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>{row.workTimeTypeCode}</span>
                       </td>
