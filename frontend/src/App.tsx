@@ -152,8 +152,8 @@ function App() {
     return (
       <div className="modal-overlay" style={{ background: 'var(--bg-primary)' }}>
         <div className="modal-content" style={{ maxWidth: '400px', padding: '2.5rem' }}>
-          <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
-            <span style={{ fontSize: '3rem' }}>⚙️</span>
+          <div style={{ textAlign: 'center', marginBottom: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <img src="/pv-logo.png" alt="P.V. Logo" className="login-logo" />
             <h1 style={{ marginTop: '0.5rem', fontFamily: 'var(--font-header)', fontWeight: 800 }}>
               WARSZTAT
             </h1>
@@ -254,7 +254,7 @@ function App() {
       {/* Top Navbar */}
       <header className="navbar">
         <div className="navbar-brand">
-          <span className="brand-logo">⚙️</span>
+          <img src="/pv-logo.png" alt="P.V. Logo" className="brand-logo" />
           <span className="brand-title">WARSZTAT</span>
         </div>
 
