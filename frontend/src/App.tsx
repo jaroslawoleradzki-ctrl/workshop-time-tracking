@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import packageJson from '../package.json';
 import { 
   BarChart3, 
   Clock, 
@@ -198,10 +199,13 @@ function App() {
             </button>
           </form>
 
-          <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', marginTop: '1.25rem' }}>
             <button className="theme-toggle" onClick={toggleTheme}>
               {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
             </button>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              Wersja v{packageJson.version}
+            </span>
           </div>
         </div>
       </div>
@@ -293,7 +297,7 @@ function App() {
             ))}
           </nav>
           <div style={{ marginTop: 'auto', fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-            System Ewidencji Czasu Pracy v1.0
+            System Ewidencji Czasu Pracy v{packageJson.version}
           </div>
         </aside>
 
