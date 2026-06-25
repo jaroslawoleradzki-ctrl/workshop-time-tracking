@@ -31,6 +31,20 @@ export interface UserSession {
   fullName: string;
 }
 
+// Intercept all fetch requests globally to handle 401/403 errors
+const originalFetch = window.fetch;
+window.fetch = async (...args) => {
+  const response = await originalFetch(...args);
+  if (response.status === 401 || response.status === 403) {
+    const url = typeof args[0] === 'string' ? args[0] : (args[0] as any).url;
+    if (url && !url.includes('/api/auth/login')) {
+      const event = new CustomEvent('auth-error', { detail: { status: response.status } });
+      window.dispatchEvent(event);
+    }
+  }
+  return response;
+};
+
 function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [user, setUser] = useState<UserSession | null>(
@@ -46,6 +60,22 @@ function App() {
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  // Listen for global auth errors (401/403)
+  useEffect(() => {
+    const handleAuthError = () => {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('user');
+      setToken(null);
+      setUser(null);
+      setLoginError('Sesja wygasła, zaloguj się ponownie');
+    };
+
+    window.addEventListener('auth-error', handleAuthError);
+    return () => window.removeEventListener('auth-error', handleAuthError);
+  }, []);
 
   // Sync theme with body data-theme attribute
   useEffect(() => {
@@ -110,6 +140,8 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
     setToken(null);
     setUser(null);
   };

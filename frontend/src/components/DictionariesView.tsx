@@ -177,7 +177,7 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
               </div>
 
               {/* requiresOrder is locked for system codes to prevent workflow breaking */}
-              {(!editingCode || !types.find(t => t.code === editingCode)?.isSystem) ? (
+              {(!editingCode || !(Array.isArray(types) ? types : []).find(t => t.code === editingCode)?.isSystem) ? (
                 <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
                   <input
                     type="checkbox"

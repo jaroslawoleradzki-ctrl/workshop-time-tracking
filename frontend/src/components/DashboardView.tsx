@@ -132,7 +132,7 @@ export default function DashboardView({ token }: DashboardViewProps) {
             <Flame size={20} />
             Zlecenia przekraczające budżet (&gt;100%)
           </h3>
-          {stats.ordersExceeding.length === 0 ? (
+          {(Array.isArray(stats?.ordersExceeding) ? stats.ordersExceeding : []).length === 0 ? (
             <p style={{ color: 'var(--text-secondary)', padding: '1rem 0' }}>
               Brak zleceń przekraczających budżet. Wszystko w normie.
             </p>
@@ -149,7 +149,7 @@ export default function DashboardView({ token }: DashboardViewProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {stats.ordersExceeding.map(order => (
+                  {Array.isArray(stats?.ordersExceeding) && stats.ordersExceeding.map(order => (
                     <tr key={order.id}>
                       <td style={{ fontWeight: 'bold' }}>{order.orderNumber}</td>
                       <td style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -176,7 +176,7 @@ export default function DashboardView({ token }: DashboardViewProps) {
             <AlertTriangle size={20} />
             Zlecenia blisko przekroczenia (80% - 100%)
           </h3>
-          {stats.ordersApproaching.length === 0 ? (
+          {(Array.isArray(stats?.ordersApproaching) ? stats.ordersApproaching : []).length === 0 ? (
             <p style={{ color: 'var(--text-secondary)', padding: '1rem 0' }}>
               Brak zleceń w strefie ostrzegawczej.
             </p>
@@ -193,7 +193,7 @@ export default function DashboardView({ token }: DashboardViewProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {stats.ordersApproaching.map(order => (
+                  {Array.isArray(stats?.ordersApproaching) && stats.ordersApproaching.map(order => (
                     <tr key={order.id}>
                       <td style={{ fontWeight: 'bold' }}>{order.orderNumber}</td>
                       <td style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -233,7 +233,7 @@ export default function DashboardView({ token }: DashboardViewProps) {
           Legenda kolorystyczna postępu: <span style={{ color: 'var(--success-color)', fontWeight: 600 }}>Zielony (0-80%)</span> | <span style={{ color: 'var(--warning-color)', fontWeight: 600 }}>Żółty (80-100%)</span> | <span style={{ color: 'var(--danger-color)', fontWeight: 600 }}>Czerwony (powyżej 100%)</span>.
         </p>
 
-        {stats.ordersExceeding.length === 0 && stats.ordersApproaching.length === 0 ? (
+        {((Array.isArray(stats?.ordersExceeding) ? stats.ordersExceeding : []).length === 0 && (Array.isArray(stats?.ordersApproaching) ? stats.ordersApproaching : []).length === 0) ? (
           <p style={{ color: 'var(--text-secondary)' }}>
             Wszystkie zlecenia są w bezpiecznych zakresach budżetowych.
           </p>
@@ -250,7 +250,10 @@ export default function DashboardView({ token }: DashboardViewProps) {
                 </tr>
               </thead>
               <tbody>
-                {[...stats.ordersExceeding, ...stats.ordersApproaching].map(order => {
+                {[
+                  ...(Array.isArray(stats?.ordersExceeding) ? stats.ordersExceeding : []),
+                  ...(Array.isArray(stats?.ordersApproaching) ? stats.ordersApproaching : [])
+                ].map(order => {
                   const percentVal = order.percent;
                   const colorClass = percentVal > 100 ? 'red' : percentVal >= 80 ? 'yellow' : 'green';
                   return (

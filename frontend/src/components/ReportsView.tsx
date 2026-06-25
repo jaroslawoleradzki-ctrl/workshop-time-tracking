@@ -166,12 +166,13 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
     let headers: string[] = [];
     let rows: any[][] = [];
     let filename = '';
+    const safeReportData = Array.isArray(reportData) ? reportData : [];
 
     switch (activeReportTab) {
       case 'by-order':
         filename = 'Raport_godzin_wg_zlecen.csv';
         headers = ['Numer zlecenia', 'Nazwa produktu', 'Numer produktu', 'Estymata (h)', 'Rzeczywiste (h)', 'Odchylenie (h)', 'Wykorzystanie (%)', 'Status'];
-        rows = reportData.map(o => [
+        rows = safeReportData.map(o => [
           o.orderNumber,
           o.productName,
           o.productNumber,
@@ -185,17 +186,17 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
       case 'by-employee':
         filename = 'Raport_miesieczny_pracownicy.csv';
         headers = ['Pracownik', 'G', 'NDR', 'NS', 'UW', 'UOK', 'UŻ', 'L4', 'Suma'];
-        rows = reportData.map(r => [r.employeeName, r.G, r.NDR, r.NS, r.UW, r.UOK, r.UŻ, r.L4, r.suma]);
+        rows = safeReportData.map(r => [r.employeeName, r.G, r.NDR, r.NS, r.UW, r.UOK, r.UŻ, r.L4, r.suma]);
         break;
       case 'by-account':
         filename = 'Raport_kont_ksiegowych.csv';
         headers = ['Data', 'Konto księgowe', 'Pracownik', 'Zlecenie', 'Produkt', 'Godziny', 'Kod czasu'];
-        rows = reportData.map(r => [r.date, r.accountingAccount, r.employeeName, r.orderNumber, r.productName, r.hours, r.workTimeTypeCode]);
+        rows = safeReportData.map(r => [r.date, r.accountingAccount, r.employeeName, r.orderNumber, r.productName, r.hours, r.workTimeTypeCode]);
         break;
       case 'detailed':
         filename = 'Raport_szczegolowy_czasu_pracy.csv';
         headers = ['Data', 'Pracownik', 'Zlecenie', 'Numer produktu', 'Nazwa produktu', 'Konto księgowe', 'Godziny', 'Typ czasu', 'Wprowadził', 'Data wpisu'];
-        rows = reportData.map(r => [r.date, r.employeeName, r.orderNumber, r.productNumber, r.productName, r.accountingAccount, r.hours, r.workTimeTypeCode, r.creatorName, r.createdAt]);
+        rows = safeReportData.map(r => [r.date, r.employeeName, r.orderNumber, r.productNumber, r.productName, r.accountingAccount, r.hours, r.workTimeTypeCode, r.creatorName, r.createdAt]);
         break;
     }
 
