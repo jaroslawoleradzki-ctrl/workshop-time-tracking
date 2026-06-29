@@ -117,20 +117,44 @@ router.post('/employees', upload.single('file'), async (req: AuthRequest, res: R
       const rowNum = idx + 2; // Excel row number (1-based index, plus header)
       const row = rawData[idx];
 
-      const fullName = row['Imię i nazwisko'] || row['fullName'] || row['Name'];
+      const rawFullName = row['Imię i nazwisko'] || row['fullName'] || row['Name'];
+      const rawFirstName = row['Imię'] || row['firstName'] || row['First Name'];
+      const rawLastName = row['Nazwisko'] || row['lastName'] || row['Last Name'];
+      const rawEmployeeNumber = row['Identyfikator'] || row['ID'] || row['employeeNumber'] || row['externalId'];
 
-      if (!fullName || typeof fullName !== 'string' || fullName.trim() === '') {
-        errorRows++;
-        errorsLog.push(`Wiersz ${rowNum}: Brak kolumny 'Imię i nazwisko' lub pusta wartość.`);
-        continue;
+      let firstName = rawFirstName ? String(rawFirstName).trim() : null;
+      let lastName = rawLastName ? String(rawLastName).trim() : null;
+      let employeeNumber = rawEmployeeNumber ? String(rawEmployeeNumber).trim() : null;
+      let fullName = rawFullName ? String(rawFullName).trim() : null;
+
+      if (firstName && lastName) {
+        fullName = `${firstName} ${lastName}`;
+      } else if (fullName) {
+        const lastSpaceIdx = fullName.lastIndexOf(' ');
+        if (lastSpaceIdx > 0) {
+          firstName = fullName.substring(0, lastSpaceIdx).trim();
+          lastName = fullName.substring(lastSpaceIdx + 1).trim();
+        } else {
+          lastName = fullName;
+          firstName = null;
+        }
       }
 
-      const cleanName = fullName.trim();
+      if (!fullName) {
+        errorRows++;
+        errorsLog.push(`Wiersz ${rowNum}: Brak kolumny z nazwą pracownika (wymagane 'Imię i nazwisko' lub 'Imię' i 'Nazwisko').`);
+        continue;
+      }
 
       try {
         // Find if employee already exists (active or soft deleted)
         const existing = await prisma.employee.findFirst({
-          where: { fullName: cleanName },
+          where: {
+            OR: [
+              ...(employeeNumber ? [{ employeeNumber }] : []),
+              { fullName }
+            ]
+          },
         });
 
         if (existing) {
@@ -140,6 +164,10 @@ router.post('/employees', upload.single('file'), async (req: AuthRequest, res: R
             data: {
               isActive: true,
               deletedAt: null, // Clear soft delete
+              fullName: fullName || undefined,
+              firstName: firstName || undefined,
+              lastName: lastName || undefined,
+              employeeNumber: employeeNumber || undefined,
             },
           });
 
@@ -155,7 +183,10 @@ router.post('/employees', upload.single('file'), async (req: AuthRequest, res: R
           // Create new
           const created = await prisma.employee.create({
             data: {
-              fullName: cleanName,
+              fullName,
+              firstName: firstName || null,
+              lastName: lastName || null,
+              employeeNumber: employeeNumber || null,
               isActive: true,
             },
           });

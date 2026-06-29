@@ -13,6 +13,9 @@ import {
 interface Employee {
   id: string;
   fullName: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  employeeNumber?: string | null;
   isActive: boolean;
   createdAt: string;
 }
@@ -30,7 +33,9 @@ export default function EmployeesView({ token }: EmployeesViewProps) {
   // Form states
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
-  const [fullName, setFullName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [employeeNumber, setEmployeeNumber] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [formValidationError, setFormValidationError] = useState('');
 
@@ -43,7 +48,10 @@ export default function EmployeesView({ token }: EmployeesViewProps) {
       const res = await fetch('/api/employees', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (!res.ok) throw new Error('Nie udało się pobrać listy pracowników');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || 'Nie udało się pobrać listy pracowników');
+      }
       const data = await res.json();
       setEmployees(data);
     } catch (err: any) {
@@ -55,7 +63,9 @@ export default function EmployeesView({ token }: EmployeesViewProps) {
 
   const handleOpenCreateModal = () => {
     setEditingEmployeeId(null);
-    setFullName('');
+    setFirstName('');
+    setLastName('');
+    setEmployeeNumber('');
     setIsActive(true);
     setFormValidationError('');
     setShowFormModal(true);
@@ -63,9 +73,27 @@ export default function EmployeesView({ token }: EmployeesViewProps) {
 
   const handleOpenEditModal = (emp: Employee) => {
     setEditingEmployeeId(emp.id);
-    setFullName(emp.fullName);
+    setEmployeeNumber(emp.employeeNumber || '');
     setIsActive(emp.isActive);
     setFormValidationError('');
+
+    let derivedFirstName = emp.firstName || '';
+    let derivedLastName = emp.lastName || '';
+
+    if (!derivedFirstName && !derivedLastName && emp.fullName) {
+      const cleanFullName = emp.fullName.trim();
+      const lastSpaceIdx = cleanFullName.lastIndexOf(' ');
+      if (lastSpaceIdx > 0) {
+        derivedFirstName = cleanFullName.substring(0, lastSpaceIdx).trim();
+        derivedLastName = cleanFullName.substring(lastSpaceIdx + 1).trim();
+      } else {
+        derivedFirstName = '';
+        derivedLastName = cleanFullName;
+      }
+    }
+
+    setFirstName(derivedFirstName);
+    setLastName(derivedLastName);
     setShowFormModal(true);
   };
 
@@ -73,8 +101,8 @@ export default function EmployeesView({ token }: EmployeesViewProps) {
     e.preventDefault();
     setFormValidationError('');
 
-    if (!fullName) {
-      setFormValidationError('Imię i nazwisko jest wymagane.');
+    if (!firstName || !lastName) {
+      setFormValidationError('Imię i nazwisko są wymagane.');
       return;
     }
 
@@ -89,15 +117,18 @@ export default function EmployeesView({ token }: EmployeesViewProps) {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          fullName: fullName.trim(),
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          employeeNumber: employeeNumber.trim() || null,
           isActive
         })
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        throw new Error(data.message || 'Błąd zapisu danych pracownika');
+        setFormValidationError(data.message || 'Unknown API error');
+        return;
       }
 
       setShowFormModal(false);
@@ -115,16 +146,24 @@ export default function EmployeesView({ token }: EmployeesViewProps) {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || 'Nie udało się usunąć pracownika.');
+      }
       fetchEmployees();
-    } catch (err) {
-      alert('Nie udało się usunąć pracownika.');
+    } catch (err: any) {
+      alert(err.message || 'Nie udało się usunąć pracownika.');
     }
   };
 
-  const filteredEmployees = employees.filter(e => 
-    e.fullName.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredEmployees = employees.filter(e => {
+    const query = searchQuery.toLowerCase();
+    const nameMatch = e.fullName.toLowerCase().includes(query);
+    const idMatch = e.employeeNumber && e.employeeNumber.toLowerCase().includes(query);
+    const firstMatch = e.firstName && e.firstName.toLowerCase().includes(query);
+    const lastMatch = e.lastName && e.lastName.toLowerCase().includes(query);
+    return nameMatch || idMatch || firstMatch || lastMatch;
+  });
 
   return (
     <div>
@@ -149,14 +188,37 @@ export default function EmployeesView({ token }: EmployeesViewProps) {
               )}
 
               <div className="form-group">
-                <label className="form-label">Imię i nazwisko pracownika</label>
+                <label className="form-label">Identyfikator (ID) pracownika</label>
                 <input
                   type="text"
                   className="form-control"
-                  placeholder="np. Nowak Jan"
-                  value={fullName}
-                  onChange={e => setFullName(e.target.value)}
-                  autoFocus
+                  placeholder="np. 12345 (opcjonalnie)"
+                  value={employeeNumber}
+                  onChange={e => setEmployeeNumber(e.target.value)}
+                  autoFocus={!editingEmployeeId}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Imię</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="np. Jan"
+                  value={firstName}
+                  onChange={e => setFirstName(e.target.value)}
+                  autoFocus={!!editingEmployeeId}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Nazwisko</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="np. Nowak"
+                  value={lastName}
+                  onChange={e => setLastName(e.target.value)}
                 />
               </div>
 
@@ -230,29 +292,49 @@ export default function EmployeesView({ token }: EmployeesViewProps) {
             <thead>
               <tr>
                 <th>Status</th>
-                <th>Imię i nazwisko</th>
+                <th>ID</th>
+                <th>Imię</th>
+                <th>Nazwisko</th>
                 <th>Data utworzenia konta</th>
                 <th style={{ textAlign: 'center' }}>Akcje</th>
               </tr>
             </thead>
             <tbody>
-              {filteredEmployees.map(emp => (
-                <tr key={emp.id}>
-                  <td>
-                    {emp.isActive ? (
-                      <span className="badge badge-open" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                        <UserCheck size={12} />
-                        Aktywny
-                      </span>
-                    ) : (
-                      <span className="badge badge-suspended" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                        <UserMinus2 size={12} />
-                        Nieaktywny
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ fontWeight: 'bold', fontSize: '1rem' }}>{emp.fullName}</td>
-                  <td>{new Date(emp.createdAt).toLocaleDateString('pl-PL', { year: 'numeric', month: '2-digit', day: '2-digit' })}</td>
+              {filteredEmployees.map(emp => {
+                let displayFirstName = emp.firstName || '';
+                let displayLastName = emp.lastName || '';
+
+                if (!displayFirstName && !displayLastName && emp.fullName) {
+                  const cleanFullName = emp.fullName.trim();
+                  const lastSpaceIdx = cleanFullName.lastIndexOf(' ');
+                  if (lastSpaceIdx > 0) {
+                    displayFirstName = cleanFullName.substring(0, lastSpaceIdx).trim();
+                    displayLastName = cleanFullName.substring(lastSpaceIdx + 1).trim();
+                  } else {
+                    displayFirstName = '-';
+                    displayLastName = cleanFullName;
+                  }
+                }
+
+                return (
+                  <tr key={emp.id}>
+                    <td>
+                      {emp.isActive ? (
+                        <span className="badge badge-open" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <UserCheck size={12} />
+                          Aktywny
+                        </span>
+                      ) : (
+                        <span className="badge badge-suspended" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <UserMinus2 size={12} />
+                          Nieaktywny
+                        </span>
+                      )}
+                    </td>
+                    <td><code>{emp.employeeNumber || '-'}</code></td>
+                    <td style={{ fontWeight: 'bold' }}>{displayFirstName || '-'}</td>
+                    <td style={{ fontWeight: 'bold' }}>{displayLastName || '-'}</td>
+                    <td>{new Date(emp.createdAt).toLocaleDateString('pl-PL', { year: 'numeric', month: '2-digit', day: '2-digit' })}</td>
                   <td>
                     <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
                       <button 
@@ -273,7 +355,8 @@ export default function EmployeesView({ token }: EmployeesViewProps) {
                     </div>
                   </td>
                 </tr>
-              ))}
+              );
+            })}
             </tbody>
           </table>
         </div>
