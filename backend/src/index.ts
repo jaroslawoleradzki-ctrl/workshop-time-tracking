@@ -62,8 +62,9 @@ app.get('/api/health', async (req, res) => {
 // Version endpoint
 app.get('/api/version', (req, res) => {
   res.json({
-    name: packageJson.name,
-    version: packageJson.version,
+    name: 'workshop-time-tracking',
+    version: process.env.APP_VERSION || packageJson.version,
+    backendVersion: packageJson.version,
     environment: process.env.NODE_ENV || 'development'
   });
 });
