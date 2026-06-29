@@ -1,108 +1,34 @@
-# Project Development Policy (Zasady Pracy Nad Projektem)
+# Zasady prowadzenia projektu (AGENTS.md)
 
-Niniejszy plik definiuje stałe standardy deweloperskie i wytyczne architektoniczne dla projektu **workshop-time-tracking**. Każda sesja z agentem AI musi bezwzględnie przestrzegać poniższych reguł.
+Dokument ten opisuje stałe zasady deweloperskie oraz standardy pracy dla wszystkich deweloperów i agentów programistycznych pracujących przy projekcie **workshop-time-tracking**.
 
----
+## 1. Przepływ pracy Git (Git Workflow)
+* **Zawsze pracujemy na branchu `development`** – codzienne prace programistyczne i testowe odbywają się wyłącznie na tej gałęzi.
+* **Stabilne wersje produkcyjne (`main`)** – gałąź `main` zawiera wyłącznie stabilne wersje aplikacji przekazane i wdrożone u klienta.
 
-## 1. Wersjonowanie (Versioning)
+## 2. Cykl wprowadzania zmian (Scope Control)
+1. **Analiza i plan zmian** – przed modyfikacją kodu należy przeprowadzić analizę zadania, zlokalizować pliki i przedstawić plan do akceptacji.
+2. **Akceptacja użytkownika** – implementację można rozpocząć **dopiero po zatwierdzeniu** planu zmian przez użytkownika.
+3. **Praca po zakończeniu każdej większej funkcjonalności**:
+   - **Build**: Upewnij się, że zarówno backend (`npm run build`), jak i frontend (`npm run build`) kompilują się bez błędów.
+   - **Test**: Przeprowadź testy wdrożonych zmian w środowisku lokalnym.
+   - **Commit**: Zaproponuj commit (z podbiciem wersji SemVer w package.json) i zaczekaj na decyzję użytkownika (nie commituj automatycznie).
 
-Aplikacja stosuje wersjonowanie semantyczne (SemVer).
-* **Aktualny stan**: Aplikacja znajduje się w fazie ciągłego rozwoju (development).
-* **Blokada wersji produkcyjnej**: Wersja `1.0.0` lub wyższa **nie może** zostać użyta ani zadeklarowana bez wyraźnej zgody użytkownika.
+## 3. Zmiany w bazie danych (Database Migrations)
+* Każda zmiana modelu danych (Prisma) wymaga:
+  - utworzenia migracji,
+  - aktualizacji dokumentacji architektury (`docs/architecture.md`),
+  - wpisu w `CHANGELOG.md` w katalogu głównym.
 
-### Reguły aktualizacji wersji:
+## 4. Utrzymanie dokumentacji i Changelog
+* **Aktualizacja na bieżąco** – dokumentacja techniczna w katalogu `docs/` oraz w katalogu głównym musi być utrzymywana na bieżąco.
+* **Aktualny stan projektu** – dokumentacja musi odzwierciedlać wyłącznie aktualny stan projektu. Nie należy opisywać funkcjonalności, które nie zostały jeszcze zaimplementowane.
+* **Aktualizacja po zakończeniu sprintu** – po zakończeniu każdego etapu/sprintu należy zaktualizować odpowiednie pliki (np. `docs/roadmap.md`, `docs/architecture.md`).
+* **Keep a Changelog** – każda wersja wydana i przekazana klientowi musi zostać szczegółowo opisana w pliku `CHANGELOG.md` w katalogu głównym.
 
-* **PATCH (np. 0.1.2 → 0.1.3)**:
-  Stosuj do: poprawek błędów (bug fixes), łatek bezpieczeństwa, drobnych ulepszeń interfejsu (UI improvements), optymalizacji wydajności, refaktoryzacji, czyszczenia kodu oraz aktualizacji dokumentacji.
-* **MINOR (np. 0.1.3 → 0.2.0)**:
-  Stosuj do: nowych funkcjonalności, zmian w schemacie bazy danych, nowych raportów, nowych modułów, nowych endpointów API, nowych ekranów oraz integracji.
-* **MAJOR (np. 0.x.x → 1.0.0)**:
-  Wymaga bezwzględnej zgody użytkownika przed utworzeniem wersji `1.0.0` lub wyższej.
-
-### Procedura commitowania i podnoszenia wersji:
-1. Przed każdym commitem przeanalizuj wszystkie wprowadzone zmiany.
-2. Zdefiniuj i zaproponuj następną wersję (PATCH lub MINOR) wraz z uzasadnieniem.
-3. **Zatrzymaj się i poproś użytkownika o zatwierdzenie wersji.**
-4. Po uzyskaniu zgody zaktualizuj wersję automatycznie w `frontend/package.json`. Aplikacja automatycznie wyświetli nową wersję.
-5. Stwórz commit z zatwierdzoną wersją w tytule. Użytkownik nie powinien ręcznie edytować `package.json`.
-
----
-
-## 2. Przepływ pracy Git (Git Workflow)
-
-* Wszystkie prace programistyczne muszą być prowadzone **wyłącznie** na branchu: `development`.
-* **Przed rozpoczęciem jakichkolwiek prac** automatycznie wykonaj następujące polecenia:
-  - `pwd`
-  - `git branch --show-current`
-  - `git status`
-* **Zweryfikuj**: czy ścieżka robocza (workspace), repozytorium oraz branch są w 100% poprawne.
-* Jeśli repozytorium lub branch są niepoprawne: **STOP! Nie wprowadzaj żadnych modyfikacji w plikach.**
-
----
-
-## 3. Kontrola zakresu zmian (Scope Control)
-
-Przed modyfikacją jakiegokolwiek kodu:
-1. Przeanalizuj zadanie i określ, które pliki będą zmieniane.
-2. Wypisz pliki planowane do modyfikacji i krótko uzasadnij dlaczego.
-3. **Poczekaj na zatwierdzenie zakresu prac przez użytkownika.**
-4. Nigdy nie modyfikuj plików niezwiązanych z powierzonym zadaniem.
-
----
-
-## 4. Testowanie (Testing)
-
-Po zakończeniu wdrażania zmian:
-* Przedstaw użytkownikowi dokładną i przejrzystą instrukcję (checklistę), co i jak powinien przetestować.
-* Nie zakładaj, że kod działa po prostu dlatego, że się kompiluje.
-* Testuj w pierwszej kolejności warunki brzegowe, poprawność przesyłania danych i obsługę błędów API.
-
----
-
-## 5. Commity
-
-* **Nigdy nie twórz commitów automatycznie.**
-* Po pomyślnym zakończeniu testów zaproponuj wersję (zgodnie z SemVer) oraz treść wiadomości commit (commit message).
-* Poczekaj na zatwierdzenie przed wykonaniem zapisu w repozytorium.
-
----
-
-## 6. Bezpieczeństwo środowiska produkcyjnego (Production Safety)
-
-Bez wyraźnego polecenia użytkownika **nigdy nie modyfikuj**:
-* Konfiguracji Docker (`docker-compose.yml`, `Dockerfile` itp.)
-* Schematu bazy danych (pliki Prisma, migracje)
-* Logiki uwierzytelniania i autoryzacji (JWT, middlewares)
-* Zmiennych środowiskowych (`.env`)
-
----
-
-## 7. Rekomendacja dotycząca artefaktów budowania (Build Artifacts Policy)
-
-Katalog statyczny `frontend/dist` jest obecnie wersjonowany w repozytorium Git, co jest nieoptymalne ze względu na:
-- Duże, nieczytelne diffy przy zmianach kodu.
-- Potencjalne konflikty scalania (merge conflicts).
-- Zwiększanie rozmiaru repozytorium zbędnymi plikami binarnymi.
-
-### Rekomendowany plan migracji (do wdrożenia w przyszłości na życzenie użytkownika):
-1. **Wykluczenie katalogu z Git**:
-   - Dopisanie `/frontend/dist` do pliku `.gitignore`.
-   - Usunięcie śledzenia katalogu w Git bez usuwania fizycznych plików lokalnie:
-     `git rm -r --cached frontend/dist`
-2. **Przeniesienie procesu budowania do Docker**:
-   - Stworzenie wieloetapowego pliku `Dockerfile` dla kontenera Nginx (serwera WWW), który samodzielnie skompiluje frontend w kontenerze budującym i skopiuje wynik do obrazu serwującego:
-     ```dockerfile
-     # Stage 1: Build React frontend
-     FROM node:20-alpine AS build
-     WORKDIR /app
-     COPY package*.json ./
-     RUN npm ci
-     COPY . .
-     RUN npm run build
-
-     # Stage 2: Serve using Nginx
-     FROM nginx:alpine
-     COPY --from=build /app/dist /usr/share/nginx/html
-     COPY nginx/nginx.conf /etc/nginx/nginx.conf:ro
-     ```
-   - Aktualizacja pliku `docker-compose.yml` w celu bezpośredniego budowania obrazu Nginx zamiast montowania lokalnego katalogu `dist`.
+## 5. Ignorowanie plików (Git Hygiene)
+* **Pliki generowane automatycznie** – pod żadnym pozorem nie commitujemy plików generowanych automatycznie, takich jak:
+  - `node_modules/`
+  - skompilowany build produkcyjny backendu (`backend/dist/`)
+  - pliki wygenerowane przez Prisma Client (`node_modules/@prisma/client` itp.)
+  - lokalne pliki konfiguracyjne `.env` oraz archiwa baz danych z katalogu `backups/`.
