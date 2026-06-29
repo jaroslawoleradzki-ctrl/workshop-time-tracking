@@ -14,6 +14,8 @@ RUN npx prisma generate
 
 FROM node:20-alpine
 
+RUN apk add --no-cache openssl libc6-compat
+
 WORKDIR /usr/src/app
 
 COPY package*.json ./
@@ -26,4 +28,7 @@ COPY --from=builder /usr/src/app/node_modules/.prisma ./node_modules/.prisma
 
 EXPOSE 5000
 
-CMD ["node", "dist/index.js"]
+COPY docker-entrypoint.sh ./
+RUN chmod +x docker-entrypoint.sh
+
+CMD ["./docker-entrypoint.sh"]
