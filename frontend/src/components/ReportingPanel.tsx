@@ -7,13 +7,16 @@ import {
   Copy, 
   AlertTriangle,
   HelpCircle,
-  Plus
+  Plus,
+  Search
 } from 'lucide-react';
 import { UserSession } from '../App';
 
 interface Employee {
   id: string;
   fullName: string;
+  firstName?: string | null;
+  lastName?: string | null;
   isActive: boolean;
 }
 
@@ -75,6 +78,8 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
     new Date().toISOString().split('T')[0]
   );
   const [currentEmployeeIdx, setCurrentEmployeeIdx] = useState<number>(0);
+
+  const currentEmployee = employees[currentEmployeeIdx];
   
   // Form input states
   const [searchOrderQuery, setSearchOrderQuery] = useState('');
@@ -91,6 +96,22 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
       o.productNumber.toLowerCase().includes(searchOrderQuery.toLowerCase()) ||
       o.productName.toLowerCase().includes(searchOrderQuery.toLowerCase())
   );
+
+  // Employee autocomplete states
+  const [employeeSearchQuery, setEmployeeSearchQuery] = useState('');
+  const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false);
+  const [employeeHighlightIdx, setEmployeeHighlightIdx] = useState(-1);
+
+  const displayEmployeeName = currentEmployee ? (currentEmployee.firstName && currentEmployee.lastName ? `${currentEmployee.firstName} ${currentEmployee.lastName}` : currentEmployee.fullName) : '';
+
+  const filteredEmployees = employees.filter(e => {
+    const query = employeeSearchQuery.toLowerCase().trim();
+    if (!query) return true;
+    const firstMatch = e.firstName && e.firstName.toLowerCase().includes(query);
+    const lastMatch = e.lastName && e.lastName.toLowerCase().includes(query);
+    const fullMatch = e.fullName.toLowerCase().includes(query);
+    return firstMatch || lastMatch || fullMatch;
+  });
 
   // Edit Mode state
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
@@ -109,8 +130,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
   const hoursInputRef = useRef<HTMLInputElement>(null);
   const saveBtnRef = useRef<HTMLButtonElement>(null);
   const autocompleteContainerRef = useRef<HTMLDivElement>(null);
-
-  const currentEmployee = employees[currentEmployeeIdx];
+  const employeeDropdownRef = useRef<HTMLDivElement>(null);
 
   // 1. Initial Load: Dictionaries
   useEffect(() => {
@@ -161,7 +181,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
     }
   };
 
-  // Close autocomplete on click outside
+  // Close autocompletes on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
@@ -169,6 +189,12 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
         !autocompleteContainerRef.current.contains(e.target as Node)
       ) {
         setShowOrderAutocomplete(false);
+      }
+      if (
+        employeeDropdownRef.current &&
+        !employeeDropdownRef.current.contains(e.target as Node)
+      ) {
+        setShowEmployeeDropdown(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -204,6 +230,52 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
   const handleNextEmployee = () => {
     if (employees.length === 0) return;
     setCurrentEmployeeIdx(prev => (prev === employees.length - 1 ? 0 : prev + 1));
+  };
+
+  const getFormattedEmployeeName = (emp: Employee) => {
+    return emp.firstName && emp.lastName ? `${emp.firstName} ${emp.lastName}` : emp.fullName;
+  };
+
+  const selectEmployee = (emp: Employee) => {
+    const idx = employees.findIndex(e => e.id === emp.id);
+    if (idx >= 0) {
+      setCurrentEmployeeIdx(idx);
+    }
+    setShowEmployeeDropdown(false);
+  };
+
+  const handleEmployeeKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showEmployeeDropdown) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter') {
+        setShowEmployeeDropdown(true);
+        setEmployeeSearchQuery('');
+        setEmployeeHighlightIdx(-1);
+        e.preventDefault();
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setEmployeeHighlightIdx(prev => 
+        prev < filteredEmployees.length - 1 ? prev + 1 : 0
+      );
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setEmployeeHighlightIdx(prev => 
+        prev > 0 ? prev - 1 : filteredEmployees.length - 1
+      );
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (employeeHighlightIdx >= 0 && employeeHighlightIdx < filteredEmployees.length) {
+        selectEmployee(filteredEmployees[employeeHighlightIdx]);
+      } else if (filteredEmployees.length > 0) {
+        selectEmployee(filteredEmployees[0]);
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setShowEmployeeDropdown(false);
+    }
   };
 
   // Order Autocomplete click selection
@@ -554,13 +626,52 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
             <span className="hide-mobile">Poprzedni pracownik</span>
           </button>
 
-          <div style={{ textAlign: 'center' }}>
-            <div className="employee-label">
-              Pracownik ({currentEmployeeIdx + 1} z {employees.length})
+          <div style={{ position: 'relative', width: '320px', textAlign: 'left' }} ref={employeeDropdownRef}>
+            <div className="employee-label" style={{ marginBottom: '0.25rem', textAlign: 'center' }}>
+              Wyszukaj pracownika ({currentEmployeeIdx + 1} z {employees.length})
             </div>
-            <div className="employee-current-name">
-              {currentEmployee.fullName}
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <Search size={18} style={{ position: 'absolute', left: '12px', color: 'var(--text-muted)' }} />
+              <input
+                type="text"
+                className="form-control"
+                style={{ paddingLeft: '38px', fontWeight: 'bold' }}
+                value={showEmployeeDropdown ? employeeSearchQuery : displayEmployeeName}
+                onChange={e => {
+                  setEmployeeSearchQuery(e.target.value);
+                  setEmployeeHighlightIdx(-1);
+                }}
+                onFocus={() => {
+                  setShowEmployeeDropdown(true);
+                  setEmployeeSearchQuery('');
+                  setEmployeeHighlightIdx(-1);
+                }}
+                onKeyDown={handleEmployeeKeyDown}
+                placeholder="Wyszukaj pracownika..."
+                autoComplete="off"
+              />
             </div>
+            
+            {showEmployeeDropdown && (
+              <div className="autocomplete-dropdown" style={{ width: '100%' }}>
+                {filteredEmployees.length === 0 ? (
+                  <div style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                    Brak wyników
+                  </div>
+                ) : (
+                  filteredEmployees.map((emp, idx) => (
+                    <div
+                      key={emp.id}
+                      className={`autocomplete-item ${idx === employeeHighlightIdx ? 'selected' : ''}`}
+                      onClick={() => selectEmployee(emp)}
+                      style={{ fontWeight: 'bold' }}
+                    >
+                      {getFormattedEmployeeName(emp)}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
 
           <button className="btn btn-secondary" onClick={handleNextEmployee}>
