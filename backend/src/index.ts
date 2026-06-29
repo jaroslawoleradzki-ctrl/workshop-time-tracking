@@ -14,6 +14,8 @@ import workTimeTypesRouter from './routes/work-time-types';
 import reportsRouter from './routes/reports';
 import analyticsRouter from './routes/analytics';
 import importsRouter from './routes/imports';
+import prisma from './utils/prisma';
+import packageJson from '../package.json';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -39,8 +41,31 @@ app.use('/api/analytics', analyticsRouter);
 app.use('/api/imports', importsRouter);
 
 // Base route for health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date() });
+app.get('/api/health', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.status(200).json({
+      status: 'ok',
+      database: 'ok',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Health check database error:', error);
+    res.status(503).json({
+      status: 'error',
+      database: 'error',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Version endpoint
+app.get('/api/version', (req, res) => {
+  res.json({
+    name: packageJson.name,
+    version: packageJson.version,
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
 
 // Error handling middleware
