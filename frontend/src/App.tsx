@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import packageJson from '../package.json';
 import { 
   BarChart3, 
   Clock, 
@@ -61,6 +60,24 @@ function App() {
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  // App version state
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+
+  // Fetch app version on mount
+  useEffect(() => {
+    fetch('/api/version')
+      .then(res => {
+        if (!res.ok) throw new Error();
+        return res.json();
+      })
+      .then(data => {
+        setAppVersion(data.version || null);
+      })
+      .catch(() => {
+        setAppVersion('error');
+      });
+  }, []);
 
   // Listen for global auth errors (401/403)
   useEffect(() => {
@@ -204,7 +221,7 @@ function App() {
               {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
             </button>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Wersja v{packageJson.version}
+              {appVersion === 'error' ? 'Wersja niedostępna' : (appVersion ? `Wersja v${appVersion}` : '')}
             </span>
           </div>
         </div>
@@ -297,7 +314,9 @@ function App() {
             ))}
           </nav>
           <div style={{ marginTop: 'auto', fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-            System Ewidencji Czasu Pracy v{packageJson.version}
+            {appVersion === 'error' 
+              ? 'System Ewidencji Czasu Pracy — wersja niedostępna' 
+              : `System Ewidencji Czasu Pracy ${appVersion ? `v${appVersion}` : ''}`}
           </div>
         </aside>
 
