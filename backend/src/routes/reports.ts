@@ -27,7 +27,7 @@ router.get('/by-employee-date', async (req: AuthRequest, res: Response) => {
         order: {
           select: {
             orderNumber: true,
-            productNumber: true,
+            productCode: true,
             productName: true,
             accountingAccount: true,
           },
@@ -410,7 +410,7 @@ router.post('/copy-last-day', async (req: AuthRequest, res: Response) => {
           order: {
             select: {
               orderNumber: true,
-              productNumber: true,
+              productCode: true,
               productName: true,
               accountingAccount: true,
             },

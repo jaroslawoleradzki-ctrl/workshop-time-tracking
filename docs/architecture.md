@@ -19,7 +19,7 @@ Aplikacja służy do rejestracji i raportowania czasu pracy pracowników warszta
 ## Model danych
 - **Users**: Użytkownicy systemu (np. admin, lider), którzy mogą zarządzać danymi i przeglądać raporty.
 - **Employees**: Pracownicy wykonujący pracę. Posiadają pola: `id`, `fullName`, `firstName`, `lastName`, `employeeNumber` oraz status aktywności `isActive`.
-- **Orders**: Zlecenia produkcyjne z budżetem godzinowym (`estimatedHours`), numerem zlecenia, produktu i kontem księgowym.
+- **Orders**: Zlecenia produkcyjne z planem godzinowym (`plannedHours`), ilością (`quantity`), jednostką (`quantityUnit`), kodem produktu (`productCode`), nazwą produktu, kontem księgowym, statusami (`OPEN`, `SUSPENDED`, `CLOSED`) oraz flagą aktywności `isActive`.
 - **WorkTimeReports**: Zapisy godzinowe czasu pracy przypisane do pracownika, rodzaju czasu pracy oraz zlecenia.
 - **WorkTimeTypes**: Słownik rodzajów czasu pracy (np. "G" - godziny standardowe, "U" - urlop).
 
@@ -44,9 +44,12 @@ Aplikacja służy do rejestracji i raportowania czasu pracy pracowników warszta
 - **Wyszukiwanie**: Filtrowanie na żywo po imieniu, nazwisku lub pełnym imieniu i nazwisku.
 - **Nawigacja**: Zachowanie przycisków "Poprzedni pracownik" i "Następny pracownik" jako alternatywnej nawigacji.
 
+### Zlecenia
+- **Przebudowa modelu i widoku**: Zmiana nazw kolumn na standard domenowy (`productCode`, `plannedHours`, `completionDate`), dodanie pól `quantity` i `quantityUnit` o typie Decimal(10,2) oraz systemowego enuma statusów.
+- **Dodanie flagi aktywności**: Wprowadzenie pola `isActive`, pozwalającego dezaktywować zlecenia bez ich usuwania. Filtrowanie autouzupełniania zlecenia w panelu raportowania wyłącznie do aktywnych zleceń (status `OPEN` i `isActive = true`).
+
 ## Do rozbudowy
-- **Przebudowa zleceń**: Refaktoryzacja modelu zleceń i powiązań z produktami.
-- **Ilość przy zleceniu**: Dodanie informacji o wolumenie produkcji do raportów.
+- **Importy (Krok 2)**: Przebudowa szablonu i parsera importu zleceń Excel zgodnie z nowym modelem danych.
 - **Raporty**: Rozszerzone eksporty i analityka dla liderów.
 - **Importy**: Dokładne logowanie błędów w arkuszach Excel.
 - **UX**: Optymalizacja mobilna.

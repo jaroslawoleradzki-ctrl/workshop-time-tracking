@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
 import { AuthRequest, authenticateJWT, requireRole } from '../middlewares/auth';
 import { logChange } from '../utils/audit';
+import { OrderStatus } from '@prisma/client';
 
 const router = Router();
 
@@ -24,21 +25,24 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 
     const formatted = orders.map((order) => {
       const actualHours = order.reports.reduce((sum, r) => sum + Number(r.hours), 0);
-      const estimatedHours = Number(order.estimatedHours);
-      const utilizationPercent = estimatedHours > 0 ? (actualHours / estimatedHours) * 100 : 0;
+      const plannedHours = Number(order.plannedHours);
+      const utilizationPercent = plannedHours > 0 ? (actualHours / plannedHours) * 100 : 0;
 
       return {
         id: order.id,
         orderNumber: order.orderNumber,
-        productNumber: order.productNumber,
+        productCode: order.productCode,
         productName: order.productName,
         accountingAccount: order.accountingAccount,
-        estimatedHours,
+        plannedHours,
+        quantity: order.quantity ? Number(order.quantity) : null,
+        quantityUnit: order.quantityUnit,
         actualHours: Math.round(actualHours * 100) / 100,
         utilizationPercent: Math.round(utilizationPercent * 100) / 100,
         status: order.status,
+        isActive: order.isActive,
         createdAt: order.createdAt,
-        closedAt: order.closedAt,
+        completionDate: order.completionDate,
       };
     });
 
@@ -49,18 +53,19 @@ router.get('/', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// GET /active - list only open orders for time reporting (optimized autocomplete dropdown)
+// GET /active - list only open and active orders for time reporting (optimized autocomplete dropdown)
 router.get('/active', async (req: AuthRequest, res: Response) => {
   try {
     const orders = await prisma.order.findMany({
       where: {
         deletedAt: null,
-        status: 'open',
+        status: OrderStatus.OPEN,
+        isActive: true,
       },
       select: {
         id: true,
         orderNumber: true,
-        productNumber: true,
+        productCode: true,
         productName: true,
         accountingAccount: true,
       },
@@ -75,10 +80,17 @@ router.get('/active', async (req: AuthRequest, res: Response) => {
 
 // Admin-only paths below
 router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response) => {
-  const { orderNumber, productNumber, productName, accountingAccount, estimatedHours, status } = req.body;
+  const { orderNumber, productCode, productName, accountingAccount, plannedHours, quantity, quantityUnit, status, isActive } = req.body;
 
-  if (!orderNumber || !productNumber || !productName || !accountingAccount || estimatedHours === undefined) {
+  if (!orderNumber || !productName || plannedHours === undefined || quantity === undefined || !status) {
     return res.status(400).json({ message: 'Wszystkie pola formularza są wymagane' });
+  }
+
+  const parsedPlannedHours = Number(plannedHours);
+  const parsedQuantity = Number(quantity);
+
+  if (isNaN(parsedPlannedHours) || parsedPlannedHours < 0 || isNaN(parsedQuantity) || parsedQuantity <= 0) {
+    return res.status(400).json({ message: 'Planowane godziny muszą być liczbą większą lub równą 0, a ilość musi być większa od 0.' });
   }
 
   try {
@@ -90,15 +102,22 @@ router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response)
       return res.status(400).json({ message: `Zlecenie o numerze ${orderNumber} już istnieje` });
     }
 
+    const orderStatusVal = (status as OrderStatus) || OrderStatus.OPEN;
+    const cleanProductCode = productCode && productCode.trim() !== '' ? productCode.trim() : null;
+    const cleanAccountingAccount = accountingAccount && accountingAccount.trim() !== '' ? accountingAccount.trim() : null;
+
     const order = await prisma.order.create({
       data: {
         orderNumber,
-        productNumber,
+        productCode: cleanProductCode,
         productName,
-        accountingAccount,
-        estimatedHours: Number(estimatedHours),
-        status: status || 'open',
-        closedAt: status === 'closed' ? new Date() : null,
+        accountingAccount: cleanAccountingAccount,
+        plannedHours: parsedPlannedHours,
+        quantity: parsedQuantity,
+        quantityUnit: quantityUnit || 'szt.',
+        status: orderStatusVal,
+        isActive: isActive !== undefined ? isActive : true,
+        completionDate: orderStatusVal === OrderStatus.CLOSED ? new Date() : null,
       },
     });
 
@@ -122,10 +141,17 @@ router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response)
 
 router.put('/:id', requireRole(['admin']), async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  const { orderNumber, productNumber, productName, accountingAccount, estimatedHours, status } = req.body;
+  const { orderNumber, productCode, productName, accountingAccount, plannedHours, quantity, quantityUnit, status, isActive } = req.body;
 
-  if (!orderNumber || !productNumber || !productName || !accountingAccount || estimatedHours === undefined || !status) {
+  if (!orderNumber || !productName || plannedHours === undefined || quantity === undefined || !status) {
     return res.status(400).json({ message: 'Wszystkie pola są wymagane' });
+  }
+
+  const parsedPlannedHours = Number(plannedHours);
+  const parsedQuantity = Number(quantity);
+
+  if (isNaN(parsedPlannedHours) || parsedPlannedHours < 0 || isNaN(parsedQuantity) || parsedQuantity <= 0) {
+    return res.status(400).json({ message: 'Planowane godziny muszą być liczbą większą lub równą 0, a ilość musi być większa od 0.' });
   }
 
   try {
@@ -147,24 +173,32 @@ router.put('/:id', requireRole(['admin']), async (req: AuthRequest, res: Respons
       }
     }
 
-    // Set closedAt when changing to closed
-    let closedAt = oldOrder.closedAt;
-    if (status === 'closed' && oldOrder.status !== 'closed') {
-      closedAt = new Date();
-    } else if (status !== 'closed') {
-      closedAt = null;
+    const orderStatusVal = status as OrderStatus;
+
+    // Set completionDate when changing to CLOSED
+    let completionDate = oldOrder.completionDate;
+    if (orderStatusVal === OrderStatus.CLOSED && oldOrder.status !== OrderStatus.CLOSED) {
+      completionDate = new Date();
+    } else if (orderStatusVal !== OrderStatus.CLOSED) {
+      completionDate = null;
     }
+
+    const cleanProductCode = productCode && productCode.trim() !== '' ? productCode.trim() : null;
+    const cleanAccountingAccount = accountingAccount && accountingAccount.trim() !== '' ? accountingAccount.trim() : null;
 
     const updatedOrder = await prisma.order.update({
       where: { id },
       data: {
         orderNumber,
-        productNumber,
+        productCode: cleanProductCode,
         productName,
-        accountingAccount,
-        estimatedHours: Number(estimatedHours),
-        status,
-        closedAt,
+        accountingAccount: cleanAccountingAccount,
+        plannedHours: parsedPlannedHours,
+        quantity: parsedQuantity,
+        quantityUnit: quantityUnit || 'szt.',
+        status: orderStatusVal,
+        isActive: isActive !== undefined ? isActive : true,
+        completionDate,
       },
     });
 
@@ -204,7 +238,7 @@ router.delete('/:id', requireRole(['admin']), async (req: AuthRequest, res: Resp
       where: { id },
       data: {
         deletedAt: new Date(),
-        status: 'closed', // Automatically mark as closed
+        status: OrderStatus.CLOSED, // Automatically mark as CLOSED
       },
     });
 

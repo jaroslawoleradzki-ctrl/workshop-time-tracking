@@ -89,36 +89,44 @@ async function main() {
   const sampleOrders = [
     {
       orderNumber: 'ZL-2026-001',
-      productNumber: 'PR-99823',
+      productCode: 'PR-99823',
       productName: 'Silnik Elektryczny 15kW',
       accountingAccount: 'KK-90210',
-      estimatedHours: 50.0,
-      status: 'open',
+      plannedHours: 50.0,
+      quantity: 1.0,
+      quantityUnit: 'szt.',
+      status: 'OPEN' as const,
     },
     {
       orderNumber: 'ZL-2026-002',
-      productNumber: 'PR-99824',
+      productCode: 'PR-99824',
       productName: 'Wał Napędowy silnika',
       accountingAccount: 'KK-90210',
-      estimatedHours: 20.0,
-      status: 'open',
+      plannedHours: 20.0,
+      quantity: 1.0,
+      quantityUnit: 'szt.',
+      status: 'OPEN' as const,
     },
     {
       orderNumber: 'ZL-2026-003',
-      productNumber: 'PR-99825',
+      productCode: 'PR-99825',
       productName: 'Obudowa pompy hydraulicznej',
       accountingAccount: 'KK-80100',
-      estimatedHours: 40.0,
-      status: 'suspended',
+      plannedHours: 40.0,
+      quantity: 1.0,
+      quantityUnit: 'szt.',
+      status: 'SUSPENDED' as const,
     },
     {
       orderNumber: 'ZL-2026-004',
-      productNumber: 'PR-99826',
+      productCode: 'PR-99826',
       productName: 'Koło zębate m=4 z=30',
       accountingAccount: 'KK-80100',
-      estimatedHours: 10.0,
-      status: 'closed',
-      closedAt: new Date(),
+      plannedHours: 10.0,
+      quantity: 1.0,
+      quantityUnit: 'szt.',
+      status: 'CLOSED' as const,
+      completionDate: new Date(),
     },
   ];
 
@@ -128,10 +136,7 @@ async function main() {
     });
     if (!existing) {
       await prisma.order.create({
-        data: {
-          ...order,
-          estimatedHours: order.estimatedHours,
-        },
+        data: order,
       });
     }
   }

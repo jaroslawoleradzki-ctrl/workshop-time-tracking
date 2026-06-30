@@ -23,7 +23,7 @@ interface Employee {
 interface Order {
   id: string;
   orderNumber: string;
-  productNumber: string;
+  productCode: string;
   productName: string;
   accountingAccount: string;
 }
@@ -43,7 +43,7 @@ interface ReportEntry {
   workTimeTypeCode: string;
   order?: {
     orderNumber: string;
-    productNumber: string;
+    productCode: string;
     productName: string;
     accountingAccount: string;
   } | null;
@@ -93,7 +93,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
   const filteredOrders = activeOrders.filter(
     o => 
       o.orderNumber.toLowerCase().includes(searchOrderQuery.toLowerCase()) ||
-      o.productNumber.toLowerCase().includes(searchOrderQuery.toLowerCase()) ||
+      o.productCode.toLowerCase().includes(searchOrderQuery.toLowerCase()) ||
       o.productName.toLowerCase().includes(searchOrderQuery.toLowerCase())
   );
 
@@ -464,7 +464,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
         const fallbackOrder: Order = {
           id: entry.orderId || '',
           orderNumber: entry.order.orderNumber,
-          productNumber: entry.order.productNumber,
+          productCode: entry.order.productCode,
           productName: entry.order.productName,
           accountingAccount: entry.order.accountingAccount
         };
@@ -746,7 +746,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                         >
                           <div className="order-title">Zlecenie: {order.orderNumber}</div>
                           <div className="order-sub">
-                            Produkt: {order.productNumber} - {order.productName} | Konto: {order.accountingAccount}
+                            Produkt: {order.productCode} - {order.productName} | Konto: {order.accountingAccount}
                           </div>
                         </div>
                       ))}
@@ -767,7 +767,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                     flexDirection: 'column',
                     gap: '0.25rem'
                   }}>
-                    <div><span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Produkt:</span> {selectedOrder.productNumber} - {selectedOrder.productName}</div>
+                    <div><span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Produkt:</span> {selectedOrder.productCode} - {selectedOrder.productName}</div>
                     <div><span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Konto księgowe:</span> {selectedOrder.accountingAccount}</div>
                   </div>
                 )}

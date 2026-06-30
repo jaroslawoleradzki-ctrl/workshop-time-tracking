@@ -13,15 +13,18 @@ import { UserSession } from '../App';
 interface Order {
   id: string;
   orderNumber: string;
-  productNumber: string;
+  productCode: string;
   productName: string;
   accountingAccount: string;
-  estimatedHours: number;
+  plannedHours: number;
+  quantity: number | null;
+  quantityUnit: string;
   actualHours: number;
   utilizationPercent: number;
-  status: 'open' | 'suspended' | 'closed';
+  status: 'OPEN' | 'SUSPENDED' | 'CLOSED';
+  isActive: boolean;
   createdAt: string;
-  closedAt: string | null;
+  completionDate: string | null;
 }
 
 interface OrdersViewProps {
@@ -40,11 +43,14 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [orderNumber, setOrderNumber] = useState('');
-  const [productNumber, setProductNumber] = useState('');
+  const [productCode, setProductCode] = useState('');
   const [productName, setProductName] = useState('');
   const [accountingAccount, setAccountingAccount] = useState('');
-  const [estimatedHours, setEstimatedHours] = useState('0.00');
-  const [orderStatus, setOrderStatus] = useState<'open' | 'suspended' | 'closed'>('open');
+  const [plannedHours, setPlannedHours] = useState('0.00');
+  const [quantity, setQuantity] = useState('1.00');
+  const [quantityUnit, setQuantityUnit] = useState('szt.');
+  const [orderStatus, setOrderStatus] = useState<'OPEN' | 'SUSPENDED' | 'CLOSED'>('OPEN');
+  const [isActive, setIsActive] = useState(true);
   const [formValidationError, setFormValidationError] = useState('');
 
   useEffect(() => {
@@ -69,11 +75,14 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
   const handleOpenCreateModal = () => {
     setEditingOrderId(null);
     setOrderNumber('');
-    setProductNumber('');
+    setProductCode('');
     setProductName('');
     setAccountingAccount('');
-    setEstimatedHours('0.00');
-    setOrderStatus('open');
+    setPlannedHours('0.00');
+    setQuantity('1.00');
+    setQuantityUnit('szt.');
+    setOrderStatus('OPEN');
+    setIsActive(true);
     setFormValidationError('');
     setShowFormModal(true);
   };
@@ -81,11 +90,14 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
   const handleOpenEditModal = (order: Order) => {
     setEditingOrderId(order.id);
     setOrderNumber(order.orderNumber);
-    setProductNumber(order.productNumber);
+    setProductCode(order.productCode || '');
     setProductName(order.productName);
-    setAccountingAccount(order.accountingAccount);
-    setEstimatedHours(order.estimatedHours.toString());
+    setAccountingAccount(order.accountingAccount || '');
+    setPlannedHours(order.plannedHours.toString());
+    setQuantity(order.quantity !== null ? order.quantity.toString() : '1.00');
+    setQuantityUnit(order.quantityUnit);
     setOrderStatus(order.status);
+    setIsActive(order.isActive);
     setFormValidationError('');
     setShowFormModal(true);
   };
@@ -94,14 +106,15 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
     e.preventDefault();
     setFormValidationError('');
 
-    if (!orderNumber || !productNumber || !productName || !accountingAccount || !estimatedHours) {
-      setFormValidationError('Wszystkie pola są wymagane.');
+    if (!orderNumber || !productName || !plannedHours || !quantity) {
+      setFormValidationError('Pola: Numer zlecenia, Nazwa produktu, Planowane godziny i Ilość są wymagane.');
       return;
     }
 
-    const estHrs = parseFloat(estimatedHours);
-    if (isNaN(estHrs) || estHrs < 0) {
-      setFormValidationError('Przewidywane godziny muszą być liczbą większą lub równą 0.');
+    const planHrs = parseFloat(plannedHours);
+    const qty = parseFloat(quantity);
+    if (isNaN(planHrs) || planHrs < 0 || isNaN(qty) || qty <= 0) {
+      setFormValidationError('Planowane godziny muszą być liczbą większą lub równą 0, a ilość musi być większa od 0.');
       return;
     }
 
@@ -117,11 +130,14 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
         },
         body: JSON.stringify({
           orderNumber: orderNumber.trim(),
-          productNumber: productNumber.trim(),
+          productCode: productCode.trim(),
           productName: productName.trim(),
           accountingAccount: accountingAccount.trim(),
-          estimatedHours: estHrs,
-          status: orderStatus
+          plannedHours: planHrs,
+          quantity: qty,
+          quantityUnit: quantityUnit.trim() || 'szt.',
+          status: orderStatus,
+          isActive
         })
       });
 
@@ -154,10 +170,10 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
   };
 
   const filteredOrders = orders.filter(o => 
-    o.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    o.productNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    o.productName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    o.accountingAccount.toLowerCase().includes(searchQuery.toLowerCase())
+    (o.orderNumber?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+    (o.productCode?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+    (o.productName?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+    (o.accountingAccount?.toLowerCase() || '').includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -195,7 +211,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Konto księgowe</label>
+                  <label className="form-label">Konto księgowe (opcjonalnie)</label>
                   <input
                     type="text"
                     className="form-control"
@@ -208,24 +224,24 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
 
               <div className="form-row" style={{ marginTop: '0.5rem' }}>
                 <div className="form-group">
-                  <label className="form-label">Numer produktu</label>
+                  <label className="form-label">Kod produktu (opcjonalnie)</label>
                   <input
                     type="text"
                     className="form-control"
                     placeholder="np. PR-99823"
-                    value={productNumber}
-                    onChange={e => setProductNumber(e.target.value)}
+                    value={productCode}
+                    onChange={e => setProductCode(e.target.value)}
                   />
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Przewidywana liczba godzin</label>
+                  <label className="form-label">Planowana liczba godzin</label>
                   <input
                     type="text"
                     className="form-control"
                     placeholder="np. 40.00"
-                    value={estimatedHours}
-                    onChange={e => setEstimatedHours(e.target.value)}
+                    value={plannedHours}
+                    onChange={e => setPlannedHours(e.target.value)}
                   />
                 </div>
               </div>
@@ -241,17 +257,56 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                 />
               </div>
 
-              <div className="form-group" style={{ marginTop: '0.5rem' }}>
-                <label className="form-label">Status zlecenia</label>
-                <select
-                  className="form-control"
-                  value={orderStatus}
-                  onChange={e => setOrderStatus(e.target.value as any)}
-                >
-                  <option value="open">Otwarte (aktywne do raportowania)</option>
-                  <option value="suspended">Wstrzymane</option>
-                  <option value="closed">Zamknięte</option>
-                </select>
+              <div className="form-row" style={{ marginTop: '0.5rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Ilość</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="np. 150.00"
+                    value={quantity}
+                    onChange={e => setQuantity(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Jednostka</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="np. szt., kg, m"
+                    value={quantityUnit}
+                    onChange={e => setQuantityUnit(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="form-row" style={{ marginTop: '0.5rem', alignItems: 'center' }}>
+                <div className="form-group">
+                  <label className="form-label">Status zlecenia</label>
+                  <select
+                    className="form-control"
+                    value={orderStatus}
+                    onChange={e => setOrderStatus(e.target.value as any)}
+                  >
+                    <option value="OPEN">Otwarte (aktywne do raportowania)</option>
+                    <option value="SUSPENDED">Wstrzymane</option>
+                    <option value="CLOSED">Zamknięte</option>
+                  </select>
+                </div>
+
+                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1.2rem' }}>
+                  <input
+                    type="checkbox"
+                    id="isActiveCheckbox"
+                    checked={isActive}
+                    onChange={e => setIsActive(e.target.checked)}
+                    style={{ cursor: 'pointer', width: '18px', height: '18px' }}
+                  />
+                  <label htmlFor="isActiveCheckbox" style={{ cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }}>
+                    Zlecenie aktywne
+                  </label>
+                </div>
               </div>
 
               <div className="modal-actions" style={{ marginTop: '1.5rem' }}>
@@ -315,7 +370,9 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                 <th>Status</th>
                 <th>Numer zlecenia</th>
                 <th>Konto księgowe</th>
-                <th>Produkt</th>
+                <th>Kod produktu</th>
+                <th>Nazwa produktu</th>
+                <th style={{ textAlign: 'right' }}>Ilość</th>
                 <th style={{ textAlign: 'right' }}>Plan</th>
                 <th style={{ textAlign: 'right' }}>Rzeczywiste</th>
                 <th>Pasek realizacji budżetu</th>
@@ -327,22 +384,30 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                 const percent = order.utilizationPercent;
                 const colorClass = percent > 100 ? 'red' : percent >= 80 ? 'yellow' : 'green';
                 const statusBadge = 
-                  order.status === 'open' ? <span className="badge badge-open">Otwarte</span> :
-                  order.status === 'suspended' ? <span className="badge badge-suspended">Wstrzymane</span> :
+                  order.status === 'OPEN' ? <span className="badge badge-open">Otwarte</span> :
+                  order.status === 'SUSPENDED' ? <span className="badge badge-suspended">Wstrzymane</span> :
                   <span className="badge badge-closed">Zamknięte</span>;
 
+                // Add indicator if order is marked as inactive
+                const orderNumberDisplay = order.isActive ? (
+                  order.orderNumber
+                ) : (
+                  <span style={{ color: 'var(--text-muted)', textDecoration: 'line-through' }}>
+                    {order.orderNumber} (nieaktywne)
+                  </span>
+                );
+
                 return (
-                  <tr key={order.id}>
+                  <tr key={order.id} style={{ opacity: order.isActive ? 1 : 0.65 }}>
                     <td>{statusBadge}</td>
-                    <td style={{ fontWeight: 'bold' }}>{order.orderNumber}</td>
-                    <td><code>{order.accountingAccount}</code></td>
-                    <td>
-                      <div>
-                        <div style={{ fontWeight: 600 }}>{order.productName}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>kod: {order.productNumber}</div>
-                      </div>
+                    <td style={{ fontWeight: 'bold' }}>{orderNumberDisplay}</td>
+                    <td>{order.accountingAccount ? <code>{order.accountingAccount}</code> : '-'}</td>
+                    <td>{order.productCode ? <code>{order.productCode}</code> : '-'}</td>
+                    <td style={{ fontWeight: 600 }}>{order.productName}</td>
+                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      {order.quantity !== null ? `${Number(order.quantity)} ${order.quantityUnit}` : '-'}
                     </td>
-                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{order.estimatedHours.toFixed(1)} h</td>
+                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{order.plannedHours.toFixed(1)} h</td>
                     <td style={{ textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }}>{order.actualHours.toFixed(1)} h</td>
                     <td style={{ minWidth: '150px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>

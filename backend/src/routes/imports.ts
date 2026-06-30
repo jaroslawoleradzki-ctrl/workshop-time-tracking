@@ -305,11 +305,11 @@ router.post('/orders', upload.single('file'), async (req: AuthRequest, res: Resp
           const updated = await prisma.order.update({
             where: { id: existing.id },
             data: {
-              productNumber: cleanProdNum,
+              productCode: cleanProdNum,
               productName: cleanProdName,
               accountingAccount: cleanAccount,
-              estimatedHours: estimatedHours,
-              status: 'open', // Re-open if closed or suspended on re-import
+              plannedHours: estimatedHours,
+              status: 'OPEN', // Re-open if closed or suspended on re-import
               deletedAt: null, // Reactivate
             },
           });
@@ -327,11 +327,11 @@ router.post('/orders', upload.single('file'), async (req: AuthRequest, res: Resp
           const created = await prisma.order.create({
             data: {
               orderNumber: cleanOrderNum,
-              productNumber: cleanProdNum,
+              productCode: cleanProdNum,
               productName: cleanProdName,
               accountingAccount: cleanAccount,
-              estimatedHours: estimatedHours,
-              status: 'open',
+              plannedHours: estimatedHours,
+              status: 'OPEN',
             },
           });
 

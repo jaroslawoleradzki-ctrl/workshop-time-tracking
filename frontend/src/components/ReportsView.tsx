@@ -173,16 +173,16 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
     switch (activeReportTab) {
       case 'by-order':
         filename = 'Raport_godzin_wg_zlecen.csv';
-        headers = ['Numer zlecenia', 'Nazwa produktu', 'Numer produktu', 'Estymata (h)', 'Rzeczywiste (h)', 'Odchylenie (h)', 'Wykorzystanie (%)', 'Status'];
+        headers = ['Numer zlecenia', 'Nazwa produktu', 'Kod produktu', 'Plan (h)', 'Rzeczywiste (h)', 'Odchylenie (h)', 'Wykorzystanie (%)', 'Status'];
         rows = safeReportData.map(o => [
           o.orderNumber,
           o.productName,
-          o.productNumber,
-          o.estimatedHours,
+          o.productCode,
+          o.plannedHours,
           o.actualHours,
           o.deviation,
           o.percent,
-          o.status === 'open' ? 'Otwarte' : o.status === 'suspended' ? 'Wstrzymane' : 'Zamknięte'
+          o.status === 'OPEN' ? 'Otwarte' : o.status === 'SUSPENDED' ? 'Wstrzymane' : 'Zamknięte'
         ]);
         break;
       case 'by-employee':
@@ -197,8 +197,8 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
         break;
       case 'detailed':
         filename = 'Raport_szczegolowy_czasu_pracy.csv';
-        headers = ['Data', 'Pracownik', 'Zlecenie', 'Numer produktu', 'Nazwa produktu', 'Konto księgowe', 'Godziny', 'Typ czasu', 'Wprowadził', 'Data wpisu'];
-        rows = safeReportData.map(r => [r.date, r.employeeName, r.orderNumber, r.productNumber, r.productName, r.accountingAccount, r.hours, r.workTimeTypeCode, r.creatorName, r.createdAt]);
+        headers = ['Data', 'Pracownik', 'Zlecenie', 'Kod produktu', 'Nazwa produktu', 'Konto księgowe', 'Godziny', 'Typ czasu', 'Wprowadził', 'Data wpisu'];
+        rows = safeReportData.map(r => [r.date, r.employeeName, r.orderNumber, r.productCode, r.productName, r.accountingAccount, r.hours, r.workTimeTypeCode, r.creatorName, r.createdAt]);
         break;
     }
 
@@ -440,16 +440,16 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                       <tr key={idx}>
                         <td style={{ fontWeight: 'bold' }}>{row.orderNumber}</td>
                         <td>{row.productName}</td>
-                        <td><code>{row.productNumber}</code></td>
-                        <td style={{ textAlign: 'right' }}>{(Number(row.estimatedHours) || 0).toFixed(1)} h</td>
+                        <td><code>{row.productCode}</code></td>
+                        <td style={{ textAlign: 'right' }}>{(Number(row.plannedHours) || 0).toFixed(1)} h</td>
                         <td style={{ textAlign: 'right', fontWeight: 600 }}>{(Number(row.actualHours) || 0).toFixed(1)} h</td>
                         <td style={{ textAlign: 'right', ...devStyle }}>{(Number(devVal) || 0).toFixed(1)} h</td>
                         <td style={{ textAlign: 'right' }}>
                           <span className={`badge ${useBadge}`}>{Math.round(useVal)}%</span>
                         </td>
                         <td>
-                          {row.status === 'open' ? <span className="badge badge-open">Otwarte</span> :
-                           row.status === 'suspended' ? <span className="badge badge-suspended">Wstrzymane</span> :
+                          {row.status === 'OPEN' ? <span className="badge badge-open">Otwarte</span> :
+                           row.status === 'SUSPENDED' ? <span className="badge badge-suspended">Wstrzymane</span> :
                            <span className="badge badge-closed">Zamknięte</span>}
                         </td>
                       </tr>

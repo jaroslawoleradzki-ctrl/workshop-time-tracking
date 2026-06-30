@@ -18,7 +18,7 @@ interface DashboardStats {
     id: string;
     orderNumber: string;
     productName: string;
-    estimatedHours: number;
+    plannedHours: number;
     actualHours: number;
     percent: number;
   }>;
@@ -26,7 +26,7 @@ interface DashboardStats {
     id: string;
     orderNumber: string;
     productName: string;
-    estimatedHours: number;
+    plannedHours: number;
     actualHours: number;
     percent: number;
   }>;
@@ -155,7 +155,7 @@ export default function DashboardView({ token }: DashboardViewProps) {
                       <td style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {order.productName}
                       </td>
-                      <td style={{ textAlign: 'right' }}>{order.estimatedHours.toFixed(1)}h</td>
+                      <td style={{ textAlign: 'right' }}>{order.plannedHours.toFixed(1)}h</td>
                       <td style={{ textAlign: 'right', color: 'var(--danger-color)', fontWeight: 'bold' }}>
                         {order.actualHours.toFixed(1)}h
                       </td>
@@ -199,7 +199,7 @@ export default function DashboardView({ token }: DashboardViewProps) {
                       <td style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {order.productName}
                       </td>
-                      <td style={{ textAlign: 'right' }}>{order.estimatedHours.toFixed(1)}h</td>
+                      <td style={{ textAlign: 'right' }}>{order.plannedHours.toFixed(1)}h</td>
                       <td style={{ textAlign: 'right' }}>{order.actualHours.toFixed(1)}h</td>
                       <td style={{ minWidth: '120px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
@@ -260,7 +260,7 @@ export default function DashboardView({ token }: DashboardViewProps) {
                     <tr key={order.id}>
                       <td style={{ fontWeight: 'bold' }}>{order.orderNumber}</td>
                       <td>{order.productName}</td>
-                      <td style={{ textAlign: 'right' }}>{order.estimatedHours.toFixed(1)} h</td>
+                      <td style={{ textAlign: 'right' }}>{order.plannedHours.toFixed(1)} h</td>
                       <td style={{ textAlign: 'right', fontWeight: 600 }}>{order.actualHours.toFixed(1)} h</td>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>

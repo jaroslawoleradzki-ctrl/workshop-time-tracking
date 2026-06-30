@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
 import { AuthRequest, authenticateJWT } from '../middlewares/auth';
 import * as ExcelJS from 'exceljs';
+import { OrderStatus } from '@prisma/client';
 
 const router = Router();
 
@@ -110,12 +111,12 @@ router.get('/dashboard', async (req: AuthRequest, res: Response) => {
 
     // Otwarte zlecenia
     const openOrdersCount = await prisma.order.count({
-      where: { status: 'open', deletedAt: null },
+      where: { status: 'OPEN', deletedAt: null },
     });
 
     // Zamknięte zlecenia
     const closedOrdersCount = await prisma.order.count({
-      where: { status: 'closed', deletedAt: null },
+      where: { status: 'CLOSED', deletedAt: null },
     });
 
     // Godziny dzisiaj
@@ -156,15 +157,15 @@ router.get('/dashboard', async (req: AuthRequest, res: Response) => {
     const ordersApproaching: any[] = [];
 
     orders.forEach((o) => {
-      const est = Number(o.estimatedHours);
-      const actual = o.reports.reduce((sum, r) => sum + Number(r.hours), 0);
+      const est = Number(o.plannedHours);
+      const actual = o.reports.reduce((sum: number, r: any) => sum + Number(r.hours), 0);
       const percent = est > 0 ? (actual / est) * 100 : 0;
 
       const orderData = {
         id: o.id,
         orderNumber: o.orderNumber,
         productName: o.productName,
-        estimatedHours: est,
+        plannedHours: est,
         actualHours: actual,
         percent: Math.round(percent * 100) / 100,
       };
@@ -198,7 +199,7 @@ router.get('/report-by-order', async (req: AuthRequest, res: Response) => {
     const orders = await prisma.order.findMany({
       where: {
         deletedAt: null,
-        status: status ? (status as string) : undefined,
+        status: status ? (status as OrderStatus) : undefined,
         orderNumber: orderNumber ? { contains: orderNumber as string, mode: 'insensitive' } : undefined,
       },
       include: {
@@ -217,16 +218,16 @@ router.get('/report-by-order', async (req: AuthRequest, res: Response) => {
     });
 
     const reportData = orders.map((o) => {
-      const est = Number(o.estimatedHours);
-      const actual = o.reports.reduce((sum, r) => sum + Number(r.hours), 0);
+      const est = Number(o.plannedHours);
+      const actual = o.reports.reduce((sum: number, r: any) => sum + Number(r.hours), 0);
       const deviation = est - actual;
       const percent = est > 0 ? (actual / est) * 100 : 0;
 
       return {
         orderNumber: o.orderNumber,
         productName: o.productName,
-        productNumber: o.productNumber,
-        estimatedHours: est,
+        productCode: o.productCode,
+        plannedHours: est,
         actualHours: Math.round(actual * 100) / 100,
         deviation: Math.round(deviation * 100) / 100,
         percent: Math.round(percent * 100) / 100,
@@ -369,7 +370,7 @@ router.get('/report-detailed', async (req: AuthRequest, res: Response) => {
       date: r.date.toISOString().split('T')[0],
       employeeName: r.employee.fullName,
       orderNumber: r.order?.orderNumber || '-',
-      productNumber: r.order?.productNumber || '-',
+      productCode: r.order?.productCode || '-',
       productName: r.order?.productName || '-',
       accountingAccount: r.order?.accountingAccount || '-',
       hours: Number(r.hours),
@@ -395,7 +396,7 @@ router.get('/export/by-order', async (req: AuthRequest, res: Response) => {
     const orders = await prisma.order.findMany({
       where: {
         deletedAt: null,
-        status: status ? (status as string) : undefined,
+        status: status ? (status as OrderStatus) : undefined,
         orderNumber: orderNumber ? { contains: orderNumber as string, mode: 'insensitive' } : undefined,
       },
       include: {
@@ -426,15 +427,15 @@ router.get('/export/by-order', async (req: AuthRequest, res: Response) => {
     ];
 
     const data = orders.map((o) => {
-      const est = Number(o.estimatedHours);
-      const actual = o.reports.reduce((sum, r) => sum + Number(r.hours), 0);
+      const est = Number(o.plannedHours);
+      const actual = o.reports.reduce((sum: number, r: any) => sum + Number(r.hours), 0);
       const deviation = est - actual;
       const percent = est > 0 ? (actual / est) * 100 : 0;
-      const statusPolish = o.status === 'open' ? 'Otwarte' : o.status === 'suspended' ? 'Wstrzymane' : 'Zamknięte';
+      const statusPolish = o.status === 'OPEN' ? 'Otwarte' : o.status === 'SUSPENDED' ? 'Wstrzymane' : 'Zamknięte';
 
       return [
         o.orderNumber,
-        o.productNumber,
+        o.productCode,
         o.productName,
         o.accountingAccount,
         est,
@@ -635,7 +636,7 @@ router.get('/export/detailed', async (req: AuthRequest, res: Response) => {
       r.date.toISOString().split('T')[0],
       r.employee.fullName,
       r.order?.orderNumber || '-',
-      r.order?.productNumber || '-',
+      r.order?.productCode || '-',
       r.order?.productName || '-',
       r.order?.accountingAccount || '-',
       Number(r.hours),
