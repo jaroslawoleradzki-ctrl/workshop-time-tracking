@@ -17,12 +17,17 @@ router.get('/template/employees', async (req: AuthRequest, res: Response) => {
   try {
     const wb = XLSX.utils.book_new();
     const wsData = [
-      ['Imię i nazwisko'],
-      ['Nowak Jan'],
-      ['Kowalski Piotr'],
-      ['Wiśniewski Krzysztof'],
+      ['ID', 'Imię', 'Nazwisko'],
     ];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
+    
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 15 },
+      { wch: 25 },
+      { wch: 30 }
+    ];
+
     XLSX.utils.book_append_sheet(wb, ws, 'Pracownicy');
     const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
