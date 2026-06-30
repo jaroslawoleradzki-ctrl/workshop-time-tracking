@@ -90,11 +90,12 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
   // Autocomplete UI states
   const [showOrderAutocomplete, setShowOrderAutocomplete] = useState(false);
   const [autocompleteHighlightIdx, setAutocompleteHighlightIdx] = useState(-1);
-  const filteredOrders = activeOrders.filter(
+  const safeActiveOrders = Array.isArray(activeOrders) ? activeOrders : [];
+  const filteredOrders = safeActiveOrders.filter(
     o => 
-      o.orderNumber.toLowerCase().includes(searchOrderQuery.toLowerCase()) ||
-      o.productCode.toLowerCase().includes(searchOrderQuery.toLowerCase()) ||
-      o.productName.toLowerCase().includes(searchOrderQuery.toLowerCase())
+      (o?.orderNumber?.toLowerCase() || '').includes(searchOrderQuery.toLowerCase()) ||
+      (o?.productCode?.toLowerCase() || '').includes(searchOrderQuery.toLowerCase()) ||
+      (o?.productName?.toLowerCase() || '').includes(searchOrderQuery.toLowerCase())
   );
 
   // Employee autocomplete states
@@ -140,20 +141,45 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
 
         // Fetch active employees
         const empRes = await fetch('/api/employees?activeOnly=true', { headers });
-        const empData = await empRes.json();
-        setEmployees(empData);
+        if (empRes.ok) {
+          const empData = await empRes.json();
+          setEmployees(Array.isArray(empData) ? empData : []);
+        } else {
+          setEmployees([]);
+        }
 
         // Fetch active orders (only open orders)
         const orderRes = await fetch('/api/orders/active', { headers });
-        const orderData = await orderRes.json();
-        setActiveOrders(orderData);
+        if (orderRes.ok) {
+          const orderData = await orderRes.json();
+          if (Array.isArray(orderData)) {
+            setActiveOrders(orderData);
+          } else {
+            setActiveOrders([]);
+            setValidationError('Błąd: Nieprawidłowy format listy zleceń.');
+          }
+        } else {
+          setActiveOrders([]);
+          if (orderRes.status === 401 || orderRes.status === 403) {
+            setValidationError('Błąd autoryzacji. Sesja mogła wygasnąć. Zaloguj się ponownie.');
+            window.dispatchEvent(new CustomEvent('auth-error', { detail: { status: orderRes.status } }));
+          } else {
+            setValidationError(`Błąd pobierania zleceń: Status ${orderRes.status}`);
+          }
+        }
 
         // Fetch work time types
         const typeRes = await fetch('/api/work-time-types', { headers });
-        const typeData = await typeRes.json();
-        setWorkTypes(typeData);
-      } catch (err) {
+        if (typeRes.ok) {
+          const typeData = await typeRes.json();
+          setWorkTypes(Array.isArray(typeData) ? typeData : []);
+        } else {
+          setWorkTypes([]);
+        }
+      } catch (err: any) {
         console.error('Błąd podczas ładowania słowników:', err);
+        setValidationError('Wystąpił problem z połączeniem lub pobieraniem słowników.');
+        setActiveOrders([]);
       }
     };
 
@@ -455,7 +481,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
     setHoursInput(entry.hours.toString());
     
     if (entry.order) {
-      const matchedOrder = activeOrders.find(o => o.orderNumber === entry.order?.orderNumber);
+      const matchedOrder = Array.isArray(activeOrders) ? activeOrders.find(o => o?.orderNumber === entry.order?.orderNumber) : undefined;
       if (matchedOrder) {
         setSelectedOrder(matchedOrder);
         setSearchOrderQuery(matchedOrder.orderNumber);
