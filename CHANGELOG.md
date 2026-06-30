@@ -12,6 +12,7 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - rollback (skrypt `rollback.sh` do cofania wersji kodu aplikacji do wybranego commita).
 - healthcheck (endpoint `/api/health` weryfikujący stan backendu i połączenie z bazą).
 - version endpoint (endpoint `/api/version` eksponujący wersję całej aplikacji).
+- nowy szablon importu pracowników w formacie XLSX, dostosowany do zaktualizowanego modelu danych (kolumny: ID, Imię, Nazwisko).
 
 ### Changed
 - model danych pracowników (schemat Prisma z rozdzielonymi polami osobowymi).

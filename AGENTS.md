@@ -21,7 +21,12 @@ Dokument ten opisuje stałe zasady deweloperskie oraz standardy pracy dla wszyst
   - wpisu w `CHANGELOG.md` w katalogu głównym.
 
 ## 4. Utrzymanie dokumentacji i Changelog
-* **Aktualizacja na bieżąco** – dokumentacja techniczna w katalogu `docs/` oraz w katalogu głównym musi być utrzymywana na bieżąco.
+* **Obowiązkowy element Definition of Done (DoD)** – aktualizacja dokumentacji jest wymaganym krokiem zakończenia każdej wdrażanej funkcjonalności. Po zakończeniu implementacji deweloper/agent ma:
+  - sprawdzić, czy dokonana zmiana wymaga modyfikacji dokumentacji,
+  - zaktualizować odpowiednie pliki (`README.md`, `CHANGELOG.md`, `docs/*`),
+  - nie dokumentować funkcjonalności, które nie zostały jeszcze zaimplementowane,
+  - traktować dokumentację jako integralną część zadania (Definition of Done).
+* **Aktualizacja na bieżąco** – dokumentacja techniczna w katalogu `docs/` oraz w katalogu głównym musi być utrzymywana na bieżąco i odzwierciedlać wyłącznie rzeczywisty, aktualny stan projektu.
 * **Aktualny stan projektu** – dokumentacja musi odzwierciedlać wyłącznie aktualny stan projektu. Nie należy opisywać funkcjonalności, które nie zostały jeszcze zaimplementowane.
 * **Aktualizacja po zakończeniu sprintu** – po zakończeniu każdego etapu/sprintu należy zaktualizować odpowiednie pliki (np. `docs/roadmap.md`, `docs/architecture.md`).
 * **Keep a Changelog** – każda wersja wydana i przekazana klientowi musi zostać szczegółowo opisana w pliku `CHANGELOG.md` w katalogu głównym.

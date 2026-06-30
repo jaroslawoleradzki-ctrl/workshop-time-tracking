@@ -37,7 +37,7 @@ Aplikacja służy do rejestracji i raportowania czasu pracy pracowników warszta
 - **Rozdzielenie danych pracowników**: Wprowadzenie pól `firstName`, `lastName` oraz `employeeNumber` przy zachowaniu pola `fullName` dla kompatybilności.
 - **Migracja bazy**: Wdrażanie zmian schematu bazy danych za pomocą Prisma (`npx prisma migrate deploy`) w entrypoincie kontenera.
 - **Kompatybilność ze starszymi rekordami**: Dynamiczne parsowanie/splitowanie `fullName` w locie dla starych rekordów (formularz edycji i kolumny tabeli).
-- **Zmiana importów**: Rozbudowanie importu z pliku Excel o obsługę nowych kolumn (imię, nazwisko, ID) wraz z fallbackiem do automatycznego podziału pełnego nazwiska.
+- **Zmiana importów**: Rozbudowanie importu z pliku Excel o obsługę nowych kolumn (imię, nazwisko, ID) wraz z fallbackiem do automatycznego podziału pełnego nazwiska. Szablon importu pracowników został dostosowany do nowego modelu danych i wykorzystuje kolumny: ID, Imię, Nazwisko.
 
 ### Raportowanie czasu
 - **Searchable combobox**: Autouzupełniający komponent wyboru pracownika z polem tekstowym i ikoną lupy.
