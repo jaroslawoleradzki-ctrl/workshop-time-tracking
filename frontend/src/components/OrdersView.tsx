@@ -18,6 +18,7 @@ interface Order {
   productCode: string | null;
   productName: string;
   accountingAccount: string | null;
+  orderedBy: string | null;
   plannedHours: number;
   quantity: number | null;
   quantityUnit: string;
@@ -51,6 +52,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
   const [productCode, setProductCode] = useState('');
   const [productName, setProductName] = useState('');
   const [accountingAccount, setAccountingAccount] = useState('');
+  const [orderedBy, setOrderedBy] = useState('');
   const [quantity, setQuantity] = useState('1.00');
   const [quantityUnit, setQuantityUnit] = useState('szt.');
   const [hoursPerUnit, setHoursPerUnit] = useState('0.00');
@@ -92,6 +94,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
     setProductCode('');
     setProductName('');
     setAccountingAccount('');
+    setOrderedBy('');
     setQuantity('1.00');
     setQuantityUnit('szt.');
     setHoursPerUnit('0.00');
@@ -109,6 +112,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
     setProductCode(order.productCode || '');
     setProductName(order.productName);
     setAccountingAccount(order.accountingAccount || '');
+    setOrderedBy(order.orderedBy || '');
     setQuantity(order.quantity !== null ? order.quantity.toString() : '1.00');
     setQuantityUnit(order.quantityUnit);
     setHoursPerUnit(order.hoursPerUnit !== null ? order.hoursPerUnit.toString() : '0.00');
@@ -151,6 +155,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
           productCode: productCode.trim(),
           productName: productName.trim(),
           accountingAccount: accountingAccount.trim(),
+          orderedBy: orderedBy.trim() || null,
           quantity: qty,
           quantityUnit: quantityUnit.trim() || 'szt.',
           hoursPerUnit: hrsPerUnit,
@@ -284,6 +289,17 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                     onChange={e => setProductName(e.target.value)}
                   />
                 </div>
+              </div>
+
+              <div className="form-group" style={{ marginTop: '0.5rem' }}>
+                <label className="form-label">Zamawiający (opcjonalnie)</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="np. MetalWorks Sp. z o.o."
+                  value={orderedBy}
+                  onChange={e => setOrderedBy(e.target.value)}
+                />
               </div>
 
               <div className="form-row" style={{ marginTop: '0.5rem' }}>
@@ -425,6 +441,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                 <th>Numer zlecenia</th>
                 <th>Data zlecenia</th>
                 <th>Planowana wysyłka</th>
+                <th>Zamawiający</th>
                 <th>Konto księgowe</th>
                 <th>Kod produktu</th>
                 <th>Nazwa produktu</th>
@@ -460,6 +477,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                     <td style={{ fontWeight: 'bold' }}>{orderNumberDisplay}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>{order.orderDate ? new Date(order.orderDate).toLocaleDateString('pl-PL') : '-'}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>{order.plannedShipmentDate ? new Date(order.plannedShipmentDate).toLocaleDateString('pl-PL') : '-'}</td>
+                    <td>{order.orderedBy || '-'}</td>
                     <td>{order.accountingAccount ? <code>{order.accountingAccount}</code> : '-'}</td>
                     <td>{order.productCode ? <code>{order.productCode}</code> : '-'}</td>
                     <td style={{ fontWeight: 600 }}>{order.productName}</td>

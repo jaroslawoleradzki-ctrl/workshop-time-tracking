@@ -36,6 +36,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
         productCode: order.productCode,
         productName: order.productName,
         accountingAccount: order.accountingAccount,
+        orderedBy: order.orderedBy,
         plannedHours,
         quantity: order.quantity ? Number(order.quantity) : null,
         quantityUnit: order.quantityUnit,
@@ -83,7 +84,7 @@ router.get('/active', async (req: AuthRequest, res: Response) => {
 
 // Admin-only paths below
 router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response) => {
-  const { orderNumber, orderDate, plannedShipmentDate, productCode, productName, accountingAccount, quantity, quantityUnit, hoursPerUnit, status, isActive } = req.body;
+  const { orderNumber, orderDate, plannedShipmentDate, productCode, productName, accountingAccount, orderedBy, quantity, quantityUnit, hoursPerUnit, status, isActive } = req.body;
 
   if (!orderNumber || !orderDate || !productName || quantity === undefined || hoursPerUnit === undefined || !status) {
     return res.status(400).json({ message: 'Numer zlecenia, data zlecenia, nazwa produktu, ilość, godziny/szt. oraz status są wymagane.' });
@@ -123,6 +124,7 @@ router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response)
     const orderStatusVal = (status as OrderStatus) || OrderStatus.OPEN;
     const cleanProductCode = productCode && productCode.trim() !== '' ? productCode.trim() : null;
     const cleanAccountingAccount = accountingAccount && accountingAccount.trim() !== '' ? accountingAccount.trim() : null;
+    const cleanOrderedBy = orderedBy && orderedBy.trim() !== '' ? orderedBy.trim() : null;
 
     const order = await prisma.order.create({
       data: {
@@ -132,6 +134,7 @@ router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response)
         productCode: cleanProductCode,
         productName,
         accountingAccount: cleanAccountingAccount,
+        orderedBy: cleanOrderedBy,
         plannedHours: calculatedPlannedHours,
         quantity: parsedQuantity,
         quantityUnit: quantityUnit || 'szt.',
@@ -162,7 +165,7 @@ router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response)
 
 router.put('/:id', requireRole(['admin']), async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  const { orderNumber, orderDate, plannedShipmentDate, productCode, productName, accountingAccount, quantity, quantityUnit, hoursPerUnit, status, isActive } = req.body;
+  const { orderNumber, orderDate, plannedShipmentDate, productCode, productName, accountingAccount, orderedBy, quantity, quantityUnit, hoursPerUnit, status, isActive } = req.body;
 
   if (!orderNumber || !orderDate || !productName || quantity === undefined || hoursPerUnit === undefined || !status) {
     return res.status(400).json({ message: 'Wszystkie pola są wymagane.' });
@@ -221,6 +224,7 @@ router.put('/:id', requireRole(['admin']), async (req: AuthRequest, res: Respons
 
     const cleanProductCode = productCode && productCode.trim() !== '' ? productCode.trim() : null;
     const cleanAccountingAccount = accountingAccount && accountingAccount.trim() !== '' ? accountingAccount.trim() : null;
+    const cleanOrderedBy = orderedBy && orderedBy.trim() !== '' ? orderedBy.trim() : null;
 
     const updatedOrder = await prisma.order.update({
       where: { id },
@@ -231,6 +235,7 @@ router.put('/:id', requireRole(['admin']), async (req: AuthRequest, res: Respons
         productCode: cleanProductCode,
         productName,
         accountingAccount: cleanAccountingAccount,
+        orderedBy: cleanOrderedBy,
         plannedHours: calculatedPlannedHours,
         quantity: parsedQuantity,
         quantityUnit: quantityUnit || 'szt.',

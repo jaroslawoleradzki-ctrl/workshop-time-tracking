@@ -44,7 +44,7 @@ router.get('/template/orders', async (req: AuthRequest, res: Response) => {
   try {
     const wb = XLSX.utils.book_new();
     const wsData = [
-      ['Numer zlecenia', 'Data zlecenia', 'Data planowanej wysyłki', 'Numer produktu', 'Nazwa produktu', 'Konto księgowe', 'Ilość', 'Godziny / szt.']
+      ['Numer zlecenia', 'Data zlecenia', 'Data planowanej wysyłki', 'Numer produktu', 'Nazwa produktu', 'Konto księgowe', 'Zamawiający', 'Ilość', 'Godziny / szt.']
     ];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     XLSX.utils.book_append_sheet(wb, ws, 'Zlecenia');
@@ -271,6 +271,7 @@ router.post('/orders', upload.single('file'), async (req: AuthRequest, res: Resp
       const productCodeRaw = row['Numer produktu'] || row['productCode'] || row['productNumber'] || row['Kod produktu'];
       const productName = row['Nazwa produktu'] || row['productName'];
       const accountingAccountRaw = row['Konto księgowe'] || row['accountingAccount'];
+      const orderedByRaw = row['Zamawiający'] || row['orderedBy'];
       const quantityRaw = row['Ilość'] || row['quantity'];
       const hoursPerUnitRaw = row['Godziny / szt.'] || row['hoursPerUnit'];
 
@@ -329,6 +330,7 @@ router.post('/orders', upload.single('file'), async (req: AuthRequest, res: Resp
       const plannedHours = quantity * hoursPerUnit;
       const cleanProdCode = productCodeRaw && productCodeRaw.toString().trim() !== '' ? productCodeRaw.toString().trim() : null;
       const cleanAccount = accountingAccountRaw && accountingAccountRaw.toString().trim() !== '' ? accountingAccountRaw.toString().trim() : null;
+      const cleanOrderedBy = orderedByRaw && orderedByRaw.toString().trim() !== '' ? orderedByRaw.toString().trim() : null;
 
       try {
         // Duplicate detection (checks if exists)
@@ -346,6 +348,7 @@ router.post('/orders', upload.single('file'), async (req: AuthRequest, res: Resp
               productCode: cleanProdCode,
               productName: cleanProdName,
               accountingAccount: cleanAccount,
+              orderedBy: cleanOrderedBy,
               plannedHours: plannedHours,
               quantity: quantity,
               hoursPerUnit: hoursPerUnit,
@@ -373,6 +376,7 @@ router.post('/orders', upload.single('file'), async (req: AuthRequest, res: Resp
               productCode: cleanProdCode,
               productName: cleanProdName,
               accountingAccount: cleanAccount,
+              orderedBy: cleanOrderedBy,
               plannedHours: plannedHours,
               quantity: quantity,
               hoursPerUnit: hoursPerUnit,

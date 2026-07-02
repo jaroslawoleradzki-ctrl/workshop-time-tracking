@@ -19,7 +19,7 @@ Aplikacja służy do rejestracji i raportowania czasu pracy pracowników warszta
 ## Model danych
 - **Users**: Użytkownicy systemu (np. admin, lider), którzy mogą zarządzać danymi i przeglądać raporty.
 - **Employees**: Pracownicy wykonujący pracę. Posiadają pola: `id`, `fullName`, `firstName`, `lastName`, `employeeNumber` oraz status aktywności `isActive`.
-- **Orders**: Zlecenia produkcyjne z planem godzinowym (`plannedHours` wyliczanym automatycznie), datą zlecenia (`orderDate`), opcjonalną planowaną wysyłką (`plannedShipmentDate`), ilością (`quantity`), jednostką (`quantityUnit`), pracochłonnością jednostkową (`hoursPerUnit`), opcjonalnym kodem produktu (`productCode`), nazwą produktu, opcjonalnym kontem księgowym, statusami (`OPEN`, `SUSPENDED`, `CLOSED`) oraz flagą aktywności `isActive`.
+- **Orders**: Zlecenia produkcyjne z planem godzinowym (`plannedHours` wyliczanym automatycznie), datą zlecenia (`orderDate`), opcjonalną planowaną wysyłką (`plannedShipmentDate`), ilością (`quantity`), jednostką (`quantityUnit`), pracochłonnością jednostkową (`hoursPerUnit`), opcjonalnym kodem produktu (`productCode`), nazwą produktu, opcjonalnym kontem księgowym, opcjonalnym zamawiającym (`orderedBy`), statusami (`OPEN`, `SUSPENDED`, `CLOSED`) oraz flagą aktywności `isActive`.
 - **WorkTimeReports**: Zapisy godzinowe czasu pracy przypisane do pracownika, rodzaju czasu pracy oraz zlecenia.
 - **WorkTimeTypes**: Słownik rodzajów czasu pracy (np. "G" - godziny standardowe, "U" - urlop).
 

@@ -68,6 +68,7 @@ model Order {
   productCode         String?          @map("product_code") @db.VarChar(50)
   productName         String           @map("product_name") @db.VarChar(200)
   accountingAccount   String?          @map("accounting_account") @db.VarChar(50)
+  orderedBy           String?          @map("ordered_by") @db.VarChar(100)
   plannedHours        Decimal          @map("planned_hours") @db.Decimal(10, 2)
   quantity            Decimal?         @map("quantity") @db.Decimal(10, 2)
   quantityUnit        String           @default("szt.") @map("quantity_unit") @db.VarChar(20)
