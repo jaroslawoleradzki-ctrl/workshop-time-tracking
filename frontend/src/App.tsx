@@ -322,7 +322,7 @@ function App() {
 
         {/* Content Area */}
         <main style={{ flex: 1, backgroundColor: 'var(--bg-primary)', display: 'flex', flexDirection: 'column' }}>
-          <div className="content-wrapper">
+          <div className={`content-wrapper ${['orders', 'employees', 'users', 'dictionaries', 'reports'].includes(currentTab) ? 'orders-tab-wrapper' : ''}`}>
             {renderActiveTab()}
           </div>
         </main>

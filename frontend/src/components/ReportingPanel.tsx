@@ -8,7 +8,8 @@ import {
   AlertTriangle,
   HelpCircle,
   Plus,
-  Search
+  Search,
+  Clock
 } from 'lucide-react';
 import { UserSession } from '../App';
 
@@ -626,22 +627,24 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
         </div>
       )}
 
-      {/* Header & Date selector */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '1.5rem' }}>
+      {/* Tytuł */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', flexShrink: 0 }}>
+        <Clock size={28} />
         <h2 style={{ fontFamily: 'var(--font-header)', fontSize: '1.8rem', margin: 0 }}>
           Raportowanie Godzin Pracy
         </h2>
+      </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <span className="form-label" style={{ margin: 0 }}>Data raportu:</span>
-          <input 
-            type="date" 
-            className="form-control" 
-            style={{ width: '170px', padding: '0.5rem 0.75rem' }} 
-            value={currentDate}
-            onChange={e => setCurrentDate(e.target.value)}
-          />
-        </div>
+      {/* Główna akcja (Wybór daty) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem', flexShrink: 0 }}>
+        <span className="form-label" style={{ margin: 0 }}>Data raportu:</span>
+        <input 
+          type="date" 
+          className="form-control" 
+          style={{ width: '170px', padding: '0.5rem 0.75rem' }} 
+          value={currentDate}
+          onChange={e => setCurrentDate(e.target.value)}
+        />
       </div>
 
       {/* Employee Navigation Bar */}

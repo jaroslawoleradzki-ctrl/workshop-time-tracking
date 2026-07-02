@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   FolderGit2, 
   Plus, 
@@ -38,6 +38,31 @@ interface OrdersViewProps {
 
 export default function OrdersView({ token, user }: OrdersViewProps) {
   const isAdmin = user.role === 'admin';
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const isSyncingScroll = useRef(false);
+  const [tableWidth, setTableWidth] = useState(0);
+
+  const handleTopScroll = () => {
+    if (!topScrollRef.current || !tableScrollRef.current) return;
+    if (isSyncingScroll.current) {
+      isSyncingScroll.current = false;
+      return;
+    }
+    isSyncingScroll.current = true;
+    tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+  };
+
+  const handleTableScroll = () => {
+    if (!topScrollRef.current || !tableScrollRef.current) return;
+    if (isSyncingScroll.current) {
+      isSyncingScroll.current = false;
+      return;
+    }
+    isSyncingScroll.current = true;
+    topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+  };
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -70,6 +95,25 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
   useEffect(() => {
     fetchOrders();
   }, [token]);
+
+  useEffect(() => {
+    if (tableScrollRef.current) {
+      const updateWidth = () => {
+        const innerTable = tableScrollRef.current?.querySelector('table');
+        if (innerTable) {
+          setTableWidth(innerTable.offsetWidth);
+        }
+      };
+
+      updateWidth();
+
+      const observer = new ResizeObserver(() => {
+        updateWidth();
+      });
+      observer.observe(tableScrollRef.current);
+      return () => observer.disconnect();
+    }
+  }, [orders, searchQuery, loading]);
 
   const fetchOrders = async () => {
     try {
@@ -200,7 +244,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
   );
 
   return (
-    <div>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', minWidth: 0, overflow: 'hidden' }}>
       {/* Create/Edit Form Modal (Admin only) */}
       {showFormModal && isAdmin && (
         <div className="modal-overlay">
@@ -220,6 +264,13 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                   {formValidationError}
                 </div>
               )}
+
+              {/* === Informacje o zleceniu === */}
+              <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.25rem', marginBottom: '0.75rem', marginTop: '0.5rem' }}>
+                <h4 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Informacje o zleceniu
+                </h4>
+              </div>
 
               <div className="form-row">
                 <div className="form-group">
@@ -246,12 +297,43 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
 
               <div className="form-row" style={{ marginTop: '0.5rem' }}>
                 <div className="form-group">
-                  <label className="form-label">Data planowanej wysyłki (opcjonalnie)</label>
+                  <label className="form-label">Planowana wysyłka (opcjonalnie)</label>
                   <input
                     type="date"
                     className="form-control"
                     value={plannedShipmentDate}
                     onChange={e => setPlannedShipmentDate(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Zamawiający (opcjonalnie)</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="np. MetalWorks Sp. z o.o."
+                    value={orderedBy}
+                    onChange={e => setOrderedBy(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* === Produkt === */}
+              <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.25rem', marginBottom: '0.75rem', marginTop: '1.25rem' }}>
+                <h4 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Produkt
+                </h4>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Numer produktu (opcjonalnie)</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="np. PR-99823"
+                    value={productCode}
+                    onChange={e => setProductCode(e.target.value)}
                   />
                 </div>
 
@@ -267,42 +349,25 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                 </div>
               </div>
 
-              <div className="form-row" style={{ marginTop: '0.5rem' }}>
-                <div className="form-group">
-                  <label className="form-label">Kod produktu (opcjonalnie)</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="np. PR-99823"
-                    value={productCode}
-                    onChange={e => setProductCode(e.target.value)}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Nazwa produktu</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="np. Silnik Elektryczny 15kW"
-                    value={productName}
-                    onChange={e => setProductName(e.target.value)}
-                  />
-                </div>
-              </div>
-
               <div className="form-group" style={{ marginTop: '0.5rem' }}>
-                <label className="form-label">Zamawiający (opcjonalnie)</label>
+                <label className="form-label">Nazwa produktu</label>
                 <input
                   type="text"
                   className="form-control"
-                  placeholder="np. MetalWorks Sp. z o.o."
-                  value={orderedBy}
-                  onChange={e => setOrderedBy(e.target.value)}
+                  placeholder="np. Silnik Elektryczny 15kW"
+                  value={productName}
+                  onChange={e => setProductName(e.target.value)}
                 />
               </div>
 
-              <div className="form-row" style={{ marginTop: '0.5rem' }}>
+              {/* === Plan === */}
+              <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.25rem', marginBottom: '0.75rem', marginTop: '1.25rem' }}>
+                <h4 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Plan
+                </h4>
+              </div>
+
+              <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Ilość</label>
                   <input
@@ -351,7 +416,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                 </div>
               </div>
 
-              <div className="form-row" style={{ marginTop: '0.5rem', alignItems: 'center' }}>
+              <div className="form-row" style={{ marginTop: '0.75rem', alignItems: 'center' }}>
                 <div className="form-group">
                   <label className="form-label">Status zlecenia</label>
                   <select
@@ -392,23 +457,26 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
         </div>
       )}
 
-      {/* Main Panel layout */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '1.5rem' }}>
-        <h2 style={{ fontFamily: 'var(--font-header)', fontSize: '1.8rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <FolderGit2 size={28} />
+      {/* Tytuł */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', flexShrink: 0 }}>
+        <FolderGit2 size={28} />
+        <h2 style={{ fontFamily: 'var(--font-header)', fontSize: '1.8rem', margin: 0 }}>
           Baza Zleceń Produkcyjnych
         </h2>
+      </div>
 
-        {isAdmin && (
+      {/* Główna akcja */}
+      {isAdmin && (
+        <div style={{ marginBottom: '1rem', flexShrink: 0 }}>
           <button className="btn btn-primary" onClick={handleOpenCreateModal}>
             <Plus size={16} />
             Dodaj zlecenie
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Filter and search bar */}
-      <div className="card" style={{ padding: '1rem', marginBottom: '1rem' }}>
+      {/* Wyszukiwanie */}
+      <div className="card" style={{ padding: '1rem', marginBottom: '1rem', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', position: 'relative' }}>
           <Search size={18} style={{ color: 'var(--text-muted)', position: 'absolute', left: '12px' }} />
           <input
@@ -422,35 +490,57 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
         </div>
       </div>
 
+      {/* Tabela */}
       {loading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem', flex: 1 }}>
           <div>Ładowanie bazy zleceń...</div>
         </div>
       ) : error ? (
-        <div className="alert alert-danger">{error}</div>
+        <div className="alert alert-danger" style={{ flexShrink: 0 }}>{error}</div>
       ) : filteredOrders.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+        <div className="card" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)', flex: 1 }}>
           Brak zleceń spełniających kryteria wyszukiwania.
         </div>
       ) : (
-        <div className="table-container">
-          <table className="table">
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, minWidth: 0 }}>
+          {/* Top scrollbar rail */}
+          <div 
+            ref={topScrollRef} 
+            onScroll={handleTopScroll} 
+            className="top-scrollbar-custom"
+            style={{ 
+              overflowX: 'scroll', 
+              overflowY: 'hidden', 
+              width: '100%', 
+              height: '14px', 
+              marginBottom: '0.25rem',
+              flexShrink: 0
+            }}
+          >
+            <div style={{ width: `${tableWidth}px`, height: '1px' }}></div>
+          </div>
+
+          <div 
+            ref={tableScrollRef}
+            onScroll={handleTableScroll}
+            className="table-container-fixed top-scrollbar-custom"
+          >
+            <table className="table-fixed table-orders">
             <thead>
               <tr>
+                {isAdmin && <th style={{ textAlign: 'center' }}>Akcje</th>}
                 <th>Status</th>
                 <th>Numer zlecenia</th>
-                <th>Data zlecenia</th>
-                <th>Planowana wysyłka</th>
+                <th style={{ whiteSpace: 'normal', minWidth: '100px' }}>Planowana<br />wysyłka</th>
                 <th>Zamawiający</th>
-                <th>Konto księgowe</th>
-                <th>Kod produktu</th>
                 <th>Nazwa produktu</th>
+                <th>Numer produktu</th>
                 <th style={{ textAlign: 'right' }}>Ilość</th>
-                <th style={{ textAlign: 'right' }}>Godziny / szt.</th>
-                <th style={{ textAlign: 'right' }}>Plan</th>
-                <th style={{ textAlign: 'right' }}>Rzeczywiste</th>
-                <th>Pasek realizacji budżetu</th>
-                {isAdmin && <th style={{ textAlign: 'center' }}>Akcje</th>}
+                <th style={{ textAlign: 'right' }}>Godziny/szt.</th>
+                <th style={{ textAlign: 'right' }}>Plan godzin</th>
+                <th>Wykorzystanie</th>
+                <th>Data zlecenia</th>
+                <th>Konto księgowe</th>
               </tr>
             </thead>
             <tbody>
@@ -462,7 +552,6 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                   order.status === 'SUSPENDED' ? <span className="badge badge-suspended">Wstrzymane</span> :
                   <span className="badge badge-closed">Zamknięte</span>;
 
-                // Add indicator if order is marked as inactive
                 const orderNumberDisplay = order.isActive ? (
                   order.orderNumber
                 ) : (
@@ -473,14 +562,36 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
 
                 return (
                   <tr key={order.id} style={{ opacity: order.isActive ? 1 : 0.65 }}>
+                    {isAdmin && (
+                      <td>
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
+                          <button 
+                            className="btn btn-secondary btn-sm"
+                            style={{ padding: '0.25rem' }}
+                            onClick={() => handleOpenEditModal(order)}
+                            title="Edytuj"
+                          >
+                            <Edit2 size={12} />
+                          </button>
+                          <button 
+                            className="btn btn-danger btn-sm"
+                            style={{ padding: '0.25rem', backgroundColor: 'transparent', color: 'var(--danger-color)', borderColor: 'var(--danger-border)' }}
+                            onClick={() => handleDeleteOrder(order.id, order.orderNumber)}
+                            title="Usuń"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                     <td>{statusBadge}</td>
                     <td style={{ fontWeight: 'bold' }}>{orderNumberDisplay}</td>
-                    <td style={{ whiteSpace: 'nowrap' }}>{order.orderDate ? new Date(order.orderDate).toLocaleDateString('pl-PL') : '-'}</td>
-                    <td style={{ whiteSpace: 'nowrap' }}>{order.plannedShipmentDate ? new Date(order.plannedShipmentDate).toLocaleDateString('pl-PL') : '-'}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      {order.plannedShipmentDate ? new Date(order.plannedShipmentDate).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
+                    </td>
                     <td>{order.orderedBy || '-'}</td>
-                    <td>{order.accountingAccount ? <code>{order.accountingAccount}</code> : '-'}</td>
-                    <td>{order.productCode ? <code>{order.productCode}</code> : '-'}</td>
                     <td style={{ fontWeight: 600 }}>{order.productName}</td>
+                    <td>{order.productCode ? <code>{order.productCode}</code> : '-'}</td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                       {order.quantity !== null ? `${Number(order.quantity)} ${order.quantityUnit}` : '-'}
                     </td>
@@ -488,7 +599,6 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                       {order.hoursPerUnit !== null ? `${Number(order.hoursPerUnit).toFixed(2)} h` : '0.00 h'}
                     </td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{order.plannedHours.toFixed(1)} h</td>
-                    <td style={{ textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }}>{order.actualHours.toFixed(1)} h</td>
                     <td style={{ minWidth: '150px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                         <div className="progress-bar-container" style={{ flex: 1, marginTop: 0 }}>
@@ -506,36 +616,21 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                         </span>
                       </div>
                     </td>
-                    {isAdmin && (
-                      <td>
-                        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
-                          <button 
-                            className="btn btn-secondary btn-sm"
-                            style={{ padding: '0.25rem 0.5rem' }}
-                            onClick={() => handleOpenEditModal(order)}
-                          >
-                            <Edit2 size={12} />
-                          </button>
-                          <button 
-                            className="btn btn-danger btn-sm"
-                            style={{ padding: '0.25rem 0.5rem', backgroundColor: 'transparent', color: 'var(--danger-color)', borderColor: 'var(--danger-border)' }}
-                            onClick={() => handleDeleteOrder(order.id, order.orderNumber)}
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      </td>
-                    )}
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      {order.orderDate ? new Date(order.orderDate).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
+                    </td>
+                    <td>{order.accountingAccount ? <code>{order.accountingAccount}</code> : '-'}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
+      </div>
       )}
 
       {!isAdmin && (
-        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.25rem', flexShrink: 0 }}>
           <Lock size={12} />
           Modyfikowanie bazy zleceń jest zarezerwowane wyłącznie dla Administratorów.
         </p>

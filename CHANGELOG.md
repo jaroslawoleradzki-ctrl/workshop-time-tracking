@@ -3,7 +3,12 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.1.5] (Development) - 2026-07-02
+## [0.1.6] (Development) - 2026-07-02
+
+### Added
+- Nowe usprawnienia layoutu i UX dla modułu Zlecenia (wersja 0.1.6).
+
+## [0.1.5] - 2026-07-02
 
 ### Added
 - nowe kolumny i widoki w zakładce Zlecenia (`Data zlecenia`, `Planowana wysyłka`, `Zamawiający`, `Godziny / szt.`).

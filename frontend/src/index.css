@@ -121,6 +121,7 @@ h1, h2, h3, h4, h5, h6 {
 /* Sidebar & Navigation */
 .sidebar {
   width: 260px;
+  flex-shrink: 0;
   background-color: var(--bg-secondary);
   border-right: 1px solid var(--border-color);
   padding: 1.5rem 1rem;
@@ -720,3 +721,93 @@ h1, h2, h3, h4, h5, h6 {
     width: 100%;
   }
 }
+
+/* Orders tab custom layout constraints for version 0.1.6 */
+.orders-tab-wrapper {
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+@media (max-width: 600px) {
+  .orders-tab-wrapper {
+    padding: 0.75rem;
+  }
+}
+
+.table-container-fixed {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  margin-top: 1rem;
+  background-color: var(--bg-secondary);
+  width: 100%;
+  min-width: 0;
+}
+
+.table-fixed {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.table-orders {
+  width: max-content !important;
+  min-width: 100% !important;
+}
+
+/* Custom scrollbars to override macOS hidden scrollbar settings */
+.top-scrollbar-custom::-webkit-scrollbar {
+  height: 10px !important;
+  background-color: var(--bg-secondary) !important;
+}
+.top-scrollbar-custom::-webkit-scrollbar-track {
+  background-color: var(--bg-secondary) !important;
+}
+.top-scrollbar-custom::-webkit-scrollbar-thumb {
+  background-color: var(--border-color) !important;
+  border-radius: 5px !important;
+  border: 2px solid var(--bg-secondary) !important;
+}
+.top-scrollbar-custom::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-muted) !important;
+}
+.top-scrollbar-custom {
+  scrollbar-width: thin !important;
+  scrollbar-color: var(--border-color) var(--bg-secondary) !important;
+}
+
+.table-fixed th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-weight: 600;
+  padding: 0.75rem 1rem;
+  border-bottom: 2px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.table-fixed td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+
+.table-fixed tr:last-child td {
+  border-bottom: none;
+}
+
+.table-fixed tr:hover td {
+  background-color: var(--bg-tertiary);
+}
+

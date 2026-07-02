@@ -143,10 +143,13 @@ export default function ImportsView({ token }: ImportsViewProps) {
 
   return (
     <div>
-      <h2 style={{ marginBottom: '1.5rem', fontFamily: 'var(--font-header)', fontSize: '1.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+      {/* Tytuł */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', flexShrink: 0 }}>
         <FileSpreadsheet size={28} />
-        Import danych z plików Excel
-      </h2>
+        <h2 style={{ fontFamily: 'var(--font-header)', fontSize: '1.8rem', margin: 0 }}>
+          Import danych z plików Excel
+        </h2>
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
         {/* Left Card: Upload Form */}

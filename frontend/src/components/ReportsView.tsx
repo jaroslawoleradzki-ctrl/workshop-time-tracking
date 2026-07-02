@@ -251,11 +251,14 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
   };
 
   return (
-    <div>
-      <h2 style={{ marginBottom: '1.5rem', fontFamily: 'var(--font-header)', fontSize: '1.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Tytuł */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', flexShrink: 0 }}>
         <FileDown size={28} />
-        Centrum Raportów
-      </h2>
+        <h2 style={{ fontFamily: 'var(--font-header)', fontSize: '1.8rem', margin: 0 }}>
+          Centrum Raportów
+        </h2>
+      </div>
 
       {/* Tabs */}
       <div style={{ 
@@ -411,10 +414,10 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
           Brak danych dla wybranych filtrów.
         </div>
       ) : (
-        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div className="card" style={{ padding: 0, overflow: 'hidden', flex: 1, display: 'flex', flexDirection: 'column' }}>
           {activeReportTab === 'by-order' && (
-            <div className="table-container" style={{ margin: 0, border: 'none' }}>
-              <table className="table">
+            <div className="table-container-fixed" style={{ margin: 0, border: 'none', flex: 1 }}>
+              <table className="table-fixed">
                 <thead>
                   <tr>
                     <th>Numer zlecenia</th>
@@ -461,8 +464,8 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
           )}
 
           {activeReportTab === 'by-employee' && (
-            <div className="table-container" style={{ margin: 0, border: 'none' }}>
-              <table className="table">
+            <div className="table-container-fixed" style={{ margin: 0, border: 'none', flex: 1 }}>
+              <table className="table-fixed">
                 <thead>
                   <tr>
                     <th>Pracownik</th>
@@ -498,8 +501,8 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
           )}
 
           {activeReportTab === 'by-account' && (
-            <div className="table-container" style={{ margin: 0, border: 'none' }}>
-              <table className="table">
+            <div className="table-container-fixed" style={{ margin: 0, border: 'none', flex: 1 }}>
+              <table className="table-fixed">
                 <thead>
                   <tr>
                     <th>Data</th>
@@ -531,8 +534,8 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
           )}
 
           {activeReportTab === 'detailed' && (
-            <div className="table-container" style={{ margin: 0, border: 'none' }}>
-              <table className="table">
+            <div className="table-container-fixed" style={{ margin: 0, border: 'none', flex: 1 }}>
+              <table className="table-fixed">
                 <thead>
                   <tr>
                     <th>Data pracy</th>

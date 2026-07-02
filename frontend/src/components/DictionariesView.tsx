@@ -130,7 +130,7 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
   };
 
   return (
-    <div>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Create/Edit Form Modal */}
       {showFormModal && (
         <div className="modal-overlay">
@@ -220,13 +220,16 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
         </div>
       )}
 
-      {/* Header bar */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '1.5rem' }}>
-        <h2 style={{ fontFamily: 'var(--font-header)', fontSize: '1.8rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Settings size={28} />
+      {/* Tytuł */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', flexShrink: 0 }}>
+        <Settings size={28} />
+        <h2 style={{ fontFamily: 'var(--font-header)', fontSize: '1.8rem', margin: 0 }}>
           Słownik Rodzajów Czasu Pracy
         </h2>
+      </div>
 
+      {/* Główna akcja */}
+      <div style={{ marginBottom: '1rem', flexShrink: 0 }}>
         <button className="btn btn-primary" onClick={handleOpenCreateModal}>
           <Plus size={16} />
           Dodaj nowy kod
@@ -240,8 +243,8 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
       ) : error ? (
         <div className="alert alert-danger">{error}</div>
       ) : (
-        <div className="table-container">
-          <table className="table">
+        <div className="table-container-fixed">
+          <table className="table-fixed">
             <thead>
               <tr>
                 <th>Kod</th>

@@ -6,7 +6,8 @@ import {
   Calendar,
   AlertTriangle,
   Flame,
-  CheckCircle2
+  CheckCircle2,
+  BarChart3
 } from 'lucide-react';
 
 interface DashboardStats {
@@ -78,9 +79,13 @@ export default function DashboardView({ token }: DashboardViewProps) {
 
   return (
     <div>
-      <h2 style={{ marginBottom: '1.5rem', fontFamily: 'var(--font-header)', fontSize: '1.8rem' }}>
-        Pulpit Menedżerski
-      </h2>
+      {/* Tytuł */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', flexShrink: 0 }}>
+        <BarChart3 size={28} />
+        <h2 style={{ fontFamily: 'var(--font-header)', fontSize: '1.8rem', margin: 0 }}>
+          Pulpit Menedżerski
+        </h2>
+      </div>
 
       {/* Stats Cards Row */}
       <div className="stats-grid">
