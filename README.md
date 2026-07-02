@@ -22,7 +22,7 @@ System rejestracji oraz rozliczania czasu pracy pracowników nad zleceniami i pr
 ## Status projektu
 
 Aktualna wersja:
-0.1.4 (Development)
+0.1.5 (Development)
 
 Branch roboczy:
 development
