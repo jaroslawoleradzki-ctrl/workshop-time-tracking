@@ -61,20 +61,23 @@ enum OrderStatus {
 }
 
 model Order {
-  id                String           @id @default(uuid()) @db.Uuid
-  orderNumber       String           @unique @map("order_number") @db.VarChar(50)
-  productCode       String?          @map("product_code") @db.VarChar(50)
-  productName       String           @map("product_name") @db.VarChar(200)
-  accountingAccount String?          @map("accounting_account") @db.VarChar(50)
-  plannedHours      Decimal          @map("planned_hours") @db.Decimal(10, 2)
-  quantity          Decimal?         @map("quantity") @db.Decimal(10, 2)
-  quantityUnit      String           @default("szt.") @map("quantity_unit") @db.VarChar(20)
-  status            OrderStatus      @default(OPEN)
-  isActive          Boolean          @default(true) @map("is_active")
-  createdAt         DateTime         @default(now()) @map("created_at")
-  completionDate    DateTime?        @map("completion_date")
-  updatedAt         DateTime         @updatedAt @map("updated_at")
-  deletedAt         DateTime?        @map("deleted_at")
+  id                  String           @id @default(uuid()) @db.Uuid
+  orderNumber         String           @unique @map("order_number") @db.VarChar(50)
+  orderDate           DateTime         @map("order_date")
+  plannedShipmentDate DateTime?        @map("planned_shipment_date")
+  productCode         String?          @map("product_code") @db.VarChar(50)
+  productName         String           @map("product_name") @db.VarChar(200)
+  accountingAccount   String?          @map("accounting_account") @db.VarChar(50)
+  plannedHours        Decimal          @map("planned_hours") @db.Decimal(10, 2)
+  quantity            Decimal?         @map("quantity") @db.Decimal(10, 2)
+  quantityUnit        String           @default("szt.") @map("quantity_unit") @db.VarChar(20)
+  hoursPerUnit        Decimal          @map("hours_per_unit") @db.Decimal(10, 2)
+  status              OrderStatus      @default(OPEN)
+  isActive            Boolean          @default(true) @map("is_active")
+  createdAt           DateTime         @default(now()) @map("created_at")
+  completionDate      DateTime?        @map("completion_date")
+  updatedAt           DateTime         @updatedAt @map("updated_at")
+  deletedAt           DateTime?        @map("deleted_at")
 
   reports           WorkTimeReport[]
 

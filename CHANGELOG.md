@@ -3,6 +3,20 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.1.5] (Development) - 2026-07-02
+
+### Added
+- nowe kolumny i widoki w zakładce Zlecenia (`Data zlecenia`, `Planowana wysyłka`, `Godziny / szt.`).
+- automatyczne dynamiczne wyliczanie planowanych godzin (`plannedHours = quantity * hoursPerUnit`) w formularzu frontendu oraz podczas zapisu i importu.
+- obsługa nowych pól `orderDate`, `plannedShipmentDate` oraz `hoursPerUnit` w bazie danych PostgreSQL i Prisma Client.
+
+### Changed
+- kolumna planowanych godzin jest teraz tylko do odczytu i wyliczana automatycznie.
+- szablon importu Excel oraz parser obsługują nowe kolumny: `Numer zlecenia`, `Data zlecenia`, `Data planowanej wysyłki`, `Numer produktu`, `Nazwa produktu`, `Konto księgowe`, `Ilość`, `Godziny / szt.` (usunięto kolumnę `Przewidywana liczba godzin`).
+
+### Fixed
+- automatyczne bezpieczne wyliczenie `hoursPerUnit` dla starych danych w bazie podczas migracji (`plannedHours / quantity` z fallbackiem).
+
 ## [0.1.4] (Development) - 2026-06-30
 
 ### Added

@@ -44,10 +44,7 @@ router.get('/template/orders', async (req: AuthRequest, res: Response) => {
   try {
     const wb = XLSX.utils.book_new();
     const wsData = [
-      ['Numer zlecenia', 'Numer produktu', 'Nazwa produktu', 'Konto księgowe', 'Przewidywana liczba godzin'],
-      ['ZL-2026-001', 'PR-10022', 'Silnik obrotowy 12V', 'KK-12345', 25.5],
-      ['ZL-2026-002', 'PR-10023', 'Wspornik stalowy ocynk', 'KK-12345', 10.0],
-      ['ZL-2026-003', 'PR-20044', 'Przewody ciśnieniowe L-1500', 'KK-54321', 8.25],
+      ['Numer zlecenia', 'Data zlecenia', 'Data planowanej wysyłki', 'Numer produktu', 'Nazwa produktu', 'Konto księgowe', 'Ilość', 'Godziny / szt.']
     ];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     XLSX.utils.book_append_sheet(wb, ws, 'Zlecenia');
@@ -269,30 +266,69 @@ router.post('/orders', upload.single('file'), async (req: AuthRequest, res: Resp
       const row = rawData[idx];
 
       const orderNumber = row['Numer zlecenia'] || row['orderNumber'];
-      const productNumber = row['Numer produktu'] || row['productNumber'];
+      const orderDateRaw = row['Data zlecenia'] || row['orderDate'];
+      const plannedShipmentDateRaw = row['Data planowanej wysyłki'] || row['plannedShipmentDate'];
+      const productCodeRaw = row['Numer produktu'] || row['productCode'] || row['productNumber'] || row['Kod produktu'];
       const productName = row['Nazwa produktu'] || row['productName'];
-      const accountingAccount = row['Konto księgowe'] || row['accountingAccount'];
-      const estimatedHoursRaw = row['Przewidywana liczba godzin'] || row['estimatedHours'];
+      const accountingAccountRaw = row['Konto księgowe'] || row['accountingAccount'];
+      const quantityRaw = row['Ilość'] || row['quantity'];
+      const hoursPerUnitRaw = row['Godziny / szt.'] || row['hoursPerUnit'];
 
-      if (!orderNumber || !productNumber || !productName || !accountingAccount || estimatedHoursRaw === undefined) {
+      const cleanOrderNum = orderNumber ? orderNumber.toString().trim() : '';
+      const cleanProdName = productName ? productName.toString().trim() : '';
+
+      if (!cleanOrderNum || !orderDateRaw || !cleanProdName || quantityRaw === undefined || hoursPerUnitRaw === undefined) {
         errorRows++;
         errorsLog.push(
-          `Wiersz ${rowNum}: Brakujące pola. Wymagane: 'Numer zlecenia', 'Numer produktu', 'Nazwa produktu', 'Konto księgowe', 'Przewidywana liczba godzin'.`
+          `Wiersz ${rowNum}: Brakujące pola. Wymagane: 'Numer zlecenia', 'Data zlecenia', 'Nazwa produktu', 'Ilość', 'Godziny / szt.'.`
         );
         continue;
       }
 
-      const estimatedHours = parseFloat(estimatedHoursRaw);
-      if (isNaN(estimatedHours) || estimatedHours < 0) {
+      const parseExcelDate = (val: any): Date | null => {
+        if (!val) return null;
+        if (val instanceof Date) return val;
+        if (typeof val === 'number') {
+          return new Date((val - 25569) * 86400 * 1000);
+        }
+        const d = new Date(val);
+        return isNaN(d.getTime()) ? null : d;
+      };
+
+      const orderDate = parseExcelDate(orderDateRaw);
+      if (!orderDate) {
         errorRows++;
-        errorsLog.push(`Wiersz ${rowNum}: Niepoprawna liczba godzin ('${estimatedHoursRaw}'). Musi być liczbą.`);
+        errorsLog.push(`Wiersz ${rowNum}: Niepoprawna data zlecenia ('${orderDateRaw}').`);
         continue;
       }
 
-      const cleanOrderNum = orderNumber.toString().trim();
-      const cleanProdNum = productNumber.toString().trim();
-      const cleanProdName = productName.toString().trim();
-      const cleanAccount = accountingAccount.toString().trim();
+      let plannedShipmentDate: Date | null = null;
+      if (plannedShipmentDateRaw) {
+        plannedShipmentDate = parseExcelDate(plannedShipmentDateRaw);
+        if (!plannedShipmentDate) {
+          errorRows++;
+          errorsLog.push(`Wiersz ${rowNum}: Niepoprawna data planowanej wysyłki ('${plannedShipmentDateRaw}').`);
+          continue;
+        }
+      }
+
+      const quantity = parseFloat(quantityRaw);
+      if (isNaN(quantity) || quantity <= 0) {
+        errorRows++;
+        errorsLog.push(`Wiersz ${rowNum}: Niepoprawna ilość ('${quantityRaw}'). Musi być liczbą większą od 0.`);
+        continue;
+      }
+
+      const hoursPerUnit = parseFloat(hoursPerUnitRaw);
+      if (isNaN(hoursPerUnit) || hoursPerUnit < 0) {
+        errorRows++;
+        errorsLog.push(`Wiersz ${rowNum}: Niepoprawne godziny/szt. ('${hoursPerUnitRaw}'). Musi być liczbą większą lub równą 0.`);
+        continue;
+      }
+
+      const plannedHours = quantity * hoursPerUnit;
+      const cleanProdCode = productCodeRaw && productCodeRaw.toString().trim() !== '' ? productCodeRaw.toString().trim() : null;
+      const cleanAccount = accountingAccountRaw && accountingAccountRaw.toString().trim() !== '' ? accountingAccountRaw.toString().trim() : null;
 
       try {
         // Duplicate detection (checks if exists)
@@ -305,11 +341,16 @@ router.post('/orders', upload.single('file'), async (req: AuthRequest, res: Resp
           const updated = await prisma.order.update({
             where: { id: existing.id },
             data: {
-              productCode: cleanProdNum,
+              orderDate: orderDate,
+              plannedShipmentDate: plannedShipmentDate,
+              productCode: cleanProdCode,
               productName: cleanProdName,
               accountingAccount: cleanAccount,
-              plannedHours: estimatedHours,
-              status: 'OPEN', // Re-open if closed or suspended on re-import
+              plannedHours: plannedHours,
+              quantity: quantity,
+              hoursPerUnit: hoursPerUnit,
+              status: 'OPEN', // Re-open on re-import
+              isActive: true, // Reactivate
               deletedAt: null, // Reactivate
             },
           });
@@ -327,11 +368,16 @@ router.post('/orders', upload.single('file'), async (req: AuthRequest, res: Resp
           const created = await prisma.order.create({
             data: {
               orderNumber: cleanOrderNum,
-              productCode: cleanProdNum,
+              orderDate: orderDate,
+              plannedShipmentDate: plannedShipmentDate,
+              productCode: cleanProdCode,
               productName: cleanProdName,
               accountingAccount: cleanAccount,
-              plannedHours: estimatedHours,
+              plannedHours: plannedHours,
+              quantity: quantity,
+              hoursPerUnit: hoursPerUnit,
               status: 'OPEN',
+              isActive: true,
             },
           });
 

@@ -31,12 +31,15 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       return {
         id: order.id,
         orderNumber: order.orderNumber,
+        orderDate: order.orderDate,
+        plannedShipmentDate: order.plannedShipmentDate,
         productCode: order.productCode,
         productName: order.productName,
         accountingAccount: order.accountingAccount,
         plannedHours,
         quantity: order.quantity ? Number(order.quantity) : null,
         quantityUnit: order.quantityUnit,
+        hoursPerUnit: Number(order.hoursPerUnit),
         actualHours: Math.round(actualHours * 100) / 100,
         utilizationPercent: Math.round(utilizationPercent * 100) / 100,
         status: order.status,
@@ -80,18 +83,33 @@ router.get('/active', async (req: AuthRequest, res: Response) => {
 
 // Admin-only paths below
 router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response) => {
-  const { orderNumber, productCode, productName, accountingAccount, plannedHours, quantity, quantityUnit, status, isActive } = req.body;
+  const { orderNumber, orderDate, plannedShipmentDate, productCode, productName, accountingAccount, quantity, quantityUnit, hoursPerUnit, status, isActive } = req.body;
 
-  if (!orderNumber || !productName || plannedHours === undefined || quantity === undefined || !status) {
-    return res.status(400).json({ message: 'Wszystkie pola formularza są wymagane' });
+  if (!orderNumber || !orderDate || !productName || quantity === undefined || hoursPerUnit === undefined || !status) {
+    return res.status(400).json({ message: 'Numer zlecenia, data zlecenia, nazwa produktu, ilość, godziny/szt. oraz status są wymagane.' });
   }
 
-  const parsedPlannedHours = Number(plannedHours);
+  const parsedOrderDate = new Date(orderDate);
+  if (isNaN(parsedOrderDate.getTime())) {
+    return res.status(400).json({ message: 'Niepoprawny format daty zlecenia.' });
+  }
+
+  let parsedShipmentDate: Date | null = null;
+  if (plannedShipmentDate) {
+    parsedShipmentDate = new Date(plannedShipmentDate);
+    if (isNaN(parsedShipmentDate.getTime())) {
+      return res.status(400).json({ message: 'Niepoprawny format daty planowanej wysyłki.' });
+    }
+  }
+
   const parsedQuantity = Number(quantity);
+  const parsedHoursPerUnit = Number(hoursPerUnit);
 
-  if (isNaN(parsedPlannedHours) || parsedPlannedHours < 0 || isNaN(parsedQuantity) || parsedQuantity <= 0) {
-    return res.status(400).json({ message: 'Planowane godziny muszą być liczbą większą lub równą 0, a ilość musi być większa od 0.' });
+  if (isNaN(parsedQuantity) || parsedQuantity <= 0 || isNaN(parsedHoursPerUnit) || parsedHoursPerUnit < 0) {
+    return res.status(400).json({ message: 'Ilość musi być liczbą większą od 0, a godziny/szt. musi być liczbą większą lub równą 0.' });
   }
+
+  const calculatedPlannedHours = parsedQuantity * parsedHoursPerUnit;
 
   try {
     const existing = await prisma.order.findFirst({
@@ -109,12 +127,15 @@ router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response)
     const order = await prisma.order.create({
       data: {
         orderNumber,
+        orderDate: parsedOrderDate,
+        plannedShipmentDate: parsedShipmentDate,
         productCode: cleanProductCode,
         productName,
         accountingAccount: cleanAccountingAccount,
-        plannedHours: parsedPlannedHours,
+        plannedHours: calculatedPlannedHours,
         quantity: parsedQuantity,
         quantityUnit: quantityUnit || 'szt.',
+        hoursPerUnit: parsedHoursPerUnit,
         status: orderStatusVal,
         isActive: isActive !== undefined ? isActive : true,
         completionDate: orderStatusVal === OrderStatus.CLOSED ? new Date() : null,
@@ -141,18 +162,33 @@ router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response)
 
 router.put('/:id', requireRole(['admin']), async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  const { orderNumber, productCode, productName, accountingAccount, plannedHours, quantity, quantityUnit, status, isActive } = req.body;
+  const { orderNumber, orderDate, plannedShipmentDate, productCode, productName, accountingAccount, quantity, quantityUnit, hoursPerUnit, status, isActive } = req.body;
 
-  if (!orderNumber || !productName || plannedHours === undefined || quantity === undefined || !status) {
-    return res.status(400).json({ message: 'Wszystkie pola są wymagane' });
+  if (!orderNumber || !orderDate || !productName || quantity === undefined || hoursPerUnit === undefined || !status) {
+    return res.status(400).json({ message: 'Wszystkie pola są wymagane.' });
   }
 
-  const parsedPlannedHours = Number(plannedHours);
+  const parsedOrderDate = new Date(orderDate);
+  if (isNaN(parsedOrderDate.getTime())) {
+    return res.status(400).json({ message: 'Niepoprawny format daty zlecenia.' });
+  }
+
+  let parsedShipmentDate: Date | null = null;
+  if (plannedShipmentDate) {
+    parsedShipmentDate = new Date(plannedShipmentDate);
+    if (isNaN(parsedShipmentDate.getTime())) {
+      return res.status(400).json({ message: 'Niepoprawny format daty planowanej wysyłki.' });
+    }
+  }
+
   const parsedQuantity = Number(quantity);
+  const parsedHoursPerUnit = Number(hoursPerUnit);
 
-  if (isNaN(parsedPlannedHours) || parsedPlannedHours < 0 || isNaN(parsedQuantity) || parsedQuantity <= 0) {
-    return res.status(400).json({ message: 'Planowane godziny muszą być liczbą większą lub równą 0, a ilość musi być większa od 0.' });
+  if (isNaN(parsedQuantity) || parsedQuantity <= 0 || isNaN(parsedHoursPerUnit) || parsedHoursPerUnit < 0) {
+    return res.status(400).json({ message: 'Ilość musi być liczbą większą od 0, a godziny/szt. musi być liczbą większą lub równą 0.' });
   }
+
+  const calculatedPlannedHours = parsedQuantity * parsedHoursPerUnit;
 
   try {
     const oldOrder = await prisma.order.findFirst({
@@ -190,12 +226,15 @@ router.put('/:id', requireRole(['admin']), async (req: AuthRequest, res: Respons
       where: { id },
       data: {
         orderNumber,
+        orderDate: parsedOrderDate,
+        plannedShipmentDate: parsedShipmentDate,
         productCode: cleanProductCode,
         productName,
         accountingAccount: cleanAccountingAccount,
-        plannedHours: parsedPlannedHours,
+        plannedHours: calculatedPlannedHours,
         quantity: parsedQuantity,
         quantityUnit: quantityUnit || 'szt.',
+        hoursPerUnit: parsedHoursPerUnit,
         status: orderStatusVal,
         isActive: isActive !== undefined ? isActive : true,
         completionDate,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   FolderGit2, 
   Plus, 
@@ -13,12 +13,15 @@ import { UserSession } from '../App';
 interface Order {
   id: string;
   orderNumber: string;
-  productCode: string;
+  orderDate: string;
+  plannedShipmentDate: string | null;
+  productCode: string | null;
   productName: string;
-  accountingAccount: string;
+  accountingAccount: string | null;
   plannedHours: number;
   quantity: number | null;
   quantityUnit: string;
+  hoursPerUnit: number;
   actualHours: number;
   utilizationPercent: number;
   status: 'OPEN' | 'SUSPENDED' | 'CLOSED';
@@ -43,15 +46,24 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [orderNumber, setOrderNumber] = useState('');
+  const [orderDate, setOrderDate] = useState('');
+  const [plannedShipmentDate, setPlannedShipmentDate] = useState('');
   const [productCode, setProductCode] = useState('');
   const [productName, setProductName] = useState('');
   const [accountingAccount, setAccountingAccount] = useState('');
-  const [plannedHours, setPlannedHours] = useState('0.00');
   const [quantity, setQuantity] = useState('1.00');
   const [quantityUnit, setQuantityUnit] = useState('szt.');
+  const [hoursPerUnit, setHoursPerUnit] = useState('0.00');
   const [orderStatus, setOrderStatus] = useState<'OPEN' | 'SUSPENDED' | 'CLOSED'>('OPEN');
   const [isActive, setIsActive] = useState(true);
   const [formValidationError, setFormValidationError] = useState('');
+
+  const derivedPlannedHours = useMemo(() => {
+    const qty = parseFloat(quantity);
+    const hpu = parseFloat(hoursPerUnit);
+    if (isNaN(qty) || isNaN(hpu)) return '0.00';
+    return (qty * hpu).toFixed(2);
+  }, [quantity, hoursPerUnit]);
 
   useEffect(() => {
     fetchOrders();
@@ -75,12 +87,14 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
   const handleOpenCreateModal = () => {
     setEditingOrderId(null);
     setOrderNumber('');
+    setOrderDate(new Date().toISOString().split('T')[0]);
+    setPlannedShipmentDate('');
     setProductCode('');
     setProductName('');
     setAccountingAccount('');
-    setPlannedHours('0.00');
     setQuantity('1.00');
     setQuantityUnit('szt.');
+    setHoursPerUnit('0.00');
     setOrderStatus('OPEN');
     setIsActive(true);
     setFormValidationError('');
@@ -90,12 +104,14 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
   const handleOpenEditModal = (order: Order) => {
     setEditingOrderId(order.id);
     setOrderNumber(order.orderNumber);
+    setOrderDate(order.orderDate ? new Date(order.orderDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
+    setPlannedShipmentDate(order.plannedShipmentDate ? new Date(order.plannedShipmentDate).toISOString().split('T')[0] : '');
     setProductCode(order.productCode || '');
     setProductName(order.productName);
     setAccountingAccount(order.accountingAccount || '');
-    setPlannedHours(order.plannedHours.toString());
     setQuantity(order.quantity !== null ? order.quantity.toString() : '1.00');
     setQuantityUnit(order.quantityUnit);
+    setHoursPerUnit(order.hoursPerUnit !== null ? order.hoursPerUnit.toString() : '0.00');
     setOrderStatus(order.status);
     setIsActive(order.isActive);
     setFormValidationError('');
@@ -106,15 +122,15 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
     e.preventDefault();
     setFormValidationError('');
 
-    if (!orderNumber || !productName || !plannedHours || !quantity) {
-      setFormValidationError('Pola: Numer zlecenia, Nazwa produktu, Planowane godziny i Ilość są wymagane.');
+    if (!orderNumber || !orderDate || !productName || !quantity || hoursPerUnit === undefined) {
+      setFormValidationError('Pola: Numer zlecenia, Data zlecenia, Nazwa produktu, Ilość i Godziny / szt. są wymagane.');
       return;
     }
 
-    const planHrs = parseFloat(plannedHours);
     const qty = parseFloat(quantity);
-    if (isNaN(planHrs) || planHrs < 0 || isNaN(qty) || qty <= 0) {
-      setFormValidationError('Planowane godziny muszą być liczbą większą lub równą 0, a ilość musi być większa od 0.');
+    const hrsPerUnit = parseFloat(hoursPerUnit);
+    if (isNaN(qty) || qty <= 0 || isNaN(hrsPerUnit) || hrsPerUnit < 0) {
+      setFormValidationError('Ilość musi być liczbą większą od 0, a godziny/szt. musi być liczbą większą lub równą 0.');
       return;
     }
 
@@ -130,12 +146,14 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
         },
         body: JSON.stringify({
           orderNumber: orderNumber.trim(),
+          orderDate,
+          plannedShipmentDate: plannedShipmentDate || null,
           productCode: productCode.trim(),
           productName: productName.trim(),
           accountingAccount: accountingAccount.trim(),
-          plannedHours: planHrs,
           quantity: qty,
           quantityUnit: quantityUnit.trim() || 'szt.',
+          hoursPerUnit: hrsPerUnit,
           status: orderStatus,
           isActive
         })
@@ -211,6 +229,28 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                 </div>
 
                 <div className="form-group">
+                  <label className="form-label">Data zlecenia</label>
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={orderDate}
+                    onChange={e => setOrderDate(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="form-row" style={{ marginTop: '0.5rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Data planowanej wysyłki (opcjonalnie)</label>
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={plannedShipmentDate}
+                    onChange={e => setPlannedShipmentDate(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
                   <label className="form-label">Konto księgowe (opcjonalnie)</label>
                   <input
                     type="text"
@@ -235,26 +275,15 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Planowana liczba godzin</label>
+                  <label className="form-label">Nazwa produktu</label>
                   <input
                     type="text"
                     className="form-control"
-                    placeholder="np. 40.00"
-                    value={plannedHours}
-                    onChange={e => setPlannedHours(e.target.value)}
+                    placeholder="np. Silnik Elektryczny 15kW"
+                    value={productName}
+                    onChange={e => setProductName(e.target.value)}
                   />
                 </div>
-              </div>
-
-              <div className="form-group" style={{ marginTop: '0.5rem' }}>
-                <label className="form-label">Nazwa produktu</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="np. Silnik Elektryczny 15kW"
-                  value={productName}
-                  onChange={e => setProductName(e.target.value)}
-                />
               </div>
 
               <div className="form-row" style={{ marginTop: '0.5rem' }}>
@@ -277,6 +306,31 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                     placeholder="np. szt., kg, m"
                     value={quantityUnit}
                     onChange={e => setQuantityUnit(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="form-row" style={{ marginTop: '0.5rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Godziny / szt.</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="np. 0.50"
+                    value={hoursPerUnit}
+                    onChange={e => setHoursPerUnit(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Plan godzin (auto)</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={derivedPlannedHours}
+                    readOnly
+                    disabled
+                    style={{ backgroundColor: 'var(--border-color)', cursor: 'not-allowed' }}
                   />
                 </div>
               </div>
@@ -369,10 +423,13 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
               <tr>
                 <th>Status</th>
                 <th>Numer zlecenia</th>
+                <th>Data zlecenia</th>
+                <th>Planowana wysyłka</th>
                 <th>Konto księgowe</th>
                 <th>Kod produktu</th>
                 <th>Nazwa produktu</th>
                 <th style={{ textAlign: 'right' }}>Ilość</th>
+                <th style={{ textAlign: 'right' }}>Godziny / szt.</th>
                 <th style={{ textAlign: 'right' }}>Plan</th>
                 <th style={{ textAlign: 'right' }}>Rzeczywiste</th>
                 <th>Pasek realizacji budżetu</th>
@@ -401,11 +458,16 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                   <tr key={order.id} style={{ opacity: order.isActive ? 1 : 0.65 }}>
                     <td>{statusBadge}</td>
                     <td style={{ fontWeight: 'bold' }}>{orderNumberDisplay}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{order.orderDate ? new Date(order.orderDate).toLocaleDateString('pl-PL') : '-'}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{order.plannedShipmentDate ? new Date(order.plannedShipmentDate).toLocaleDateString('pl-PL') : '-'}</td>
                     <td>{order.accountingAccount ? <code>{order.accountingAccount}</code> : '-'}</td>
                     <td>{order.productCode ? <code>{order.productCode}</code> : '-'}</td>
                     <td style={{ fontWeight: 600 }}>{order.productName}</td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                       {order.quantity !== null ? `${Number(order.quantity)} ${order.quantityUnit}` : '-'}
+                    </td>
+                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      {order.hoursPerUnit !== null ? `${Number(order.hoursPerUnit).toFixed(2)} h` : '0.00 h'}
                     </td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{order.plannedHours.toFixed(1)} h</td>
                     <td style={{ textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }}>{order.actualHours.toFixed(1)} h</td>
