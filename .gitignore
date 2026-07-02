@@ -1,2 +1,18 @@
 backups/
 .DS_Store
+
+# Node modules
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+
+# Prisma client generated artifacts
+backend/node_modules/.prisma/
+
+# Vite cache
+frontend/node_modules/.vite/
+
+# Local cache & logs
+cache/
+logs/
+*.log
