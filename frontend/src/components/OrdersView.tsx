@@ -244,7 +244,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', minWidth: 0, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
       {/* Create/Edit Form Modal (Admin only) */}
       {showFormModal && isAdmin && (
         <div className="modal-overlay">
@@ -458,7 +458,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
       )}
 
       {/* Tytuł */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', flexShrink: 0 }}>
         <FolderGit2 size={28} />
         <h2 style={{ fontFamily: 'var(--font-header)', fontSize: '1.8rem', margin: 0 }}>
           Baza Zleceń Produkcyjnych
@@ -502,7 +502,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
           Brak zleceń spełniających kryteria wyszukiwania.
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, minWidth: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, minWidth: 0, maxWidth: '100%' }}>
           {/* Top scrollbar rail */}
           <div 
             ref={topScrollRef} 

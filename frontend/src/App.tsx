@@ -5,13 +5,12 @@ import {
   FolderGit2, 
   Users, 
   Settings, 
-  UserCheck, 
-  FileSpreadsheet, 
   FileDown, 
   LogOut, 
   Sun, 
   Moon, 
-  Lock 
+  Lock,
+  ChevronDown
 } from 'lucide-react';
 
 // View Components (to be created)
@@ -53,7 +52,9 @@ function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>(
     (localStorage.getItem('theme') as 'dark' | 'light') || 'dark'
   );
-  const [currentTab, setCurrentTab] = useState<string>('reporting');
+  const [currentTab, setCurrentTab] = useState<string>(() => {
+    return sessionStorage.getItem('current_tab') || 'reporting';
+  });
   
   // Login form state
   const [loginUsername, setLoginUsername] = useState('');
@@ -63,6 +64,9 @@ function App() {
 
   // App version state
   const [appVersion, setAppVersion] = useState<string | null>(null);
+  const [isAdminOpen, setIsAdminOpen] = useState<boolean>(() => {
+    return sessionStorage.getItem('sidebar_admin_open') === 'true';
+  });
 
   // Fetch app version on mount
   useEffect(() => {
@@ -101,13 +105,23 @@ function App() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
+  // Save currentTab to sessionStorage and auto-expand Administracja submenu if active page is inside it
+  useEffect(() => {
+    sessionStorage.setItem('current_tab', currentTab);
+    if (['users', 'dictionaries', 'imports'].includes(currentTab)) {
+      setIsAdminOpen(true);
+    }
+  }, [currentTab]);
+
   // Set default tab based on user role on login
   useEffect(() => {
     if (user) {
-      if (user.role === 'admin') {
-        setCurrentTab('dashboard');
-      } else {
-        setCurrentTab('reporting');
+      if (!sessionStorage.getItem('current_tab')) {
+        if (user.role === 'admin') {
+          setCurrentTab('dashboard');
+        } else {
+          setCurrentTab('reporting');
+        }
       }
     }
   }, [user]);
@@ -160,6 +174,8 @@ function App() {
     localStorage.removeItem('user');
     sessionStorage.removeItem('token');
     sessionStorage.removeItem('user');
+    sessionStorage.removeItem('current_tab');
+    sessionStorage.removeItem('sidebar_admin_open');
     setToken(null);
     setUser(null);
   };
@@ -221,7 +237,7 @@ function App() {
               {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
             </button>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              {appVersion === 'error' ? 'Wersja niedostępna' : (appVersion ? `Wersja v${appVersion}` : '')}
+              {appVersion === 'error' ? 'Wersja systemu niedostępna' : (appVersion ? `Wersja systemu v${appVersion}` : '')}
             </span>
           </div>
         </div>
@@ -229,19 +245,7 @@ function App() {
     );
   }
 
-  // Define sidebar menu options based on role
-  const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: <BarChart3 size={18} />, roles: ['admin'] },
-    { id: 'reporting', label: 'Raportowanie', icon: <Clock size={18} />, roles: ['admin', 'leader'] },
-    { id: 'orders', label: 'Zlecenia', icon: <FolderGit2 size={18} />, roles: ['admin', 'leader'] },
-    { id: 'employees', label: 'Pracownicy', icon: <Users size={18} />, roles: ['admin'] },
-    { id: 'dictionaries', label: 'Słowniki', icon: <Settings size={18} />, roles: ['admin'] },
-    { id: 'users', label: 'Użytkownicy', icon: <UserCheck size={18} />, roles: ['admin'] },
-    { id: 'imports', label: 'Import danych', icon: <FileSpreadsheet size={18} />, roles: ['admin'] },
-    { id: 'reports', label: 'Raporty', icon: <FileDown size={18} />, roles: ['admin', 'leader'] },
-  ];
 
-  const filteredMenuItems = menuItems.filter(item => item.roles.includes(user.role));
 
   const renderActiveTab = () => {
     switch (currentTab) {
@@ -280,19 +284,13 @@ function App() {
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>
 
-          <div className="user-profile-badge">
-            <span style={{ 
-              width: '8px', 
-              height: '8px', 
-              borderRadius: '50%', 
-              backgroundColor: user.role === 'admin' ? '#ef4444' : '#10b981' 
-            }}></span>
-            <span>{user.fullName} ({user.role === 'admin' ? 'Admin' : 'Leader'})</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', color: 'var(--text-secondary)', marginRight: '0.5rem' }}>
+            <span>{user.fullName} / {user.role === 'admin' ? 'Administrator' : 'Leader'}</span>
           </div>
 
-          <button className="btn btn-secondary btn-sm" onClick={handleLogout} title="Wyloguj się">
+          <button className="btn btn-danger btn-sm" onClick={handleLogout} title="Wyloguj się" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             <LogOut size={16} />
-            <span className="hide-mobile">Wyloguj</span>
+            <span>Wyloguj</span>
           </button>
         </div>
       </header>
@@ -302,26 +300,131 @@ function App() {
         {/* Sidebar Menu */}
         <aside className="sidebar">
           <nav className="nav-links">
-            {filteredMenuItems.map(item => (
-              <button
-                key={item.id}
-                onClick={() => setCurrentTab(item.id)}
-                className={`nav-item ${currentTab === item.id ? 'active' : ''}`}
-              >
-                {item.icon}
-                <span>{item.label}</span>
-              </button>
-            ))}
+            {user.role === 'leader' ? (
+              <>
+                <button
+                  onClick={() => setCurrentTab('reporting')}
+                  className={`nav-item ${currentTab === 'reporting' ? 'active' : ''}`}
+                >
+                  <Clock size={18} />
+                  <span>Raportowanie</span>
+                </button>
+                <button
+                  onClick={() => setCurrentTab('reports')}
+                  className={`nav-item ${currentTab === 'reports' ? 'active' : ''}`}
+                >
+                  <FileDown size={18} />
+                  <span>Raporty</span>
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Robocza (Workspace) Section */}
+                <button
+                  onClick={() => setCurrentTab('dashboard')}
+                  className={`nav-item ${currentTab === 'dashboard' ? 'active' : ''}`}
+                >
+                  <BarChart3 size={18} />
+                  <span>Dashboard</span>
+                </button>
+                <button
+                  onClick={() => setCurrentTab('orders')}
+                  className={`nav-item ${currentTab === 'orders' ? 'active' : ''}`}
+                >
+                  <FolderGit2 size={18} />
+                  <span>Zlecenia</span>
+                </button>
+                <button
+                  onClick={() => setCurrentTab('reporting')}
+                  className={`nav-item ${currentTab === 'reporting' ? 'active' : ''}`}
+                >
+                  <Clock size={18} />
+                  <span>Raportowanie</span>
+                </button>
+                <button
+                  onClick={() => setCurrentTab('reports')}
+                  className={`nav-item ${currentTab === 'reports' ? 'active' : ''}`}
+                >
+                  <FileDown size={18} />
+                  <span>Raporty</span>
+                </button>
+
+                {/* Divider separating Workspace from Administration */}
+                <div className="sidebar-divider"></div>
+
+                {/* Administracja Section */}
+                <button
+                  onClick={() => setCurrentTab('employees')}
+                  className={`nav-item ${currentTab === 'employees' ? 'active' : ''}`}
+                >
+                  <Users size={18} />
+                  <span>Pracownicy</span>
+                </button>
+
+                {/* Collapsible Administracja parent */}
+                <button
+                  onClick={() => {
+                    setIsAdminOpen(prev => {
+                      const next = !prev;
+                      sessionStorage.setItem('sidebar_admin_open', String(next));
+                      return next;
+                    });
+                  }}
+                  className={`nav-item ${['users', 'dictionaries', 'imports'].includes(currentTab) ? 'parent-active' : ''}`}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <Settings size={18} />
+                    <span>Administracja</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <ChevronDown size={16} className={`nav-chevron ${isAdminOpen ? 'open' : ''}`} />
+                  </div>
+                </button>
+
+                {/* Submenu wrapper with collapse/expand CSS transition */}
+                <div className={`sidebar-submenu-wrapper ${isAdminOpen ? 'open' : ''}`}>
+                  <div className="sidebar-submenu">
+                    <button
+                      onClick={() => setCurrentTab('users')}
+                      className={`nav-submenu-item ${currentTab === 'users' ? 'active' : ''}`}
+                    >
+                      <span className="bullet">•</span>
+                      <span>Użytkownicy</span>
+                    </button>
+                    <button
+                      onClick={() => setCurrentTab('dictionaries')}
+                      className={`nav-submenu-item ${currentTab === 'dictionaries' ? 'active' : ''}`}
+                    >
+                      <span className="bullet">•</span>
+                      <span>Słowniki</span>
+                    </button>
+                    <button
+                      onClick={() => setCurrentTab('imports')}
+                      className={`nav-submenu-item ${currentTab === 'imports' ? 'active' : ''}`}
+                    >
+                      <span className="bullet">•</span>
+                      <span>Import danych</span>
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </nav>
-          <div style={{ marginTop: 'auto', fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-            {appVersion === 'error' 
-              ? 'System Ewidencji Czasu Pracy — wersja niedostępna' 
-              : `System Ewidencji Czasu Pracy ${appVersion ? `v${appVersion}` : ''}`}
+
+          {/* Sidebar Footer */}
+          <div className="sidebar-footer">
+            <div className="sidebar-version-section">
+              <span className="sidebar-version-label">Wersja systemu</span>
+              <span className="sidebar-version-value">
+                {appVersion === 'error' ? 'niedostępna' : (appVersion ? `v${appVersion}` : '')}
+              </span>
+            </div>
           </div>
         </aside>
 
         {/* Content Area */}
-        <main style={{ flex: 1, backgroundColor: 'var(--bg-primary)', display: 'flex', flexDirection: 'column' }}>
+        <main style={{ flex: 1, backgroundColor: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', minWidth: 0, maxWidth: '100%' }}>
           <div className={`content-wrapper ${['orders', 'employees', 'users', 'dictionaries', 'reports'].includes(currentTab) ? 'orders-tab-wrapper' : ''}`}>
             {renderActiveTab()}
           </div>

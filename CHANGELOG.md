@@ -3,7 +3,16 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.1.6] (Development) - 2026-07-02
+## [0.2.0] (Development) - 2026-07-03
+
+### Added
+- Nowy dwusekcyjny układ menu nawigacyjnego dla Administratora (Robocza vs Administracja).
+- Ograniczenie dostępu dla roli Leader do zakładki Zlecenia (widzi wyłącznie Raportowanie i Raporty).
+- Collapsible submenu dla sekcji Administracja z automatycznym rozwijaniem i wyróżnieniem nadrzędnego elementu.
+- Nowa stopka sidebara zawierająca wersję systemu, zalogowanego użytkownika oraz przycisk wylogowania na samym dole.
+- Ujednolicenie terminologii w interfejsie ("Wersja systemu" zamiast "Wersja aplikacji").
+
+## [0.1.6] - 2026-07-02
 
 ### Added
 - Nowe usprawnienia layoutu i UX dla modułu Zlecenia (wersja 0.1.6).

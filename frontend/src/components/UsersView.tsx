@@ -316,7 +316,7 @@ export default function UsersView({ token, currentUser }: UsersViewProps) {
       )}
 
       {/* Tytuł */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', flexShrink: 0 }}>
         <UserCheck size={28} />
         <h2 style={{ fontFamily: 'var(--font-header)', fontSize: '1.8rem', margin: 0 }}>
           Użytkownicy Systemu

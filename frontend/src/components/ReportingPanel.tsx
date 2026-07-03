@@ -9,7 +9,8 @@ import {
   HelpCircle,
   Plus,
   Search,
-  Clock
+  Clock,
+  Calendar
 } from 'lucide-react';
 import { UserSession } from '../App';
 
@@ -78,6 +79,13 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
   const [currentDate, setCurrentDate] = useState<string>(
     new Date().toISOString().split('T')[0]
   );
+
+  const handleSetToday = () => {
+    const today = new Date();
+    const offset = today.getTimezoneOffset();
+    const localToday = new Date(today.getTime() - (offset * 60 * 1000));
+    setCurrentDate(localToday.toISOString().split('T')[0]);
+  };
   const [currentEmployeeIdx, setCurrentEmployeeIdx] = useState<number>(0);
 
   const currentEmployee = employees[currentEmployeeIdx];
@@ -628,7 +636,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
       )}
 
       {/* Tytuł */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', flexShrink: 0 }}>
         <Clock size={28} />
         <h2 style={{ fontFamily: 'var(--font-header)', fontSize: '1.8rem', margin: 0 }}>
           Raportowanie Godzin Pracy
@@ -645,6 +653,14 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
           value={currentDate}
           onChange={e => setCurrentDate(e.target.value)}
         />
+        <button 
+          className="btn btn-primary" 
+          onClick={handleSetToday}
+          style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 0.75rem' }}
+        >
+          <Calendar size={16} />
+          <span>Dzisiaj</span>
+        </button>
       </div>
 
       {/* Employee Navigation Bar */}
