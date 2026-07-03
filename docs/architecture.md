@@ -48,8 +48,4 @@ Aplikacja służy do rejestracji i raportowania czasu pracy pracowników warszta
 - **Przebudowa modelu i widoku**: Zmiana nazw kolumn na standard domenowy (`productCode`, `plannedHours`, `completionDate`), dodanie pól `quantity` i `quantityUnit` o typie Decimal(10,2) oraz systemowego enuma statusów.
 - **Dodanie flagi aktywności**: Wprowadzenie pola `isActive`, pozwalającego dezaktywować zlecenia bez ich usuwania. Filtrowanie autouzupełniania zlecenia w panelu raportowania wyłącznie do aktywnych zleceń (status `OPEN` i `isActive = true`).
 
-## Do rozbudowy
-- **Importy (Krok 2)**: Przebudowa szablonu i parsera importu zleceń Excel zgodnie z nowym modelem danych.
-- **Raporty**: Rozszerzone eksporty i analityka dla liderów.
-- **Importy**: Dokładne logowanie błędów w arkuszach Excel.
-- **UX**: Optymalizacja mobilna.
+

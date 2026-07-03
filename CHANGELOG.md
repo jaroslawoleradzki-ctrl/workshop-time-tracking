@@ -3,6 +3,13 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.1] (Development) - 2026-07-03
+
+### Added
+- Gruntowna reorganizacja pliku README.md w celu pełnego udokumentowania architektury, procesów wdrażania, struktury repozytorium oraz stosu technologicznego.
+- Utworzenie dokumentu wytycznych deweloperskich AGENTS.md opisującego standardy pracy dla deweloperów i agentów AI (Definition of Done, Git workflow, reguły bazy danych/Prisma, standard opisu zadań).
+- Dostosowanie dokumentacji technicznej w katalogu `docs/` do stanu rzeczywistego (usunięcie sekcji planowanych zmian w architecture.md i zaktualizowanie roadmap.md do listy zrealizowanych kamieni milowych).
+
 ## [0.2.0] (Development) - 2026-07-03
 
 ### Added
