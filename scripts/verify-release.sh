@@ -24,6 +24,7 @@ GIT_STATUS="PENDING"
 VERSIONS_STATUS="PENDING"
 BACKEND_BUILD_STATUS="PENDING"
 FRONTEND_BUILD_STATUS="PENDING"
+BACKEND_TESTS_STATUS="PENDING"
 DOCKER_STATUS="SKIPPED"
 DOCS_STATUS="PENDING"
 
@@ -200,7 +201,18 @@ validate_builds() {
   return 0
 }
 
-# 4. DOCKER VALIDATION
+# 4. BACKEND TESTS VALIDATION
+validate_backend_tests() {
+  if ! (cd backend && npm test >/dev/null 2>&1); then
+    log_fail "Backend automated tests failed. Run 'npm test' inside backend/ to diagnose."
+    BACKEND_TESTS_STATUS="FAIL"
+    return 1
+  fi
+  BACKEND_TESTS_STATUS="PASS"
+  return 0
+}
+
+# 5. DOCKER VALIDATION
 validate_docker() {
   DOCKER_STATUS="PENDING"
   if ! command -v docker >/dev/null 2>&1; then
@@ -234,8 +246,10 @@ echo "========================================="
 if validate_git; then
   if validate_versions; then
     if validate_builds; then
-      if [ "$WITH_DOCKER" = true ]; then
-        validate_docker || true
+      if validate_backend_tests; then
+        if [ "$WITH_DOCKER" = true ]; then
+          validate_docker || true
+        fi
       fi
     fi
   fi
@@ -246,6 +260,7 @@ echo "Git....................... $GIT_STATUS"
 echo "Versions.................. $VERSIONS_STATUS"
 echo "Backend Build............. $BACKEND_BUILD_STATUS"
 echo "Frontend Build............ $FRONTEND_BUILD_STATUS"
+echo "Backend Tests............ $BACKEND_TESTS_STATUS"
 echo "Docker Compose............ $DOCKER_STATUS"
 echo "Documentation............. $DOCS_STATUS"
 echo "========================================="
@@ -254,6 +269,7 @@ if [ "$GIT_STATUS" = "PASS" ] && \
    [ "$VERSIONS_STATUS" = "PASS" ] && \
    [ "$BACKEND_BUILD_STATUS" = "PASS" ] && \
    [ "$FRONTEND_BUILD_STATUS" = "PASS" ] && \
+   [ "$BACKEND_TESTS_STATUS" = "PASS" ] && \
    ( [ "$WITH_DOCKER" = false ] || [ "$DOCKER_STATUS" = "PASS" ] ) && \
    [ "$DOCS_STATUS" = "PASS" ]; then
   echo "RESULT: RELEASE VALIDATION PASSED"
