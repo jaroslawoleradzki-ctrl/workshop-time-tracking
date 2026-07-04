@@ -36,10 +36,42 @@ git checkout main
 git pull origin main
 docker compose up -d --build
 ```
-Logi backendu po wdrożeniu można sprawdzić komendą:
+
+### Modyfikacje lokalne na serwerze (Local server modifications)
+Serwery produkcyjne mogą zawierać celowe, lokalne modyfikacje plików konfiguracyjnych (np. zmiany portów w `docker-compose.yml` lub zmiennych środowiskowych). Obecność lokalnych zmian może spowodować błąd wykonania `git pull`.
+
+Przed pobraniem aktualizacji należy zawsze wykonać:
 ```bash
+git status
+```
+Jeśli w repozytorium znajdują się lokalne zmiany, zabezpiecz je poleceniem `stash`:
+```bash
+git stash push -m "server local config"
+git pull origin main
+git stash pop
+```
+*Uwaga: Wszelkie ewentualne konflikty scalania (merge conflicts) po wykonaniu `git stash pop` muszą zostać bezwzględnie rozwiązane przed kontynuowaniem procesu wdrożenia.*
+
+### Weryfikacja po wdrożeniu (Post-deployment verification)
+Zaraz po zakończeniu wdrożenia (uruchomieniu kontenerów), wykonaj poniższą sekwenckę poleceń w celu weryfikacji poprawności uruchomienia:
+```bash
+# Odczekaj 15 sekund na uruchomienie aplikacji i wykonanie migracji Prisma
+sleep 15
+
+# Zweryfikuj zwracaną wersję API
+curl http://localhost/api/version
+
+# Sprawdź status i zdrowie kontenerów
+docker compose ps
+
+# Sprawdź ostatnie 50 linii logów backendu pod kątem błędów
 docker logs worktime-api --tail=50
 ```
+
+**Co należy zweryfikować**:
+- Czy polecenie `curl` zwraca prawidłowy obiekt JSON z nowo wdrożoną wersją aplikacji (np. `{"version":"v0.2.6"}`).
+- Czy wszystkie kontenery mają status `running` (oraz czy baza `postgres` jest oznaczona jako `healthy`).
+- Czy w logach `worktime-api` nie występują błędy połączenia z bazą danych (Connection Refused), niepowodzenia migracji Prisma lub wyjątki krytyczne Node.js.
 
 *Uwaga: Od wersji v0.2.4/v0.2.5, proces instalowania pakietów npm oraz budowania wersji produkcyjnej frontendu (React) odbywa się w pełni automatycznie wewnątrz kontenera Docker (multi-stage build). Oznacza to, że wdrożenie nie wymaga już obecności w repozytorium skompilowanych plików frontendu. Uruchomienie `docker compose up -d --build` samodzielnie pobiera zależności, kompiluje kod i serwuje pliki produkcyjne bez konieczności jakichkolwiek działań manualnych na maszynie hosta. Katalog `frontend/dist` został całkowicie wykluczony z systemu kontroli wersji i nie powinien być nigdy zatwierdzany (committed) do repozytorium.*
 
@@ -108,6 +140,36 @@ Domyślnie weryfikuje czystość kodu w Git, zgodność wersji w plikach konfigu
 ./scripts/verify-release.sh --with-docker
 ```
 Zwraca kod wyjścia `0` w przypadku powodzenia (PASS) lub `1` w przypadku wykrycia jakichkolwiek problemów (FAIL), przerywając proces wydania.
+
+## Procedura testu dymnego (Smoke Test)
+
+Po wdrożeniu nowej wersji na serwer produkcyjny, należy przeprowadzić ręczny test dymny (smoke test) według następujących kroków:
+1. **Status kontenerów**:
+   Zweryfikuj stan usług za pomocą polecenia:
+   ```bash
+   docker compose ps
+   ```
+   Upewnij się, że wszystkie kontenery są w stanie `running` (a baza danych w stanie `healthy`).
+2. **Weryfikacja wersji API**:
+   Wyślij zapytanie do endpointu wersji backendu:
+   ```bash
+   curl http://localhost/api/version
+   ```
+   Upewnij się, że zwrócony obiekt JSON zawiera poprawną, nowo wdrożoną wersję aplikacji.
+3. **Weryfikacja wersji w przeglądarce**:
+   Otwórz aplikację w przeglądarce. Na ekranie logowania sprawdź, czy wersja wyświetlana w dolnej części panelu logowania jest identyczna z wydaną wersją.
+4. **Logowanie**:
+   Zaloguj się do aplikacji z uprawnieniami administratora (`Administrator`).
+5. **Nawigacja i ładowanie danych**:
+   Przejdź kolejno po podstronach nawigacji:
+   - **Dashboard** (Panel główny)
+   - **Pracownicy** (Employees)
+   - **Zlecenia** (Orders)
+   - **Raporty** (Reports)
+   - **Użytkownicy** (Users)
+6. **Weryfikacja poprawności**:
+   - Sprawdź, czy dane ładują się poprawnie (widoczne rekordy w tabelach, brak komunikatów o braku danych).
+   - Potwierdź brak widocznych błędów frontendowych i backendowych (brak komunikatów błędów w konsoli przeglądarki lub w logach serwera).
 
 ## Lista kontrolna wydania (Release Checklist)
 
