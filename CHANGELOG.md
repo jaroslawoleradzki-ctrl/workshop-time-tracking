@@ -3,6 +3,14 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.8] (Development) - 2026-07-04
+
+### Planned
+- Uporządkowanie konfiguracji TypeScript dla skryptu inicjalizacji bazy danych (Prisma seed).
+- Wprowadzenie automatycznego zasilania bazy danych (database seed) podczas startu kontenerów.
+- Usprawnienie procedury pierwszej instalacji systemu (first-install experience).
+- Zapewnienie bezpieczniejszego i bardziej stabilnego procesu inicjalizacji bazy danych w środowisku produkcyjnym.
+
 ## [0.2.7] (Development) - 2026-07-04
 
 ### Added
