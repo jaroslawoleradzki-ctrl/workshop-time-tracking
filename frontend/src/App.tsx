@@ -69,6 +69,16 @@ function App() {
     return sessionStorage.getItem('sidebar_admin_open') === 'true';
   });
 
+  // Helper to clear all application-specific storage keys
+  const clearApplicationStorage = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
+    sessionStorage.removeItem('current_tab');
+    sessionStorage.removeItem('sidebar_admin_open');
+  };
+
   // Fetch app version on mount
   useEffect(() => {
     fetch('/api/version')
@@ -102,12 +112,10 @@ function App() {
           const latestVer = data.version || null;
           if (latestVer && initialVersionRef.current && latestVer !== initialVersionRef.current) {
             clearInterval(interval);
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            sessionStorage.removeItem('current_tab');
-            sessionStorage.removeItem('sidebar_admin_open');
+            clearApplicationStorage();
             setToken(null);
             setUser(null);
+            setCurrentTab('reporting');
             setLoginError('Aplikacja została zaktualizowana. Zaloguj się ponownie.');
           }
         })
@@ -122,10 +130,7 @@ function App() {
   // Listen for global auth errors (401/403)
   useEffect(() => {
     const handleAuthError = () => {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      sessionStorage.removeItem('token');
-      sessionStorage.removeItem('user');
+      clearApplicationStorage();
       setToken(null);
       setUser(null);
       setLoginError('Sesja wygasła, zaloguj się ponownie');
@@ -206,12 +211,7 @@ function App() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    sessionStorage.removeItem('token');
-    sessionStorage.removeItem('user');
-    sessionStorage.removeItem('current_tab');
-    sessionStorage.removeItem('sidebar_admin_open');
+    clearApplicationStorage();
     setToken(null);
     setUser(null);
   };

@@ -30,6 +30,8 @@ export default class ErrorBoundary extends Component<Props, State> {
     localStorage.removeItem('user');
     sessionStorage.removeItem('token');
     sessionStorage.removeItem('user');
+    sessionStorage.removeItem('current_tab');
+    sessionStorage.removeItem('sidebar_admin_open');
     window.location.reload();
   };
 
