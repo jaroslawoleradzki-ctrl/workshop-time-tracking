@@ -44,14 +44,46 @@ docker logs worktime-api --tail=50
 *Uwaga: Od wersji v0.2.4/v0.2.5, proces instalowania pakietów npm oraz budowania wersji produkcyjnej frontendu (React) odbywa się w pełni automatycznie wewnątrz kontenera Docker (multi-stage build). Oznacza to, że wdrożenie nie wymaga już obecności w repozytorium skompilowanych plików frontendu. Uruchomienie `docker compose up -d --build` samodzielnie pobiera zależności, kompiluje kod i serwuje pliki produkcyjne bez konieczności jakichkolwiek działań manualnych na maszynie hosta. Katalog `frontend/dist` został całkowicie wykluczony z systemu kontroli wersji i nie powinien być nigdy zatwierdzany (committed) do repozytorium.*
 
 ## Kopia zapasowa (Backup)
-Do tworzenia kopii zapasowej bazy danych służy skrypt `backup-db.sh` zlokalizowany w katalogu głównym:
+
+Do tworzenia kopii zapasowej bazy danych PostgreSQL służy zautomatyzowany skrypt `backup-db.sh` zlokalizowany w katalogu głównym projektu.
+
+### Funkcje skryptu `backup-db.sh`
+Skrypt ten wykonuje następujące operacje podczas każdego uruchomienia:
+1. **Automatyczne określenie ścieżki**: Skrypt automatycznie wykrywa katalog, w którym się znajduje, i przełącza się do niego (co umożliwia bezpieczne wywołanie skryptu z dowolnej ścieżki na hoście).
+2. **Weryfikacja środowiska**: Przed wykonaniem kopii sprawdza, czy narzędzia `docker` oraz wtyczka `docker compose` są zainstalowane i dostępne.
+3. **Kontrola kontenera bazy danych**: Weryfikuje, czy kontener bazy danych PostgreSQL (`worktime-db`) jest aktualnie uruchomiony. Jeśli nie, skrypt kończy działanie zwracając niezerowy kod błędu.
+4. **Tworzenie katalogu backupu**: Jeśli katalog `backups/` nie istnieje, skrypt tworzy go automatycznie.
+5. **Kompilacja i kompresja**: Wykonuje zrzut bazy `pg_dump` wewnątrz kontenera bez eksponowania hasła i kompresuje plik programem `gzip` na hoście.
+6. **Rotacja plików kopii**: Automatycznie skanuje katalog `backups/` i usuwa pliki kopii starsze niż **30 dni** (retencja 30 dni) w celu ochrony serwera przed wyczerpaniem wolnego miejsca.
+7. **Szczegółowe logowanie**: Każda operacja jest logowana do konsoli ze znacznikiem czasu oraz poziomem ważności (np. `[YYYY-MM-DD HH:MM:SS] INFO ...`).
+
+### Ręczne wykonanie kopii (Manual backup)
+Aby natychmiast utworzyć kopię zapasową bazy danych, uruchom z poziomu katalogu głównego projektu:
 ```bash
 ./backup-db.sh
 ```
-Skrypt ten:
-- Tworzy katalog `backups/` (zignorowany w Git).
-- Wykonuje `pg_dump` wewnątrz kontenera bazy danych `worktime-db` bez hardkodowania hasła (pobiera je ze zmiennych środowiskowych kontenera).
-- Kompresuje wynik gzipem i zapisuje plik w formacie: `backups/time_reporting_YYYY-MM-DD_HH-MM-SS.sql.gz`.
+
+### Lokalizacja i retencja
+Wszystkie kopie zapasowe bazy danych są zapisywane w katalogu:
+`backups/` (katalog ten jest zignorowany w systemie kontroli wersji Git).
+
+Pliki są zapisywane z unikalnymi nazwami opartymi na dacie i godzinie: `time_reporting_YYYY-MM-DD_HH-MM-SS.sql.gz`.
+
+Retencja wynosi **30 dni**. Starsze kopie są usuwane automatycznie przy kolejnych uruchomieniach skryptu.
+
+### Automatyzacja (Cron)
+Skrypt jest w pełni przystosowany do pracy w harmonogramie zadań `cron` (używa przełącznika `-T` w komendzie `docker compose exec`, który wyłącza emulację terminala TTY i zapobiega błędom w środowiskach nieinteraktywnych).
+
+Automatyczne harmonogramowanie **nie jest domyślnie włączone**. Administrator serwera może je skonfigurować np. w systemowym crontabie:
+```cron
+# Uruchamiaj backup codziennie o 2:00 w nocy i zapisuj logi do pliku
+0 2 * * * /sciezka/do/projektu/backup-db.sh >> /sciezka/do/projektu/backups/cron-backup.log 2>&1
+```
+
+### Rozwiązywanie problemów (Troubleshooting)
+W przypadku niepowodzenia skryptu, w logach pojawi się szczegółowy opis błędu:
+* **`ERROR Docker is not available...`**: Narzędzie Docker nie jest zainstalowane lub nie zostało dodane do zmiennej środowiskowej `$PATH` crona.
+* **`ERROR PostgreSQL container (postgres) is not running...`**: Kontener bazy danych nie działa. Należy go uruchomić komendą `docker compose up -d postgres` i dopiero wtedy ponowić wykonanie kopii.
 
 ## Przywracanie kodu (Rollback)
 W przypadku awarii nowej wersji kodu aplikacji, można cofnąć kod do stabilnego stanu za pomocą skryptu `rollback.sh`:
