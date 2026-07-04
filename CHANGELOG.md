@@ -3,6 +3,13 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.4] (Development) - 2026-07-04
+
+### Added
+- Pełna konteneryzacja procesu budowania frontendu (multi-stage Dockerfile dla aplikacji frontendowej).
+- Aktualizacja konfiguracji docker-compose.yml w celu automatycznego budowania obrazu frontendu przy uruchomieniu kontenera.
+- Aktualizacja README.md i docs/deployment.md odzwierciedlająca uproszczoną procedurę wdrożeniową.
+
 ## [0.2.3] (Development) - 2026-07-04
 
 ### Added

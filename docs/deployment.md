@@ -41,6 +41,8 @@ Logi backendu po wdrożeniu można sprawdzić komendą:
 docker logs worktime-api --tail=50
 ```
 
+*Uwaga: Od wersji v0.2.4, proces instalowania pakietów npm oraz budowania wersji produkcyjnej frontendu (React) odbywa się w pełni automatycznie wewnątrz kontenera Docker (multi-stage build). Uruchomienie `docker compose up -d --build` samodzielnie pobiera zależności, kompiluje kod i serwuje pliki produkcyjne bez konieczności jakichkolwiek działań manualnych na maszynie hosta.*
+
 ## Kopia zapasowa (Backup)
 Do tworzenia kopii zapasowej bazy danych służy skrypt `backup-db.sh` zlokalizowany w katalogu głównym:
 ```bash
