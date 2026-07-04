@@ -128,8 +128,17 @@ Cofnięcie kodu aplikacji do wybranego commita odbywa się za pomocą skryptu `r
 ```
 *Uwaga: Skrypt ten cofa wyłącznie kod źródłowy aplikacji (wykonuje bezpieczny `git checkout` na wskazany commit po uprzedniej weryfikacji jego istnienia i przebudowuje kontenery za pomocą `docker compose up -d --build`). Nie modyfikuje on w żaden sposób bazy danych.*
 
-### 2. Przywracanie bazy danych (Manualne)
-Database rollback **nie jest wykonywany automatycznie**. Jeśli pomiędzy wersją wadliwą a wersją stabilną nastąpiła migracja schematu Prisma (zmiana struktury bazy), sama zmiana kodu nie wystarczy i backend zacznie zgłaszać błędy runtime. W takim przypadku należy manualnie przywrócić odpowiednią bazę danych z pliku kopii zapasowej SQL utworzonej przed aktualizacją:
+### 2. Przywracanie bazy danych (Database Restore)
+Przywrócenie bazy danych (w tym database rollback podczas cofania kodu) nie jest wykonywane automatycznie. W celu przywrócenia bazy z wybranego pliku kopii zapasowej `.sql.gz` należy użyć zautomatyzowanego skryptu `restore-db.sh`:
+```bash
+./restore-db.sh backups/time_reporting_YYYY-MM-DD_HH-MM-SS.sql.gz
+```
+Skrypt ten automatycznie weryfikuje istnienie pliku, dostępność narzędzi Docker/Compose oraz stan kontenera bazy danych, a następnie żąda wpisania słowa `YES` w celu potwierdzenia nadpisania dotychczasowych danych.
+
+> [!CAUTION]
+> Skrypt `restore-db.sh` **NIGDY** nie może być uruchamiany w środowisku produkcyjnym bez wcześniejszego upewnienia się, że wybrany plik kopii zapasowej (backupu) jest w 100% poprawny i dopasowany do schematu Prisma planowanej wersji aplikacji. Błędny plik kopii spowoduje całkowitą utratę danych produkcyjnych oraz runtime-crashe API.
+
+Alternatywnie (w sytuacjach awaryjnych) można wykonać przywracanie bezpośrednio za pomocą potoku:
 ```bash
 zcat backups/time_reporting_YYYY-MM-DD_HH-MM-SS.sql.gz | docker exec -i worktime-db psql -U time_user -d time_reporting
 ```
@@ -208,7 +217,7 @@ Upewnij się, że zmienna `DATABASE_URL` w `docker-compose.yml` wskazuje na popr
 ### 2. Problem z uprawnieniami do wykonywania skryptów shellowych
 *Rozwiązanie*: Nadaj skryptom uprawnienia wykonywania:
 ```bash
-chmod +x backup-db.sh rollback.sh backend/docker-entrypoint.sh scripts/verify-release.sh
+chmod +x backup-db.sh rollback.sh restore-db.sh backend/docker-entrypoint.sh scripts/verify-release.sh
 ```
 
 ### 3. Kontener bazy danych nie startuje (port zajęty)
