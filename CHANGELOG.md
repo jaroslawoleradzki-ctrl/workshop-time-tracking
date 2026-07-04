@@ -3,6 +3,16 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.6] (Development) - 2026-07-04
+
+### Added
+- Wdrożenie skryptu automatycznej walidacji wydania (`verify-release.sh`).
+- Wprowadzenie testów integracyjnych backendu (Vitest + Supertest) dla endpointów health check, login oraz kontroli dostępu.
+- Wpięcie testów automatycznych backendu do procesu walidacji wydania.
+- Zabezpieczenie i uszczelnienie procedury rollback w skrypcie `rollback.sh`.
+- Wdrożenie bezpiecznego narzędzia automatycznego przywracania bazy danych (`restore-db.sh`).
+- Stworzenie pełnej dokumentacji testów (`docs/testing.md`).
+
 ## [0.2.5] (Development) - 2026-07-04
 
 ### Added
