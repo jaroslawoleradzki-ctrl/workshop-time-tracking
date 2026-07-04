@@ -217,8 +217,34 @@ Upewnij się, że zmienna `DATABASE_URL` w `docker-compose.yml` wskazuje na popr
 ### 2. Problem z uprawnieniami do wykonywania skryptów shellowych
 *Rozwiązanie*: Nadaj skryptom uprawnienia wykonywania:
 ```bash
-chmod +x backup-db.sh rollback.sh restore-db.sh backend/docker-entrypoint.sh scripts/verify-release.sh
+chmod +x backup-db.sh rollback.sh restore-db.sh status.sh backend/docker-entrypoint.sh scripts/verify-release.sh
 ```
 
 ### 3. Kontener bazy danych nie startuje (port zajęty)
 *Rozwiązanie*: Upewnij się, że port `5432` na hoście nie jest zajęty przez lokalną instalację PostgreSQL. W razie potrzeby zmień mapowanie portów w `docker-compose.yml`.
+
+---
+
+## Diagnostyka stanu systemu (status.sh)
+
+W celach diagnostycznych na produkcji przygotowano lekki skrypt diagnostyczny `status.sh`, który pozwala szybko ocenić stan działania całego ekosystemu aplikacji bez modyfikowania jakichkolwiek konfiguracji.
+
+### Sposób uruchamiania:
+Z poziomu głównego katalogu projektu:
+```bash
+./status.sh
+```
+
+### Kiedy używać skryptu:
+* Po wdrożeniu nowej wersji w celu upewnienia się, że kontenery wstały i działają stabilnie.
+* W przypadku zgłoszeń użytkowników o braku połączenia lub wolnym działaniu systemu.
+* Przed planowanymi pracami konserwacyjnymi lub aktualizacjami bazy danych.
+
+### Co weryfikuje skrypt:
+1. **Stan repozytorium Git**: Aktywną gałąź, status czystości katalogu roboczego oraz ostatni zatwierdzony commit.
+2. **Dostępność API wersji**: Odpytuje lokalny endpoint wersji (`http://localhost/api/version`) za pomocą narzędzia curl.
+3. **Stan kontenerów Docker**: Listę i status procesów kontenerowych (`docker compose ps`).
+4. **Zasoby systemowe**: Dostępne miejsce na dysku (`df -h`) oraz pamięć RAM (poprzez `free -h` lub plik `/proc/meminfo`).
+5. **Logi kontenerów**: Ostatnie 40 linii logów backendu (`worktime-api`) oraz 30 linii logów Nginx/frontendu (`worktime-web`).
+6. **Stan kopii zapasowych**: Pokazuje 10 ostatnich plików kopii zapasowych z katalogu `backups/`.
+
