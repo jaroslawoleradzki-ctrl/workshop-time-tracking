@@ -3,6 +3,13 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.7] (Development) - 2026-07-04
+
+### Added
+- Wdrożenie szkieletu automatycznych testów frontendu (konfiguracja środowiska Vitest + React Testing Library + Happy DOM).
+- Przygotowanie pierwszych stabilnych testów widoku logowania i weryfikacji wersji systemu.
+- Integracja testów frontendu z procesem automatycznej walidacji wydania (`verify-release.sh`).
+
 ## [0.2.6] (Development) - 2026-07-04
 
 ### Added
