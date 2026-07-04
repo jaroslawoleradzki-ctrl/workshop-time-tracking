@@ -3,6 +3,11 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.2] (Development) - 2026-07-04
+
+### Added
+- Dostosowanie szablonu importu zleceń Excel do aktualnego modelu bazy danych (dodanie brakującej kolumny "Jednostka *", oznaczenie wymaganych kolumn symbolem "*" oraz uporządkowanie kolejności kolumn według wytycznych biznesowych).
+
 ## [0.2.1] (Development) - 2026-07-03
 
 ### Added

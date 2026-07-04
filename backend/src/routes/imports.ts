@@ -44,9 +44,35 @@ router.get('/template/orders', async (req: AuthRequest, res: Response) => {
   try {
     const wb = XLSX.utils.book_new();
     const wsData = [
-      ['Numer zlecenia', 'Data zlecenia', 'Data planowanej wysyłki', 'Numer produktu', 'Nazwa produktu', 'Konto księgowe', 'Zamawiający', 'Ilość', 'Godziny / szt.']
+      [
+        'Numer zlecenia *',
+        'Data zlecenia *',
+        'Data planowanej wysyłki',
+        'Zamawiający',
+        'Numer produktu',
+        'Nazwa produktu *',
+        'Konto księgowe',
+        'Ilość *',
+        'Jednostka *',
+        'Godziny / szt. *'
+      ]
     ];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
+    
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 22 }, // Numer zlecenia *
+      { wch: 18 }, // Data zlecenia *
+      { wch: 25 }, // Data planowanej wysyłki
+      { wch: 25 }, // Zamawiający
+      { wch: 20 }, // Numer produktu
+      { wch: 30 }, // Nazwa produktu *
+      { wch: 20 }, // Konto księgowe
+      { wch: 12 }, // Ilość *
+      { wch: 15 }, // Jednostka *
+      { wch: 18 }  // Godziny / szt. *
+    ];
+
     XLSX.utils.book_append_sheet(wb, ws, 'Zlecenia');
     const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
