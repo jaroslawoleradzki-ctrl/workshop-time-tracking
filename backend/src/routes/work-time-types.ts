@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
 import { AuthRequest, authenticateJWT, requireRole } from '../middlewares/auth';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -15,7 +16,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     });
     return res.json(types);
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd podczas pobierania słownika typów');
     return res.status(500).json({ message: 'Błąd podczas pobierania słownika typów' });
   }
 });
@@ -51,7 +52,7 @@ router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response)
 
     return res.status(201).json(newType);
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd podczas tworzenia pozycji słownika');
     return res.status(500).json({ message: 'Błąd podczas tworzenia pozycji słownika' });
   }
 });
@@ -85,7 +86,7 @@ router.put('/:code', requireRole(['admin']), async (req: AuthRequest, res: Respo
 
     return res.json(updated);
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd podczas edycji pozycji słownika');
     return res.status(500).json({ message: 'Błąd podczas edycji pozycji słownika' });
   }
 });
@@ -123,7 +124,7 @@ router.delete('/:code', requireRole(['admin']), async (req: AuthRequest, res: Re
 
     return res.json({ message: 'Pozycja słownika została usunięta' });
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd podczas usuwania pozycji słownika');
     return res.status(500).json({ message: 'Błąd podczas usuwania pozycji słownika' });
   }
 });

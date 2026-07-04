@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
 import { AuthRequest, authenticateJWT, requireRole } from '../middlewares/auth';
 import { logChange } from '../utils/audit';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -22,7 +23,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     });
     return res.json(employees);
   } catch (error) {
-    console.error('Full caught error in GET /api/employees:', error);
+    logger.error(error, 'Full caught error in GET /api/employees');
     return res.status(500).json({ message: 'Błąd podczas pobierania pracowników' });
   }
 });
@@ -61,7 +62,7 @@ router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response)
 
     return res.status(201).json(employee);
   } catch (error) {
-    console.error('Full caught error in POST /api/employees:', error);
+    logger.error(error, 'Full caught error in POST /api/employees');
     return res.status(500).json({ message: 'Błąd podczas dodawania pracownika' });
   }
 });
@@ -110,7 +111,7 @@ router.put('/:id', requireRole(['admin']), async (req: AuthRequest, res: Respons
 
     return res.json(updatedEmployee);
   } catch (error) {
-    console.error('Full caught error in PUT /api/employees/:id:', error);
+    logger.error(error, 'Full caught error in PUT /api/employees/:id');
     return res.status(500).json({ message: 'Błąd podczas edycji pracownika' });
   }
 });
@@ -150,7 +151,7 @@ router.delete('/:id', requireRole(['admin']), async (req: AuthRequest, res: Resp
 
     return res.json({ message: 'Pracownik został pomyślnie usunięty' });
   } catch (error) {
-    console.error('Full caught error in DELETE /api/employees/:id:', error);
+    logger.error(error, 'Full caught error in DELETE /api/employees/:id');
     return res.status(500).json({ message: 'Błąd podczas usuwania pracownika' });
   }
 });

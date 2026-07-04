@@ -1,4 +1,5 @@
 import prisma from './prisma';
+import logger from './logger';
 
 export async function logChange(params: {
   tableName: 'work_time_reports' | 'orders' | 'employees';
@@ -26,6 +27,6 @@ export async function logChange(params: {
       },
     });
   } catch (error) {
-    console.error('Failed to write audit log:', error);
+    logger.error(error, 'Failed to write audit log');
   }
 }

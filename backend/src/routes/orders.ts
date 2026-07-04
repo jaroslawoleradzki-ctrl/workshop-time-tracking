@@ -3,6 +3,7 @@ import prisma from '../utils/prisma';
 import { AuthRequest, authenticateJWT, requireRole } from '../middlewares/auth';
 import { logChange } from '../utils/audit';
 import { OrderStatus } from '@prisma/client';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -52,7 +53,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 
     return res.json(formatted);
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd podczas pobierania zleceń');
     return res.status(500).json({ message: 'Błąd podczas pobierania zleceń' });
   }
 });
@@ -77,7 +78,7 @@ router.get('/active', async (req: AuthRequest, res: Response) => {
     });
     return res.json(orders);
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd podczas pobierania aktywnych zleceń');
     return res.status(500).json({ message: 'Błąd podczas pobierania aktywnych zleceń' });
   }
 });
@@ -158,7 +159,7 @@ router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response)
 
     return res.status(201).json(order);
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd podczas dodawania zlecenia');
     return res.status(500).json({ message: 'Błąd podczas dodawania zlecenia' });
   }
 });
@@ -260,7 +261,7 @@ router.put('/:id', requireRole(['admin']), async (req: AuthRequest, res: Respons
 
     return res.json(updatedOrder);
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd podczas edycji zlecenia');
     return res.status(500).json({ message: 'Błąd podczas edycji zlecenia' });
   }
 });
@@ -300,7 +301,7 @@ router.delete('/:id', requireRole(['admin']), async (req: AuthRequest, res: Resp
 
     return res.json({ message: 'Zlecenie zostało pomyślnie usunięty' });
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd podczas usuwania zlecenia');
     return res.status(500).json({ message: 'Błąd podczas usuwania zlecenia' });
   }
 });

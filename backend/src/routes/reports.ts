@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
 import { AuthRequest, authenticateJWT } from '../middlewares/auth';
 import { logChange } from '../utils/audit';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -58,7 +59,7 @@ router.get('/by-employee-date', async (req: AuthRequest, res: Response) => {
 
     return res.json(formatted);
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd podczas pobierania wpisów');
     return res.status(500).json({ message: 'Błąd podczas pobierania wpisów' });
   }
 });
@@ -129,7 +130,7 @@ router.post('/check-warnings', async (req: AuthRequest, res: Response) => {
 
     return res.json(warnings);
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd podczas sprawdzania limitów');
     return res.status(500).json({ message: 'Błąd podczas sprawdzania limitów' });
   }
 });
@@ -218,7 +219,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       warnings,
     });
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd podczas dodawania wpisu czasu pracy');
     return res.status(500).json({ message: 'Błąd podczas dodawania wpisu czasu pracy' });
   }
 });
@@ -299,7 +300,7 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
       },
     });
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd podczas edycji wpisu');
     return res.status(500).json({ message: 'Błąd podczas edycji wpisu' });
   }
 });
@@ -337,7 +338,7 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
 
     return res.json({ message: 'Wpis został pomyślnie usunięty' });
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd podczas usuwania wpisu');
     return res.status(500).json({ message: 'Błąd podczas usuwania wpisu' });
   }
 });
@@ -447,7 +448,7 @@ router.post('/copy-last-day', async (req: AuthRequest, res: Response) => {
       reports: createdReports,
     });
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd podczas kopiowania wpisów');
     return res.status(500).json({ message: 'Błąd podczas kopiowania wpisów' });
   }
 });

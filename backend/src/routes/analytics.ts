@@ -3,6 +3,7 @@ import prisma from '../utils/prisma';
 import { AuthRequest, authenticateJWT } from '../middlewares/auth';
 import * as ExcelJS from 'exceljs';
 import { OrderStatus } from '@prisma/client';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -186,7 +187,7 @@ router.get('/dashboard', async (req: AuthRequest, res: Response) => {
       ordersApproaching: ordersApproaching.slice(0, 10),
     });
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd podczas generowania statystyk dashboardu');
     return res.status(500).json({ message: 'Błąd podczas generowania statystyk dashboardu' });
   }
 });
@@ -237,7 +238,7 @@ router.get('/report-by-order', async (req: AuthRequest, res: Response) => {
 
     return res.json(reportData);
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd podczas pobierania raportu wg zleceń');
     return res.status(500).json({ message: 'Błąd podczas pobierania raportu wg zleceń' });
   }
 });
@@ -294,7 +295,7 @@ router.get('/report-by-employee', async (req: AuthRequest, res: Response) => {
     const result = Object.values(pivot).sort((a, b) => a.employeeName.localeCompare(b.employeeName));
     return res.json(result);
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd podczas pobierania raportu wg pracowników');
     return res.status(500).json({ message: 'Błąd podczas pobierania raportu wg pracowników' });
   }
 });
@@ -337,7 +338,7 @@ router.get('/report-by-account', async (req: AuthRequest, res: Response) => {
 
     return res.json(formatted);
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd podczas pobierania raportu wg kont');
     return res.status(500).json({ message: 'Błąd podczas pobierania raportu wg kont' });
   }
 });
@@ -381,7 +382,7 @@ router.get('/report-detailed', async (req: AuthRequest, res: Response) => {
 
     return res.json(formatted);
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd podczas pobierania szczegółowych wpisów');
     return res.status(500).json({ message: 'Błąd podczas pobierania szczegółowych wpisów' });
   }
 });
@@ -455,7 +456,7 @@ router.get('/export/by-order', async (req: AuthRequest, res: Response) => {
       numberColumns: [5, 6, 7, 8],
     });
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd eksportu XLSX (by-order)');
     return res.status(500).json({ message: 'Błąd eksportu XLSX' });
   }
 });
@@ -531,7 +532,7 @@ router.get('/export/by-employee', async (req: AuthRequest, res: Response) => {
       numberColumns: [2, 3, 4, 5, 6, 7, 8, 9],
     });
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd eksportu XLSX (by-employee)');
     return res.status(500).json({ message: 'Błąd eksportu XLSX' });
   }
 });
@@ -591,7 +592,7 @@ router.get('/export/by-account', async (req: AuthRequest, res: Response) => {
       dateColumns: [1],
     });
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd eksportu XLSX (by-account)');
     return res.status(500).json({ message: 'Błąd eksportu XLSX' });
   }
 });
@@ -655,7 +656,7 @@ router.get('/export/detailed', async (req: AuthRequest, res: Response) => {
       dateColumns: [1, 10],
     });
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd eksportu XLSX (detailed)');
     return res.status(500).json({ message: 'Błąd eksportu XLSX' });
   }
 });

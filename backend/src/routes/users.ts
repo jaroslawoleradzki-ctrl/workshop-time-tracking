@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import * as bcrypt from 'bcryptjs';
 import prisma from '../utils/prisma';
 import { AuthRequest, authenticateJWT, requireRole } from '../middlewares/auth';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -26,7 +27,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     });
     return res.json(users);
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd podczas pobierania użytkowników');
     return res.status(500).json({ message: 'Błąd podczas pobierania użytkowników' });
   }
 });
@@ -71,7 +72,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 
     return res.status(201).json(user);
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd podczas tworzenia użytkownika');
     return res.status(500).json({ message: 'Błąd podczas tworzenia użytkownika' });
   }
 });
@@ -112,7 +113,7 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
     });
     return res.json(updated);
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd podczas aktualizacji użytkownika');
     return res.status(500).json({ message: 'Błąd podczas aktualizacji użytkownika' });
   }
 });
@@ -137,7 +138,7 @@ router.put('/:id/reset-password', async (req: AuthRequest, res: Response) => {
 
     return res.json({ message: 'Hasło zostało zresetowane pomyślnie' });
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd podczas resetowania hasła');
     return res.status(500).json({ message: 'Błąd podczas resetowania hasła' });
   }
 });

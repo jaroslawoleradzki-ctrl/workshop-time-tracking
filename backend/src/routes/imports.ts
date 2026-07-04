@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
 import { AuthRequest, authenticateJWT, requireRole } from '../middlewares/auth';
+import logger from '../utils/logger';
 import { logChange } from '../utils/audit';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
@@ -35,7 +36,7 @@ router.get('/template/employees', async (req: AuthRequest, res: Response) => {
     res.setHeader('Content-Disposition', 'attachment; filename="szablon_pracownicy.xlsx"');
     return res.send(buf);
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd generowania szablonu (employees)');
     return res.status(500).json({ message: 'Błąd generowania szablonu' });
   }
 });
@@ -80,7 +81,7 @@ router.get('/template/orders', async (req: AuthRequest, res: Response) => {
     res.setHeader('Content-Disposition', 'attachment; filename="szablon_zlecen.xlsx"');
     return res.send(buf);
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd generowania szablonu (orders)');
     return res.status(500).json({ message: 'Błąd generowania szablonu' });
   }
 });
@@ -112,7 +113,7 @@ router.get('/history', async (req: AuthRequest, res: Response) => {
 
     return res.json(formatted);
   } catch (error) {
-    console.error(error);
+    logger.error(error, 'Błąd pobierania historii importów');
     return res.status(500).json({ message: 'Błąd pobierania historii importów' });
   }
 });
@@ -258,7 +259,7 @@ router.post('/employees', upload.single('file'), async (req: AuthRequest, res: R
       historyId: history.id,
     });
   } catch (error: any) {
-    console.error(error);
+    logger.error(error, 'Błąd przetwarzania pliku (employees)');
     return res.status(500).json({ message: `Błąd przetwarzania pliku: ${error.message || error}` });
   }
 });
@@ -475,7 +476,7 @@ router.post('/orders', upload.single('file'), async (req: AuthRequest, res: Resp
       importDuration
     });
   } catch (error: any) {
-    console.error(error);
+    logger.error(error, 'Błąd przetwarzania pliku (orders)');
     return res.status(500).json({ message: `Błąd przetwarzania pliku: ${error.message || error}` });
   }
 });

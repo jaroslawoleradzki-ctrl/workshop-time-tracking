@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import logger from './utils/logger';
 
 // Load environment variables
 dotenv.config();
@@ -25,7 +26,7 @@ app.use(express.json());
 
 // Request logger for debugging
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  logger.info(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
   next();
 });
 
@@ -49,7 +50,7 @@ app.get('/api/health', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Health check database error:', error);
+    logger.error(error, 'Health check database error');
     res.status(503).json({
       status: 'error',
       database: 'error',
@@ -70,7 +71,7 @@ app.get('/api/version', (req, res) => {
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Unhandled error:', err);
+  logger.error(err, 'Unhandled error');
   res.status(err.status || 500).json({
     message: err.message || 'Wystąpił wewnętrzny błąd serwera',
   });
