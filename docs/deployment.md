@@ -33,12 +33,25 @@ Dokument opisuje proces instalacji, aktualizacji, backupu oraz przywracania apli
 Od wersji `v0.2.8` cały proces konfiguracji bazy danych po pierwszej instalacji został w pełni zautomatyzowany. Podczas każdego startu kontenera backendu `worktime-api` uruchamiany jest skrypt `docker-entrypoint.sh`, który wykonuje następujące operacje:
 
 1. **Automatyczne migracje Prisma**: Uruchamiane jest polecenie `npx prisma migrate deploy`, które tworzy lub aktualizuje schemat tabel w bazie PostgreSQL do najnowszej wersji.
-2. **Automatyczne zasilanie (Seeding)**: Po pomyślnym nałożeniu migracji automatycznie uruchamiany jest skrypt produkcyjnego zasilania bazy (`node dist/prisma/seed.js`).
+2. **Automatyczne zasilanie systemowe (System Seeding)**: Po pomyślnym nałożeniu migracji automatycznie uruchamiany jest skrypt produkcyjnego zasilania bazy (`node dist/prisma/seed.js`). Skrypt ten instaluje wyłącznie niezbędne dane systemowe (domyślnych użytkowników oraz słowniki typów czasu pracy). **Dane demo/przykładowe są z tego procesu wyłączone i nigdy nie uruchamiają się automatycznie.**
 
-### Charakterystyka skryptu zasilającego:
-* **Idempotentność**: Skrypt jest w pełni bezpieczny do wielokrotnego uruchamiania. Jeśli rekordy (np. słowniki, role, pracownicy) już istnieją w bazie, nie zostaną one zduplikowane.
+### Charakterystyka skryptu zasilającego (System Seed):
+* **Idempotentność**: Skrypt jest w pełni bezpieczny do wielokrotnego uruchamiania. Jeśli rekordy (np. słowniki, role) już istnieją w bazie, nie zostaną one zduplikowane.
 * **Bezpieczeństwo haseł**: Upsert dla istniejących użytkowników (w tym kont `admin` oraz `leader`) aktualizuje jedynie ich metadane (`fullName`, `role`, `isActive`), ale **nie resetuje hasła** użytkownika, zapobiegając nadpisaniu zmienionych haseł produkcyjnych.
-* **Zasoby startowe**: Skrypt tworzy/weryfikuje domyślne konta dostępowe, słowniki kodów czasu pracy (`G`, `NDR`, `NS`, `UW` itd.), a także przykładowe zlecenia i pracowników w celu ułatwienia testów systemu po instalacji.
+* **Zasoby startowe**: Skrypt tworzy/weryfikuje domyślne konta dostępowe, słowniki kodów czasu pracy (`G`, `NDR`, `NS`, `UW` itd.).
+
+### Zasilanie danymi demo (Demo Seeding):
+Dla celów prezentacyjnych lub testowych przygotowano osobny skrypt zasilający z przykładowymi zleceniami produkcyjnymi oraz pracownikami. **Dane demo należy wgrać ręcznie.**
+
+* **Uruchomienie lokalne deweloperskie**:
+  ```bash
+  cd backend
+  npm run seed:demo
+  ```
+* **Uruchomienie wewnątrz kontenera produkcyjnego (w razie potrzeby)**:
+  ```bash
+  docker exec -it worktime-api npm run seed:demo:prod
+  ```
 
 > [!IMPORTANT]
 > **Domyślne dane uwierzytelniające**:

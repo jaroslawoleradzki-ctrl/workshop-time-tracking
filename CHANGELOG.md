@@ -10,6 +10,8 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Wprowadzenie automatycznego zasilania bazy danych (database seed) w pliku `docker-entrypoint.sh` po wykonaniu migracji a przed uruchomieniem backendu.
 - Usprawnienie procedury pierwszej instalacji systemu (first-install experience).
 - Poprawienie idempotentności skryptu zasilającego poprzez bezpieczną aktualizację użytkowników testowych bez resetowania haseł.
+- Rozdzielenie zasilania bazy danych na część systemową/produkcyjną (`seed.ts`) oraz część demo/przykładową (`seed-demo.ts`).
+- Zapewnienie, że dane demonstracyjne nie uruchamiają się automatycznie w żadnym środowisku i muszą być ładowane manualnie.
 
 ## [0.2.7] (Development) - 2026-07-04
 

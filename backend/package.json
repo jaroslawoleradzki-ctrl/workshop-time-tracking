@@ -12,6 +12,8 @@
     "prisma:studio": "prisma studio",
     "seed": "ts-node prisma/seed.ts",
     "seed:prod": "node dist/prisma/seed.js",
+    "seed:demo": "ts-node prisma/seed-demo.ts",
+    "seed:demo:prod": "node dist/prisma/seed-demo.js",
     "test": "vitest run"
   },
   "dependencies": {
