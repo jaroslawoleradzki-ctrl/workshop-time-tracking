@@ -88,18 +88,32 @@ Każde oficjalne wydanie wersji produkcyjnej (Release) musi zawierać następuj�
 2. Synchronizacja wersji we wszystkich standardowych plikach (`package.json`, `package-lock.json`, `docker-compose.yml`, `README.md`)
 3. Kompilacja backendu (`npm run build` w `backend/`)
 4. Kompilacja frontendu (`npm run build` w `frontend/`)
-5. Utworzenie commita
-6. Wysłanie zmian gałęzi `main` na zdalne repozytorium (Push main)
-7. Utworzenie tagu Git z opisem (annotated tag):
+5. Uruchomienie skryptu walidacyjnego: `./scripts/verify-release.sh` i upewnienie się, że zwraca status PASS.
+6. Utworzenie commita
+7. Wysłanie zmian gałęzi `main` na zdalne repozytorium (Push main)
+8. Utworzenie tagu Git z opisem (annotated tag):
    `git tag -a vX.Y.Z -m "Release X.Y.Z"`
-8. Wysłanie tagu na zdalne repozytorium:
+9. Wysłanie tagu na zdalne repozytorium:
    `git push origin vX.Y.Z`
-9. Utworzenie Wydania na GitHubie (GitHub Release)
-10. Wdrożenie u klienta (Deployment)
-11. Weryfikacja działania na produkcji (smoke test)
+10. Utworzenie Wydania na GitHubie (GitHub Release)
+11. Wdrożenie u klienta (Deployment)
+12. Weryfikacja działania na produkcji (smoke test)
 
 > [!IMPORTANT]
 > Wydanie wersji (Release) nie jest uznane za zakończone, dopóki tag Git, GitHub Release, wdrożenie produkcyjne oraz weryfikacja na produkcji nie zostaną w pełni ukończone.
+
+---
+
+## Skrypt Walidacji Wydania (Release Verification Script)
+Do programistycznego zapobiegania wypuszczaniu wersji z błędami służy skrypt `./scripts/verify-release.sh`.
+* **Przeznaczenie**: Walidacja przedtagowa i przedwdrożeniowa. Domyślnie weryfikuje czysty stan gałęzi Git, zgodność wersji w plikach projektu, bezbłędną kompilację backendu/frontendu oraz dokumentację. Aby dodatkowo zweryfikować składnię konfiguracji Docker Compose oraz poprawność środowiska Docker na hoście, należy uruchomić skrypt z flagą `--with-docker`.
+* **Kiedy uruchamiać**: Zawsze przed utworzeniem commita wersji na gałęzi `main` i przed utworzeniem nowego tagu Git.
+* **Kody wyjścia**:
+  * `0` – Wszystkie kroki przeszły pomyślnie (PASS), wersja gotowa do wydania.
+  * `1` – Przynajmniej jedna walidacja nie powiodła się (FAIL), wydanie zostaje przerwane.
+* **Format wyniku**: Wypisuje szczegółowy raport statusów (PASS / FAIL / PENDING / SKIPPED) dla każdego obszaru wraz z przyczynami ewentualnych błędów.
+
+---
 
 ---
 

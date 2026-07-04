@@ -97,6 +97,18 @@ W przypadku awarii nowej wersji kodu aplikacji, można cofnąć kod do stabilneg
 zcat backups/time_reporting_*.sql.gz | docker exec -i worktime-db psql -U time_user -d time_reporting
 ```
 
+## Skrypt weryfikacji wydania (Release Verification Script)
+
+Przed publikacją wersji produkcyjnej, deweloper lub agent powinien uruchomić skrypt automatycznej walidacji:
+```bash
+./scripts/verify-release.sh
+```
+Domyślnie weryfikuje czystość kodu w Git, zgodność wersji w plikach konfiguracyjnych/dokumentacji oraz poprawne kompilowanie backendu/frontendu. Aby dodatkowo zweryfikować poprawność składniową konfiguracji Docker Compose oraz obecność silnika Docker na serwerze hosta, należy wywołać skrypt z opcją:
+```bash
+./scripts/verify-release.sh --with-docker
+```
+Zwraca kod wyjścia `0` w przypadku powodzenia (PASS) lub `1` w przypadku wykrycia jakichkolwiek problemów (FAIL), przerywając proces wydania.
+
 ## Lista kontrolna wydania (Release Checklist)
 
 Przed zakończeniem procesu publikacji nowej wersji i oznaczeniem jej jako ukończonej, należy sprawdzić poniższe punkty:
@@ -104,6 +116,7 @@ Przed zakończeniem procesu publikacji nowej wersji i oznaczeniem jej jako ukoń
 - [ ] Wersja została zsynchronizowana we wszystkich standardowych plikach (`package.json`, `package-lock.json`, `docker-compose.yml`, `README.md`).
 - [ ] Kompilacja backendu przebiegła pomyślnie (`npm run build` w katalogu `backend/`).
 - [ ] Kompilacja frontendu przebiegła pomyślnie (`npm run build` w katalogu `frontend/`).
+- [ ] Uruchomiono skrypt weryfikacji wydania `./scripts/verify-release.sh` i zakończył się on pomyślnie (status PASS).
 - [ ] Zmiany z gałęzi `development` zostały zmergowane do gałęzi `main`.
 - [ ] Gałąź `main` została wypchnięta na serwer zdalny (git push).
 - [ ] Utworzono lokalnie opisany tag Git (git tag -a vX.Y.Z -m "Release X.Y.Z").
@@ -127,7 +140,7 @@ Upewnij się, że zmienna `DATABASE_URL` w `docker-compose.yml` wskazuje na popr
 ### 2. Problem z uprawnieniami do wykonywania skryptów shellowych
 *Rozwiązanie*: Nadaj skryptom uprawnienia wykonywania:
 ```bash
-chmod +x backup-db.sh rollback.sh backend/docker-entrypoint.sh
+chmod +x backup-db.sh rollback.sh backend/docker-entrypoint.sh scripts/verify-release.sh
 ```
 
 ### 3. Kontener bazy danych nie startuje (port zajęty)
