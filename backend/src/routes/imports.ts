@@ -270,9 +270,13 @@ router.post('/orders', upload.single('file'), async (req: AuthRequest, res: Resp
   }
 
   const filename = req.file.originalname;
+  const startTime = Date.now();
   let totalRows = 0;
   let successRows = 0;
   let errorRows = 0;
+  let added = 0;
+  let updated = 0;
+  let skipped = 0;
   const errorsLog: string[] = [];
 
   try {
@@ -291,30 +295,34 @@ router.post('/orders', upload.single('file'), async (req: AuthRequest, res: Resp
       const rowNum = idx + 2;
       const row = rawData[idx];
 
-      const orderNumber = row['Numer zlecenia'] || row['orderNumber'];
-      const orderDateRaw = row['Data zlecenia'] || row['orderDate'];
+      const orderNumber = row['Numer zlecenia *'] || row['Numer zlecenia'] || row['orderNumber'];
+      const orderDateRaw = row['Data zlecenia *'] || row['Data zlecenia'] || row['orderDate'];
       const plannedShipmentDateRaw = row['Data planowanej wysyłki'] || row['plannedShipmentDate'];
+      const productName = row['Nazwa produktu *'] || row['Nazwa produktu'] || row['productName'];
+      const quantityRaw = row['Ilość *'] || row['Ilość'] || row['quantity'];
+      const quantityUnitRaw = row['Jednostka *'] || row['Jednostka'] || row['quantityUnit'] || row['quantity_unit'] || row['unit'];
+      const hoursPerUnitRaw = row['Godziny / szt. *'] || row['Godziny / szt.'] || row['hoursPerUnit'];
       const productCodeRaw = row['Numer produktu'] || row['productCode'] || row['productNumber'] || row['Kod produktu'];
-      const productName = row['Nazwa produktu'] || row['productName'];
       const accountingAccountRaw = row['Konto księgowe'] || row['accountingAccount'];
       const orderedByRaw = row['Zamawiający'] || row['orderedBy'];
-      const quantityRaw = row['Ilość'] || row['quantity'];
-      const hoursPerUnitRaw = row['Godziny / szt.'] || row['hoursPerUnit'];
 
       const cleanOrderNum = orderNumber ? orderNumber.toString().trim() : '';
       const cleanProdName = productName ? productName.toString().trim() : '';
+      const cleanQuantityUnit = quantityUnitRaw ? quantityUnitRaw.toString().trim() : '';
 
-      if (!cleanOrderNum || !orderDateRaw || !cleanProdName || quantityRaw === undefined || hoursPerUnitRaw === undefined) {
+      if (!cleanOrderNum || !orderDateRaw || !cleanProdName || quantityRaw === undefined || !cleanQuantityUnit || hoursPerUnitRaw === undefined) {
         errorRows++;
+        skipped++;
         errorsLog.push(
-          `Wiersz ${rowNum}: Brakujące pola. Wymagane: 'Numer zlecenia', 'Data zlecenia', 'Nazwa produktu', 'Ilość', 'Godziny / szt.'.`
+          `Wiersz ${rowNum}: Brakujące pola. Wymagane: 'Numer zlecenia', 'Data zlecenia', 'Nazwa produktu', 'Ilość', 'Jednostka', 'Godziny / szt.'.`
         );
         continue;
       }
 
       const parseExcelDate = (val: any): Date | null => {
-        if (!val) return null;
+        if (val === undefined || val === null) return null;
         if (val instanceof Date) return val;
+        if (typeof val === 'string' && val.trim() === '') return null;
         if (typeof val === 'number') {
           return new Date((val - 25569) * 86400 * 1000);
         }
@@ -325,15 +333,17 @@ router.post('/orders', upload.single('file'), async (req: AuthRequest, res: Resp
       const orderDate = parseExcelDate(orderDateRaw);
       if (!orderDate) {
         errorRows++;
+        skipped++;
         errorsLog.push(`Wiersz ${rowNum}: Niepoprawna data zlecenia ('${orderDateRaw}').`);
         continue;
       }
 
       let plannedShipmentDate: Date | null = null;
-      if (plannedShipmentDateRaw) {
+      if (plannedShipmentDateRaw !== undefined && plannedShipmentDateRaw !== null) {
         plannedShipmentDate = parseExcelDate(plannedShipmentDateRaw);
-        if (!plannedShipmentDate) {
+        if (plannedShipmentDate === null && (typeof plannedShipmentDateRaw !== 'string' || plannedShipmentDateRaw.trim() !== '')) {
           errorRows++;
+          skipped++;
           errorsLog.push(`Wiersz ${rowNum}: Niepoprawna data planowanej wysyłki ('${plannedShipmentDateRaw}').`);
           continue;
         }
@@ -342,6 +352,7 @@ router.post('/orders', upload.single('file'), async (req: AuthRequest, res: Resp
       const quantity = parseFloat(quantityRaw);
       if (isNaN(quantity) || quantity <= 0) {
         errorRows++;
+        skipped++;
         errorsLog.push(`Wiersz ${rowNum}: Niepoprawna ilość ('${quantityRaw}'). Musi być liczbą większą od 0.`);
         continue;
       }
@@ -349,6 +360,7 @@ router.post('/orders', upload.single('file'), async (req: AuthRequest, res: Resp
       const hoursPerUnit = parseFloat(hoursPerUnitRaw);
       if (isNaN(hoursPerUnit) || hoursPerUnit < 0) {
         errorRows++;
+        skipped++;
         errorsLog.push(`Wiersz ${rowNum}: Niepoprawne godziny/szt. ('${hoursPerUnitRaw}'). Musi być liczbą większą lub równą 0.`);
         continue;
       }
@@ -366,7 +378,7 @@ router.post('/orders', upload.single('file'), async (req: AuthRequest, res: Resp
 
         if (existing) {
           // Update duplicate
-          const updated = await prisma.order.update({
+          const updatedOrder = await prisma.order.update({
             where: { id: existing.id },
             data: {
               orderDate: orderDate,
@@ -377,6 +389,7 @@ router.post('/orders', upload.single('file'), async (req: AuthRequest, res: Resp
               orderedBy: cleanOrderedBy,
               plannedHours: plannedHours,
               quantity: quantity,
+              quantityUnit: cleanQuantityUnit,
               hoursPerUnit: hoursPerUnit,
               status: 'OPEN', // Re-open on re-import
               isActive: true, // Reactivate
@@ -389,12 +402,13 @@ router.post('/orders', upload.single('file'), async (req: AuthRequest, res: Resp
             recordId: existing.id,
             action: 'UPDATE',
             oldValues: existing,
-            newValues: updated,
+            newValues: updatedOrder,
             userId: req.user!.id,
           });
+          updated++;
         } else {
           // Create new
-          const created = await prisma.order.create({
+          const createdOrder = await prisma.order.create({
             data: {
               orderNumber: cleanOrderNum,
               orderDate: orderDate,
@@ -405,6 +419,7 @@ router.post('/orders', upload.single('file'), async (req: AuthRequest, res: Resp
               orderedBy: cleanOrderedBy,
               plannedHours: plannedHours,
               quantity: quantity,
+              quantityUnit: cleanQuantityUnit,
               hoursPerUnit: hoursPerUnit,
               status: 'OPEN',
               isActive: true,
@@ -413,20 +428,24 @@ router.post('/orders', upload.single('file'), async (req: AuthRequest, res: Resp
 
           await logChange({
             tableName: 'orders',
-            recordId: created.id,
+            recordId: createdOrder.id,
             action: 'CREATE',
-            newValues: created,
+            newValues: createdOrder,
             userId: req.user!.id,
           });
+          added++;
         }
         successRows++;
       } catch (err: any) {
         errorRows++;
+        skipped++;
         errorsLog.push(`Wiersz ${rowNum}: Błąd bazy danych (${err.message || err}).`);
       }
     }
 
     const status = errorRows === 0 ? 'success' : successRows > 0 ? 'partial' : 'failed';
+    const importDuration = Date.now() - startTime;
+    const processedRows = successRows + errorRows;
 
     const history = await prisma.importHistory.create({
       data: {
@@ -448,6 +467,12 @@ router.post('/orders', upload.single('file'), async (req: AuthRequest, res: Resp
       errorRows,
       errorsLog,
       historyId: history.id,
+      processedRows,
+      added,
+      updated,
+      skipped,
+      errors: errorRows,
+      importDuration
     });
   } catch (error: any) {
     console.error(error);
