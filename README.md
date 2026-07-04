@@ -144,7 +144,8 @@ graph TD
 │   └── src/            # Kod źródłowy (kontrolery, trasy, utils)
 ├── frontend/           # Aplikacja kliencka SPA (React + Vite)
 │   ├── src/            # Kod źródłowy React (App.tsx, index.css, components/)
-│   └── public/         # Statyczne zasoby frontendu (logo itp.)
+│   ├── public/         # Statyczne zasoby frontendu (logo itp.)
+│   └── dist/           # [ZIGNOROWANE] Lokalne pliki produkcyjne (generowane przez npm run build, poza kontrolą wersji)
 ├── nginx/              # Pliki konfiguracyjne serwera Nginx
 ├── docs/               # Dokumentacja techniczna i projektowa
 ├── DEPLOYMENT.md       # Wskaźnik głównej dokumentacji wdrożenia
@@ -212,6 +213,11 @@ docker compose up -d postgres
    npm run dev
    ```
    Aplikacja deweloperska będzie dostępna pod adresem **http://localhost:5173**. Zapytania API są automatycznie przekierowywane na port 5000 za pomocą konfiguracji proxy w Vite (`vite.config.ts`).
+4. (Opcjonalnie) Przetestuj budowanie plików produkcyjnych:
+   ```bash
+   npm run build
+   ```
+   Pliki wynikowe zostaną umieszczone w katalogu `dist/` (katalog ten jest zignorowany w Git i nie powinien być wysyłany do repozytorium). Wszelkie wdrożenia produkcyjne budują te pliki automatycznie w kontenerze.
 
 ---
 

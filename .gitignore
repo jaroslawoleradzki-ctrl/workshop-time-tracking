@@ -16,3 +16,10 @@ frontend/node_modules/.vite/
 cache/
 logs/
 *.log
+
+# Build output
+frontend/dist/
+
+# Local environment files
+.env.local
+.env.*.local
