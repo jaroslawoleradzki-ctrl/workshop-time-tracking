@@ -117,17 +117,23 @@ W przypadku niepowodzenia skryptu, w logach pojawi się szczegółowy opis błę
 * **`ERROR Docker is not available...`**: Narzędzie Docker nie jest zainstalowane lub nie zostało dodane do zmiennej środowiskowej `$PATH` crona.
 * **`ERROR PostgreSQL container (postgres) is not running...`**: Kontener bazy danych nie działa. Należy go uruchomić komendą `docker compose up -d postgres` i dopiero wtedy ponowić wykonanie kopii.
 
-## Przywracanie kodu (Rollback)
-W przypadku awarii nowej wersji kodu aplikacji, można cofnąć kod do stabilnego stanu za pomocą skryptu `rollback.sh`:
+## Przywracanie kodu i bazy danych (Rollback)
+
+W przypadku awarii nowej wersji kodu aplikacji, można cofnąć system do stabilnego stanu. Procedura ta składa się z dwóch niezależnych kroków:
+
+### 1. Przywracanie kodu aplikacji
+Cofnięcie kodu aplikacji do wybranego commita odbywa się za pomocą skryptu `rollback.sh`:
 ```bash
 ./rollback.sh <commit_hash>
 ```
-*Uwaga: Skrypt ten cofa wyłącznie kod aplikacji (Checkout kodu + przebudowanie kontenerów). Przywrócenie danych w bazie danych musi zostać wykonane osobno przy użyciu plików z katalogu `backups/`.*
+*Uwaga: Skrypt ten cofa wyłącznie kod źródłowy aplikacji (wykonuje bezpieczny `git checkout` na wskazany commit po uprzedniej weryfikacji jego istnienia i przebudowuje kontenery za pomocą `docker compose up -d --build`). Nie modyfikuje on w żaden sposób bazy danych.*
 
-### Ręczne przywrócenie bazy danych z backupu:
+### 2. Przywracanie bazy danych (Manualne)
+Database rollback **nie jest wykonywany automatycznie**. Jeśli pomiędzy wersją wadliwą a wersją stabilną nastąpiła migracja schematu Prisma (zmiana struktury bazy), sama zmiana kodu nie wystarczy i backend zacznie zgłaszać błędy runtime. W takim przypadku należy manualnie przywrócić odpowiednią bazę danych z pliku kopii zapasowej SQL utworzonej przed aktualizacją:
 ```bash
-zcat backups/time_reporting_*.sql.gz | docker exec -i worktime-db psql -U time_user -d time_reporting
+zcat backups/time_reporting_YYYY-MM-DD_HH-MM-SS.sql.gz | docker exec -i worktime-db psql -U time_user -d time_reporting
 ```
+*Wskazówka: Zawsze upewnij się, że przywracany plik kopii zapasowej bazy danych odpowiada strukturze schematu bazy danych (Prisma schema) zawartej w wybranym do rollbacku commit hash.*
 
 ## Skrypt weryfikacji wydania (Release Verification Script)
 
