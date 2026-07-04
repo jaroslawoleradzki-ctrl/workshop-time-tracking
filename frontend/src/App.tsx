@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   BarChart3, 
   Clock, 
@@ -64,6 +64,7 @@ function App() {
 
   // App version state
   const [appVersion, setAppVersion] = useState<string | null>(null);
+  const initialVersionRef = useRef<string | null>(null);
   const [isAdminOpen, setIsAdminOpen] = useState<boolean>(() => {
     return sessionStorage.getItem('sidebar_admin_open') === 'true';
   });
@@ -76,12 +77,47 @@ function App() {
         return res.json();
       })
       .then(data => {
-        setAppVersion(data.version || null);
+        const ver = data.version || null;
+        setAppVersion(ver);
+        if (!initialVersionRef.current && ver) {
+          initialVersionRef.current = ver;
+        }
       })
       .catch(() => {
         setAppVersion('error');
       });
   }, []);
+
+  // Poll version periodically to check for updates
+  useEffect(() => {
+    if (!user) return;
+
+    const interval = setInterval(() => {
+      fetch('/api/version')
+        .then(res => {
+          if (!res.ok) throw new Error();
+          return res.json();
+        })
+        .then(data => {
+          const latestVer = data.version || null;
+          if (latestVer && initialVersionRef.current && latestVer !== initialVersionRef.current) {
+            clearInterval(interval);
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            sessionStorage.removeItem('current_tab');
+            sessionStorage.removeItem('sidebar_admin_open');
+            setToken(null);
+            setUser(null);
+            setLoginError('Aplikacja została zaktualizowana. Zaloguj się ponownie.');
+          }
+        })
+        .catch(err => {
+          console.warn('Błąd sprawdzania wersji:', err);
+        });
+    }, 10000); // Check every 10 seconds
+
+    return () => clearInterval(interval);
+  }, [user]);
 
   // Listen for global auth errors (401/403)
   useEffect(() => {

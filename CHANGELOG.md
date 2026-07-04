@@ -3,6 +3,11 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.3] (Development) - 2026-07-04
+
+### Added
+- Wdrożenie automatycznego wylogowania użytkownika i przekierowania do ekranu logowania po aktualizacji wersji systemu (zmianie wersji na backendzie) z wyświetleniem odpowiedniego komunikatu.
+
 ## [0.2.2] (Development) - 2026-07-04
 
 ### Added
