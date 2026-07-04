@@ -82,6 +82,27 @@ Zmiana zostaje uznana za ukończoną tylko wtedy, gdy spełnia poniższe kryteri
 
 ---
 
+## Procedura Wydania (Release Procedure)
+Każde oficjalne wydanie wersji produkcyjnej (Release) musi zawierać następujące kroki:
+1. Scalenie gałęzi: `development` → `main`
+2. Synchronizacja wersji we wszystkich standardowych plikach (`package.json`, `package-lock.json`, `docker-compose.yml`, `README.md`)
+3. Kompilacja backendu (`npm run build` w `backend/`)
+4. Kompilacja frontendu (`npm run build` w `frontend/`)
+5. Utworzenie commita
+6. Wysłanie zmian gałęzi `main` na zdalne repozytorium (Push main)
+7. Utworzenie tagu Git z opisem (annotated tag):
+   `git tag -a vX.Y.Z -m "Release X.Y.Z"`
+8. Wysłanie tagu na zdalne repozytorium:
+   `git push origin vX.Y.Z`
+9. Utworzenie Wydania na GitHubie (GitHub Release)
+10. Wdrożenie u klienta (Deployment)
+11. Weryfikacja działania na produkcji (smoke test)
+
+> [!IMPORTANT]
+> Wydanie wersji (Release) nie jest uznane za zakończone, dopóki tag Git, GitHub Release, wdrożenie produkcyjne oraz weryfikacja na produkcji nie zostaną w pełni ukończone.
+
+---
+
 ## Standard opisu zadania (Prompt Standard)
 Każde zlecenie implementacyjne przekazywane do agenta lub tworzone w planie prac powinno zawierać ujednolicone sekcje:
 1. **Kontekst (Context)**: Opis aktualnego stanu systemu i tła biznesowego.

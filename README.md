@@ -239,6 +239,7 @@ Pełne instrukcje dotyczące kopii zapasowych, rollbacków oraz logowania błęd
 * **Gałąź `development` (Główna robocza)**: Wszystkie prace programistyczne, poprawki błędów i wdrożenia nowych funkcji są wykonywane **wyłącznie** na tej gałęzi.
 * **Gałąź `main` (Produkcyjna)**: Reprezentuje wersje stabilne wdrożone u klienta.
 * **Proces Mergowania**: Po zakończeniu prac na `development` i pomyślnej weryfikacji buildów lokalnych, zmiany są scalane do `main` **tylko i wyłącznie za akceptacją użytkownika**.
+* **Śledzenie Wydań**: Wydania produkcyjne (releases) są śledzone za pomocą opisanych tagów Git (annotated tags) oraz wydań na platformie GitHub (GitHub Releases) począwszy od wersji `v0.2.1`.
 
 ---
 

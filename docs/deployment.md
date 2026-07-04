@@ -63,6 +63,24 @@ W przypadku awarii nowej wersji kodu aplikacji, można cofnąć kod do stabilneg
 zcat backups/time_reporting_*.sql.gz | docker exec -i worktime-db psql -U time_user -d time_reporting
 ```
 
+## Lista kontrolna wydania (Release Checklist)
+
+Przed zakończeniem procesu publikacji nowej wersji i oznaczeniem jej jako ukończonej, należy sprawdzić poniższe punkty:
+- [ ] Plik `CHANGELOG.md` został zaktualizowany o opis zmian w nowej wersji.
+- [ ] Wersja została zsynchronizowana we wszystkich standardowych plikach (`package.json`, `package-lock.json`, `docker-compose.yml`, `README.md`).
+- [ ] Kompilacja backendu przebiegła pomyślnie (`npm run build` w katalogu `backend/`).
+- [ ] Kompilacja frontendu przebiegła pomyślnie (`npm run build` w katalogu `frontend/`).
+- [ ] Zmiany z gałęzi `development` zostały zmergowane do gałęzi `main`.
+- [ ] Gałąź `main` została wypchnięta na serwer zdalny (git push).
+- [ ] Utworzono lokalnie opisany tag Git (git tag -a vX.Y.Z -m "Release X.Y.Z").
+- [ ] Tag Git został wypchnięty na serwer zdalny (git push origin vX.Y.Z).
+- [ ] Utworzono Wydanie (Release) na platformie GitHub na podstawie nowo utworzonego tagu.
+- [ ] Wykonano kopię zapasową bazy danych PostgreSQL przed rozpoczęciem aktualizacji.
+- [ ] Wdrożenie nowej wersji zostało zakończone sukcesem (docker compose up -d --build).
+- [ ] Przeprowadzono test dymny (smoke test) na wersji produkcyjnej i potwierdzono poprawność działania aplikacji.
+
+---
+
 ## Najczęstsze problemy
 
 ### 1. Baza danych jest pusta lub brak tabel po instalacji
