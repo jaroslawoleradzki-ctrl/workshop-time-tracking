@@ -28,6 +28,25 @@ Dokument opisuje proces instalacji, aktualizacji, backupu oraz przywracania apli
    docker ps
    ```
 
+## Inicjalizacja bazy danych i zasilanie (Migrations & Seeding)
+
+Od wersji `v0.2.8` cały proces konfiguracji bazy danych po pierwszej instalacji został w pełni zautomatyzowany. Podczas każdego startu kontenera backendu `worktime-api` uruchamiany jest skrypt `docker-entrypoint.sh`, który wykonuje następujące operacje:
+
+1. **Automatyczne migracje Prisma**: Uruchamiane jest polecenie `npx prisma migrate deploy`, które tworzy lub aktualizuje schemat tabel w bazie PostgreSQL do najnowszej wersji.
+2. **Automatyczne zasilanie (Seeding)**: Po pomyślnym nałożeniu migracji automatycznie uruchamiany jest skrypt produkcyjnego zasilania bazy (`node dist/prisma/seed.js`).
+
+### Charakterystyka skryptu zasilającego:
+* **Idempotentność**: Skrypt jest w pełni bezpieczny do wielokrotnego uruchamiania. Jeśli rekordy (np. słowniki, role, pracownicy) już istnieją w bazie, nie zostaną one zduplikowane.
+* **Bezpieczeństwo haseł**: Upsert dla istniejących użytkowników (w tym kont `admin` oraz `leader`) aktualizuje jedynie ich metadane (`fullName`, `role`, `isActive`), ale **nie resetuje hasła** użytkownika, zapobiegając nadpisaniu zmienionych haseł produkcyjnych.
+* **Zasoby startowe**: Skrypt tworzy/weryfikuje domyślne konta dostępowe, słowniki kodów czasu pracy (`G`, `NDR`, `NS`, `UW` itd.), a także przykładowe zlecenia i pracowników w celu ułatwienia testów systemu po instalacji.
+
+> [!IMPORTANT]
+> **Domyślne dane uwierzytelniające**:
+> - Administrator: login `admin`, hasło `admin123`
+> - Lider testowy: login `leader`, hasło `leader123`
+>
+> Bezwzględnie należy zmienić hasła do tych kont lub dezaktywować konta testowe niezwłocznie po zakończeniu pierwszej instalacji w środowisku produkcyjnym!
+
 ## Aktualizacja aplikacji
 Aktualizacja kodu odbywa się poprzez pobranie zmian z gałęzi `main` i przebudowanie obrazów:
 ```bash

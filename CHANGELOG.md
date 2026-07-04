@@ -5,11 +5,11 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.2.8] (Development) - 2026-07-04
 
-### Planned
-- Uporządkowanie konfiguracji TypeScript dla skryptu inicjalizacji bazy danych (Prisma seed).
-- Wprowadzenie automatycznego zasilania bazy danych (database seed) podczas startu kontenerów.
+### Added
+- Uporządkowanie konfiguracji TypeScript dla skryptu zasilania bazy danych (Prisma seed) poprzez utworzenie dedykowanego pliku `tsconfig.seed.json` i dodanie typów Node.
+- Wprowadzenie automatycznego zasilania bazy danych (database seed) w pliku `docker-entrypoint.sh` po wykonaniu migracji a przed uruchomieniem backendu.
 - Usprawnienie procedury pierwszej instalacji systemu (first-install experience).
-- Zapewnienie bezpieczniejszego i bardziej stabilnego procesu inicjalizacji bazy danych w środowisku produkcyjnym.
+- Poprawienie idempotentności skryptu zasilającego poprzez bezpieczną aktualizację użytkowników testowych bez resetowania haseł.
 
 ## [0.2.7] (Development) - 2026-07-04
 

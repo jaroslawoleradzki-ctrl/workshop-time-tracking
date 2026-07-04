@@ -14,7 +14,11 @@ async function main() {
 
   const admin = await prisma.user.upsert({
     where: { username: adminUsername },
-    update: {},
+    update: {
+      fullName: 'Administrator',
+      role: 'admin',
+      isActive: true,
+    },
     create: {
       username: adminUsername,
       passwordHash: passwordHash,
@@ -31,7 +35,11 @@ async function main() {
   const leaderHash = await bcrypt.hash(leaderPassword, salt);
   const leader = await prisma.user.upsert({
     where: { username: leaderUsername },
-    update: {},
+    update: {
+      fullName: 'Jan Kowalski (Leader)',
+      role: 'leader',
+      isActive: true,
+    },
     create: {
       username: leaderUsername,
       passwordHash: leaderHash,
