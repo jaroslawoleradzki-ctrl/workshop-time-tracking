@@ -16,6 +16,9 @@ W projekcie zaimplementowano dwie warstwy testów automatycznych: testy integrac
 * **Biblioteka testowa**: **React Testing Library** (umożliwia testowanie komponentów w sposób zbliżony do interakcji użytkownika).
 * **Dodatkowe narzędzia**: `@testing-library/jest-dom` (dodatkowe asercje DOM, np. `.toBeInTheDocument()`), `@testing-library/user-event` (symulacja rzeczywistych zdarzeń użytkownika).
 
+### Uwaga dotycząca logów w testach
+Obecne testy automatyczne nie weryfikują formatu ani samej obecności logów na wyjściu konsoli. Logowanie (centralny logger Pino) jest traktowane jako element infrastruktury/diagnostyki operacyjnej, a nie logiki biznesowej aplikacji, dlatego jego działanie nie podlega asercjom w testach integracyjnych i jednostkowych.
+
 ---
 
 ## 2. Struktura i lokalizacja testów

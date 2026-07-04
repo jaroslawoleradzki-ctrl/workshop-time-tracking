@@ -248,3 +248,31 @@ Z poziomu głównego katalogu projektu:
 5. **Logi kontenerów**: Ostatnie 40 linii logów backendu (`worktime-api`) oraz 30 linii logów Nginx/frontendu (`worktime-web`).
 6. **Stan kopii zapasowych**: Pokazuje 10 ostatnich plików kopii zapasowych z katalogu `backups/`.
 
+---
+
+## Logowanie aplikacji (Application Logging)
+
+Aplikacja wykorzystuje centralny logger **Pino**, który został zaprojektowany z myślą o maksymalnej wydajności i integracji ze standardami systemów produkcyjnych.
+
+### Gdzie znajdują się logi:
+Wszystkie logi kontenera API backendu są wypisywane bezpośrednio na standardowe wyjście (`stdout` oraz `stderr`) kontenera Docker. Zgodnie z dobrymi praktykami chmurowymi (12-Factor App), aplikacja nie zapisuje logów do plików bezpośrednio na dysku kontenera.
+
+### Odczyt logów:
+Aby odczytać logi na serwerze produkcyjnym, użyj standardowego polecenia dockera dla kontenera backendu `worktime-api`:
+```bash
+docker logs worktime-api
+```
+Możesz filtrować logi w czasie rzeczywistym dodając przełącznik `-f` (follow) lub ograniczyć liczbę linii przez `--tail`:
+```bash
+# Podgląd ostatnich 50 linii z ciągłym śledzeniem
+docker logs -f worktime-api --tail=50
+```
+
+### Różnice między środowiskami (Development vs Production):
+* **Production (`NODE_ENV=production`)**: Logi są generowane w ustrukturyzowanym formacie **JSON**. Ułatwia to automatyczne zbieranie, parsowanie oraz agregację logów w chmurze przez oprogramowanie takie jak ELK Stack, Logstash, Datadog czy AWS CloudWatch.
+* **Development (lokalnie)**: Logi są formatowane przez bibliotekę **`pino-pretty`** do postaci czytelnych linii tekstowych z kolorowaniem składni na konsoli (np. poziomy `INFO`, `ERROR` w kolorach, czytelne znaczniki czasu).
+
+### Rola Pino i `pino-pretty`:
+* **Pino**: Odpowiada za zunifikowane zbieranie logów z poziomami ważności (`info`, `warn`, `error`, `debug`). Dzięki architekturze asynchronicznej minimalizuje narzut procesora podczas operacji wejścia/wyjścia.
+* **pino-pretty**: Narzędzie deweloperskie ułatwiające debugowanie lokalne, wyłączone automatycznie w trybie produkcyjnym w celu zachowania optymalnej wydajności i czystości danych JSON.
+

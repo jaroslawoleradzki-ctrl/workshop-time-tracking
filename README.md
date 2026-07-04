@@ -108,6 +108,7 @@ Aplikacja rozróżnia dwie role użytkowników posiadające odmienne uprawnienia
 
 ### Backend
 * **Node.js** (Express, TypeScript)
+* **Logowanie**: Centralny logger oparty o **Pino** (format JSON w produkcji, czytelny format kolorowy `pino-pretty` w środowisku deweloperskim)
 * **ORM**: Prisma Client
 * **Przetwarzanie i generowanie plików**: biblioteki `exceljs` oraz `xlsx` (SheetJS)
 
@@ -131,6 +132,7 @@ graph TD
 ```
 
 * **Nginx**: Bramka wejściowa na porcie 80. Serwuje statyczne pliki React SPA bezpośrednio do klienta, a zapytania API `/api/*` przekazuje jako reverse proxy do kontenera backendu `worktime-api` (port 5000).
+* **Pino Logger**: Centralny, wydajny logger w backendzie. Wytwarza ustrukturyzowane logi JSON w środowisku produkcyjnym (ułatwiające integrację z systemami monitoringu) oraz używa `pino-pretty` do kolorowania logów na konsoli deweloperskiej.
 * **Prisma ORM**: Mapuje encje bazodanowe i wykonuje automatyczne migracje struktury bazy danych.
 
 ---
