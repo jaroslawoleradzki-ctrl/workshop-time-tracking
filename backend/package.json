@@ -11,7 +11,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "seed": "ts-node prisma/seed.ts",
-    "seed:prod": "node dist/prisma/seed.js"
+    "seed:prod": "node dist/prisma/seed.js",
+    "test": "vitest run"
   },
   "dependencies": {
     "@prisma/client": "^5.14.0",
@@ -32,10 +33,13 @@
     "@types/jsonwebtoken": "^9.0.6",
     "@types/multer": "^1.4.11",
     "@types/node": "^20.12.12",
+    "@types/supertest": "^7.2.0",
     "prisma": "^5.14.0",
+    "supertest": "^7.2.2",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "vitest": "^4.1.9"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
