@@ -64,6 +64,19 @@ Zmiana zostaje uznana za ukończoną tylko wtedy, gdy spełnia poniższe kryteri
 * **Tylko istniejące funkcjonalności**: Dokumentacja musi opisywać wyłącznie działający i faktycznie zaimplementowany kod aplikacji.
 * **Zakaz dokumentowania planów**: Nigdy nie opisuj w dokumentacji technicznej, instrukcjach ani readme funkcji planowanych do wdrożenia w przyszłości.
 * **Aktualizacja na bieżąco**: Przy każdej zmianie kodu weryfikuj konieczność naniesienia poprawek w `README.md`, `CHANGELOG.md`, `AGENTS.md` oraz plikach w katalogu `docs/`.
+* Przy zmianie reguł biznesowych aktualizuj `docs/business-rules.md`.
+* Przy zmianie importu lub eksportu aktualizuj `docs/import-export-specification.md`.
+* Przy zmianie zmiennych środowiskowych aktualizuj `docs/configuration.md`.
+* Przy zmianie interfejsu lub sposobu obsługi aktualizuj `docs/user-guide.md`.
+* Przy zmianie modelu danych albo architektury aktualizuj `docs/architecture.md`.
+* **Bez sekretów i danych klienta**: Nie umieszczaj w dokumentacji prawdziwych haseł, tokenów, kluczy, connection stringów ani danych klienta.
+
+### Wymagane polecenia weryfikacyjne
+
+Zgodnie ze skryptami w `package.json` uruchom odpowiednio:
+
+* backend: `cd backend && npm test` oraz `npm run build` (backend nie definiuje skryptu lint),
+* frontend: `cd frontend && npm test`, `npm run lint` oraz `npm run build`.
 
 ---
 

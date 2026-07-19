@@ -271,11 +271,28 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 
 ## Indeks dokumentacji
 
-* [docs/architecture.md](docs/architecture.md) – Szczegółowy opis modeli bazy danych PostgreSQL, specyfikacji tabel oraz relacji.
-* [docs/deployment.md](docs/deployment.md) – Instrukcje pierwszej instalacji serwera, procedury backupów (`backup-db.sh`) i rollbacków (`rollback.sh`).
-* [docs/roadmap.md](docs/roadmap.md) – Kamienie Milowe Projektu - dziennik ukończonych etapów i wdrożeń.
-* [CHANGELOG.md](CHANGELOG.md) – Dziennik zmian wprowadzonych w poszczególnych wersjach systemu.
-* [AGENTS.md](AGENTS.md) – Zbiór zasad kodowania, standardów i reguł technicznych dla deweloperów oraz agentów AI.
+### Użytkowanie
+
+* [Instrukcja użytkownika](docs/user-guide.md) – obsługa dla lidera i administratora.
+* [Reguły biznesowe](docs/business-rules.md) – obowiązujące walidacje, statusy, audyt i zasady raportowania.
+* [Importy i eksporty](docs/import-export-specification.md) – formaty kolumn, walidacja i raporty plikowe.
+
+### Projekt i rozwój
+
+* [Architektura](docs/architecture.md) – komponenty, model danych i przepływy.
+* [Konfiguracja](docs/configuration.md) – zmienne środowiskowe i różnice środowisk.
+* [Testowanie](docs/testing.md) – istniejące testy, polecenia i checklista regresji.
+* [Zasady współpracy](AGENTS.md) – standardy dla deweloperów i agentów AI.
+
+### Wdrożenie i utrzymanie
+
+* [Wdrożenie](docs/deployment.md) – instalacja, backup i rollback.
+* [Runbook operacyjny](docs/operations-runbook.md) – diagnoza awarii i kryteria rollbacku.
+
+### Historia projektu
+
+* [Zrealizowane kamienie milowe](docs/roadmap.md) – ukończone etapy rozwoju.
+* [Changelog](CHANGELOG.md) – zmiany w poszczególnych wersjach.
 
 ---
 

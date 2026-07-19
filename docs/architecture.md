@@ -1,51 +1,71 @@
-# Architektura aplikacji
+# Architektura systemu
 
-## Cel projektu
-Aplikacja służy do rejestracji i raportowania czasu pracy pracowników warsztatowych nad konkretnymi zleceniami/produktami w systemie rozliczeniowym firmy.
+Workshop Time Tracking jest aplikacją SPA z API i relacyjną bazą, wdrażaną jako trzy usługi Docker Compose.
 
-## Stos technologiczny
-- **Frontend**: React (Vite, TypeScript, Lucide React icons)
-- **Backend**: Node.js (Express, TypeScript, Prisma ORM)
-- **Baza danych**: PostgreSQL
-- **Serwer**: Nginx (reverse proxy serwujący statyczne pliki frontendu i przekierowujący API do backendu)
-- **Docker**: Konteneryzacja całego środowiska (Dockerfile dla backendu, Nginx i PostgreSQL spięte przez docker-compose)
+```mermaid
+flowchart LR
+  U["Przeglądarka użytkownika"] -->|HTTP, statyczne pliki| N["Nginx / frontend"]
+  U -->|/api, JSON, Bearer JWT| N
+  N -->|reverse proxy /api| A["Express API"]
+  A --> R["Routery i middleware"]
+  R --> P["Prisma Client"]
+  P --> D[("PostgreSQL")]
+```
 
-## Struktura projektu
-- `backend/`: Kod serwera, schemat Prisma, definicje endpointów i logika biznesowa importu/eksportu danych.
-- `frontend/`: Kod aplikacji SPA, komponenty React (m.in. ReportingPanel, EmployeesView).
-- `nginx/`: Konfiguracja serwera Nginx do obsługi routingu i proxy.
-- `docs/`: Dokumentacja techniczna projektu.
+## Odpowiedzialności i warstwy
+
+- React renderuje UI, przechowuje token i użytkownika w `localStorage`, stan nawigacji w `sessionStorage`, waliduje formularze i wywołuje względne `/api`.
+- Nginx serwuje build SPA i przekazuje `/api` do backendu.
+- Express składa middleware CORS/JSON/logowania, uwierzytelnianie JWT, kontrolę ról i routery: auth, users, employees, orders, work-time-types, reports, analytics, imports.
+- Routery zawierają walidację i logikę biznesową oraz bezpośrednio wywołują Prisma; osobnej warstwy serwisów/repozytoriów nie ma.
+- Prisma mapuje modele i migracje na PostgreSQL. Logger Pino zapisuje żądania i błędy na stdout/stderr.
 
 ## Model danych
-- **Users**: Użytkownicy systemu (np. admin, lider), którzy mogą zarządzać danymi i przeglądać raporty.
-- **Employees**: Pracownicy wykonujący pracę. Posiadają pola: `id`, `fullName`, `firstName`, `lastName`, `employeeNumber` oraz status aktywności `isActive`.
-- **Orders**: Zlecenia produkcyjne z planem godzinowym (`plannedHours` wyliczanym automatycznie), datą zlecenia (`orderDate`), opcjonalną planowaną wysyłką (`plannedShipmentDate`), ilością (`quantity`), jednostką (`quantityUnit`), pracochłonnością jednostkową (`hoursPerUnit`), opcjonalnym kodem produktu (`productCode`), nazwą produktu, opcjonalnym kontem księgowym, opcjonalnym zamawiającym (`orderedBy`), statusami (`OPEN`, `SUSPENDED`, `CLOSED`) oraz flagą aktywności `isActive`.
-- **WorkTimeReports**: Zapisy godzinowe czasu pracy przypisane do pracownika, rodzaju czasu pracy oraz zlecenia.
-- **WorkTimeTypes**: Słownik rodzajów czasu pracy (np. "G" - godziny standardowe, "U" - urlop).
 
-## Zrealizowane funkcjonalności
+```mermaid
+erDiagram
+  USER ||--o{ WORK_TIME_REPORT : creates
+  USER ||--o{ WORK_TIME_REPORT : modifies
+  USER ||--o{ AUDIT_LOG : causes
+  USER ||--o{ IMPORT_HISTORY : performs
+  EMPLOYEE ||--o{ WORK_TIME_REPORT : has
+  ORDER o|--o{ WORK_TIME_REPORT : concerns
+  WORK_TIME_TYPE ||--o{ WORK_TIME_REPORT : classifies
+```
 
-### Infrastruktura
-- **GitHub**: Integracja z repozytorium kodu na gałęziach `development` oraz `main`.
-- **Deployment**: Konteneryzacja stosu za pomocą Docker Compose.
-- **Backup**: Skrypt `backup-db.sh` tworzący zrzuty bazy danych (`pg_dump`) skompresowane za pomocą `gzip` do folderu `backups/` z obsługą uruchamiania z dowolnej lokalizacji.
-- **Rollback**: Skrypt `rollback.sh` umożliwiający cofnięcie kodu aplikacji do wybranego commita i przebudowę kontenerów z ostrzeżeniem o braku rollbacku bazy danych.
-- **Healthcheck**: Endpoint `/api/health` weryfikujący stan działania serwera backendowego oraz łączność z bazą PostgreSQL.
-- **Version endpoint**: Endpoint `/api/version` eksponujący nazwę, środowisko, wersję backendu oraz główną wersję aplikacji (`APP_VERSION`).
+`User` nie jest powiązany z `Employee`. `WorkTimeReport` łączy pracownika, opcjonalne zlecenie, typ czasu i użytkowników tworzącego/modyfikującego. `Order` ma status, aktywność i plan godzin. `ImportHistory` przechowuje wynik importu, a `AuditLog` migawkę zmiany.
 
-### Pracownicy
-- **Rozdzielenie danych pracowników**: Wprowadzenie pól `firstName`, `lastName` oraz `employeeNumber` przy zachowaniu pola `fullName` dla kompatybilności.
-- **Migracja bazy**: Wdrażanie zmian schematu bazy danych za pomocą Prisma (`npx prisma migrate deploy`) w entrypoincie kontenera.
-- **Kompatybilność ze starszymi rekordami**: Dynamiczne parsowanie/splitowanie `fullName` w locie dla starych rekordów (formularz edycji i kolumny tabeli).
-- **Zmiana importów**: Rozbudowanie importu z pliku Excel o obsługę nowych kolumn (imię, nazwisko, ID) wraz z fallbackiem do automatycznego podziału pełnego nazwiska. Szablon importu pracowników został dostosowany do nowego modelu danych i wykorzystuje kolumny: ID, Imię, Nazwisko.
+## Przepływy
 
-### Raportowanie czasu
-- **Searchable combobox**: Autouzupełniający komponent wyboru pracownika z polem tekstowym i ikoną lupy.
-- **Wyszukiwanie**: Filtrowanie na żywo po imieniu, nazwisku lub pełnym imieniu i nazwisku.
-- **Nawigacja**: Zachowanie przycisków "Poprzedni pracownik" i "Następny pracownik" jako alternatywnej nawigacji.
+Logowanie: React wysyła login i hasło do `/api/auth/login`; API wyszukuje aktywnego użytkownika, porównuje bcrypt i zwraca JWT ważny 12 godzin. Każde chronione żądanie weryfikuje podpis oraz aktualną aktywność konta w bazie.
 
-### Zlecenia
-- **Przebudowa modelu i widoku**: Zmiana nazw kolumn na standard domenowy (`productCode`, `plannedHours`, `completionDate`), dodanie pól `quantity` i `quantityUnit` o typie Decimal(10,2) oraz systemowego enuma statusów.
-- **Dodanie flagi aktywności**: Wprowadzenie pola `isActive`, pozwalającego dezaktywować zlecenia bez ich usuwania. Filtrowanie autouzupełniania zlecenia w panelu raportowania wyłącznie do aktywnych zleceń (status `OPEN` i `isActive = true`).
+```mermaid
+sequenceDiagram
+  actor L as Lider
+  participant F as React
+  participant A as Reports API
+  participant P as Prisma/PostgreSQL
+  L->>F: wybiera pracownika, datę, typ, zlecenie i godziny
+  F->>A: POST /api/reports/check-warnings
+  A->>P: suma aktywnych wpisów dnia
+  P-->>A: godziny
+  A-->>F: ostrzeżenia 8/12/24
+  L->>F: potwierdza zapis
+  F->>A: POST /api/reports
+  A->>P: walidacja pracownika, typu i opcjonalnego zlecenia
+  A->>P: utworzenie WorkTimeReport
+  A->>P: utworzenie AuditLog
+  A-->>F: wpis i ostrzeżenia
+```
 
+Import: Multer przechowuje plik w pamięci, SheetJS odczytuje pierwszy arkusz, router waliduje każdy wiersz i tworzy/aktualizuje rekord oraz audyt. Po pętli zapisuje `ImportHistory`. Nie ma transakcji całego pliku.
 
+## Soft delete, audyt i błędy
+
+`Employee`, `Order` i `WorkTimeReport` używają `deletedAt`; większość odczytów filtruje `null`. Usunięcie pracownika dodatkowo go dezaktywuje, a zlecenia ustawia na `CLOSED`. Import może przywrócić pracownika lub zlecenie.
+
+AuditLog jest tworzony pomocniczą funkcją dla zmian pracowników, zleceń i wpisów. Błąd zapisu audytu jest logowany i nie cofa operacji biznesowej. Routery zwracają polskie komunikaty i odpowiednie kody 4xx/5xx; końcowy middleware obsługuje błędy nieprzechwycone. React pokazuje błędy lokalnie, a globalne 401/403 czyszczą sesję. Middleware ról zwraca niestandardowy kod 430 przy braku roli.
+
+## Daty i wdrożenie
+
+Daty raportów są przechowywane jako PostgreSQL `date`, pozostałe znaczniki jako `DateTime`. Kod miesza lokalne konstruktory `Date` z formatowaniem UTC; biznesowa strefa czasowa jest **do potwierdzenia**. Szczegóły uruchomienia zawierają [konfiguracja](configuration.md) i [wdrożenie](deployment.md).
