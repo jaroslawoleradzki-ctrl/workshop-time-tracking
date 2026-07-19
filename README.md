@@ -279,6 +279,8 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 
 ### Projekt i rozwój
 
+* [Rozpoczęcie sesji projektowej](docs/session-start.md) – obowiązkowa kontrola stanu i zasady przekazania między ChatGPT i Codexem.
+* [Status projektu](PROJECT_STATUS.md) – bieżąca wersja, ostatnio zakończone prace, wyniki weryfikacji i znane ustalenia.
 * [Architektura](docs/architecture.md) – komponenty, model danych i przepływy.
 * [Konfiguracja](docs/configuration.md) – zmienne środowiskowe i różnice środowisk.
 * [Testowanie](docs/testing.md) – istniejące testy, polecenia i checklista regresji.

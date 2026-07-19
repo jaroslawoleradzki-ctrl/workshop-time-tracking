@@ -7,6 +7,7 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 - Rozbudowano strukturę dokumentacji o reguły biznesowe, specyfikację importów i eksportów, konfigurację, testowanie, runbook operacyjny oraz instrukcję użytkownika; uzupełniono także architekturę i indeks dokumentacji.
+- Dodano `PROJECT_STATUS.md` oraz obowiązkową procedurę rozpoczęcia sesji i przekazania pracy między ChatGPT i Codexem w `docs/session-start.md`; powiązano procedurę z zasadami w `AGENTS.md`.
 
 ## [0.2.8] (Development) - 2026-07-04
 

@@ -5,11 +5,15 @@ Dokument ten definiuje standardy programistyczne, architekturę projektu, przep�
 ---
 
 ## Procedura rozpoczęcia pracy (Work Startup Procedure)
+Pełna, obowiązkowa procedura rozpoczęcia sesji i przekazania pracy znajduje się w `docs/session-start.md`. Należy ją wykonać przed powrotem do projektu po przerwie, rozpoczęciem funkcjonalności, naprawy błędu lub wydania oraz po przejęciu pracy od innego agenta.
+
 Przed przystąpieniem do jakichkolwiek modyfikacji kodu lub konfiguracji, agent/deweloper musi bezwzględnie wykonać następujące czynności weryfikacyjne:
 1. **Sprawdzenie ścieżki roboczej**: Wykonaj `pwd` i upewnij się, że pracujesz w odpowiednim katalogu projektu.
 2. **Sprawdzenie gałęzi Git**: Wykonaj `git branch --show-current` i upewnij się, że aktualny branch to `development`.
 3. **Sprawdzenie stanu repozytorium**: Wykonaj `git status` w celu upewnienia się, że stan repozytorium jest czysty.
-4. **Zapoznanie z zasadami**: Przeczytaj `AGENTS.md` oraz (w razie potrzeby) `README.md`.
+4. **Synchronizacja informacji o origin**: Wykonaj `git fetch origin` i porównaj `HEAD` z gałęzią śledzoną.
+5. **Zapoznanie z kontekstem**: Przeczytaj `AGENTS.md`, `PROJECT_STATUS.md`, `CHANGELOG.md`, `README.md` oraz dokumentację dotyczącą zadania.
+6. **Raport startowy**: Przed modyfikacją przedstaw krótki raport zgodny z `docs/session-start.md`.
 
 > [!IMPORTANT]
 > Jeżeli katalog roboczy, aktywny branch lub stan repozytorium jest niezgodny ze specyfikacją zadania – **ZATRZYMAJ PRACĘ NATYCHMIAST** i poinformuj użytkownika.
@@ -69,6 +73,8 @@ Zmiana zostaje uznana za ukończoną tylko wtedy, gdy spełnia poniższe kryteri
 * Przy zmianie zmiennych środowiskowych aktualizuj `docs/configuration.md`.
 * Przy zmianie interfejsu lub sposobu obsługi aktualizuj `docs/user-guide.md`.
 * Przy zmianie modelu danych albo architektury aktualizuj `docs/architecture.md`.
+* Przy zmianie wersji, zakończonego zakresu prac, wyników weryfikacji lub znanych ryzyk aktualizuj `PROJECT_STATUS.md`.
+* Zmiany procedury rozpoczęcia pracy i przekazania między agentami muszą być odzwierciedlone w `docs/session-start.md`.
 * **Bez sekretów i danych klienta**: Nie umieszczaj w dokumentacji prawdziwych haseł, tokenów, kluczy, connection stringów ani danych klienta.
 
 ### Wymagane polecenia weryfikacyjne
