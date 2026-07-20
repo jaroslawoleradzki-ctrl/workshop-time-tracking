@@ -5,11 +5,11 @@
 - Projekt: Workshop Time Tracking
 - Aktualna wersja: `0.2.9`
 - Gałąź robocza: `fix/duplicate-reports-cleanup`
-- Ostatni zatwierdzony commit: `c949b9d` (`docs: update project status after 0.2.9 merge`)
-- Stan zmian: lokalne, niezatwierdzone narzędzie read-only do analizy historycznych duplikatów; zmiany nie zostały wypchnięte ani scalone.
-- Stan wdrożenia: narzędzie diagnostyczne nie zostało wdrożone ani uruchomione na produkcyjnej bazie.
+- Ostatni zatwierdzony commit: `a710334` (`feat(maintenance): add read-only duplicate report analyzer`)
+- Stan zmian: lokalny, niezatwierdzony etap 2 – read-only Repair Manifest Builder; zmiany nie zostały wypchnięte ani scalone.
+- Stan wdrożenia: analizator i builder manifestu nie zostały wdrożone; etap 2 nie łączy się z bazą danych.
 
-Gałąź `development` zawiera zweryfikowaną poprawkę krytyczną operacji kopiowania ostatniego dnia. Bieżąca gałąź dodaje wyłącznie diagnostykę poza kodem produkcyjnym: klasyfikator, CLI wymuszający transakcję PostgreSQL `READ ONLY`, eksport JSON/CSV, testy jednostkowe i dokumentację. Skrypt nie wykonuje `INSERT`, `UPDATE` ani `DELETE`.
+Gałąź `development` zawiera zweryfikowaną poprawkę krytyczną operacji kopiowania ostatniego dnia. Bieżąca gałąź zawiera zatwierdzony etap 1 analizy oraz lokalny etap 2, który wyłącznie czyta `duplicate-analysis.json` i zapisuje Repair Manifest JSON/Markdown/CSV. Builder nie importuje Prisma, nie używa `DATABASE_URL` i nie wykonuje `INSERT`, `UPDATE`, `DELETE` ani soft delete.
 
 ## Dokumentacja projektu
 
@@ -50,7 +50,20 @@ Lint frontendu nie uruchomił się, ponieważ istniejący skrypt odwołuje się 
 - backend i frontend: build zakończony powodzeniem,
 - frontend: 8 testów zakończonych powodzeniem,
 - punkt wejścia `reports:analyze-duplicates -- --help` zakończony powodzeniem bez połączenia z bazą,
-- analizator nie został uruchomiony z zakresem dat ani przeciwko produkcyjnej bazie.
+- istniejący lokalny `duplicate-analysis.json` został wykorzystany jako wejście etapu 2; dokumentacja nie przypisuje tego pliku do środowiska produkcyjnego.
+
+## Weryfikacja Repair Manifest Builder
+
+- 10 testów jednostkowych buildera zakończonych powodzeniem,
+- pełny backend: 41 testów zakończonych powodzeniem,
+- frontend: 8 testów zakończonych powodzeniem,
+- typecheck skryptów diagnostycznych zakończony powodzeniem,
+- build backendu i frontendu zakończony powodzeniem,
+- na istniejącym lokalnym raporcie zawierającym 504 batche wygenerowano przykładowy manifest: 8 KEEP, 11 propozycji DELETE i 494 REVIEW,
+- wszystkie propozycje DELETE wymagają ręcznej weryfikacji, a manifest pozostaje `approved: false`,
+- skrypt nie utworzył połączenia z bazą i zapisał wyłącznie pliki w ignorowanym katalogu `backend/reports/`.
+
+Lint frontendu nadal nie uruchamia się, ponieważ istniejący skrypt odwołuje się do `eslint`, którego nie ma w zależnościach projektu. Nie zmieniano zależności poza zakresem etapu 2.
 
 ## Znane ustalenia wymagające uwagi
 

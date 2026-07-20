@@ -285,6 +285,7 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 * [Konfiguracja](docs/configuration.md) – zmienne środowiskowe i różnice środowisk.
 * [Testowanie](docs/testing.md) – istniejące testy, polecenia i checklista regresji.
 * [Analiza historycznych duplikatów](docs/duplicate-report-analysis.md) – read-only diagnostyka `work_time_reports`, poziomy pewności i raporty JSON/CSV.
+* [Repair Manifest Builder](docs/duplicate-repair-plan.md) – read-only plan KEEP/DELETE/REVIEW generowany z raportu analizy, bez zmian w bazie.
 * [Zasady współpracy](AGENTS.md) – standardy dla deweloperów i agentów AI.
 
 ### Wdrożenie i utrzymanie

@@ -15,6 +15,7 @@
     "seed:demo": "ts-node prisma/seed-demo.ts",
     "seed:demo:prod": "node dist/prisma/seed-demo.js",
     "reports:analyze-duplicates": "ts-node --project tsconfig.scripts.json scripts/analyze-report-duplicates.ts",
+    "duplicates:repair-plan": "ts-node --project tsconfig.scripts.json scripts/build-repair-manifest.ts",
     "test": "vitest run"
   },
   "dependencies": {

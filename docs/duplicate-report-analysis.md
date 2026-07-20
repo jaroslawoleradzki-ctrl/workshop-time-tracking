@@ -110,3 +110,7 @@ Pełny zestaw backendu:
 cd backend
 npm test
 ```
+
+## Etap 2 – plan naprawy
+
+Pełny `duplicate-analysis.json` może być wejściem do osobnego, nadal read-only narzędzia tworzącego propozycję KEEP/DELETE/REVIEW. Zasady bezpieczeństwa, uruchomienie i format wyników opisuje dokument [Repair Manifest Builder](duplicate-repair-plan.md). Etap 2 nie łączy się z bazą i nie wykonuje żadnej naprawy.
