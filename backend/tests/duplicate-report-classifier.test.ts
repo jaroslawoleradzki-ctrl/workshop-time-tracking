@@ -196,3 +196,44 @@ describe('duplicate report classification', () => {
     expect(result.highCandidates).toHaveLength(0);
   });
 });
+
+  it('classifies repeated import sessions minutes apart as HIGH regression', () => {
+    const reports = [
+      report({ date: '2026-07-16', createdAt: '2026-07-16T08:00:00.000Z', orderId: 'order-a', hours: 4 }),
+      report({ date: '2026-07-16', createdAt: '2026-07-16T08:00:01.000Z', orderId: 'order-b', hours: 3 }),
+      report({ date: '2026-07-16', createdAt: '2026-07-16T08:00:02.000Z', orderId: 'order-c', hours: 1 }),
+      report({ date: '2026-07-17', createdAt: '2026-07-17T09:45:00.000Z', orderId: 'order-a', hours: 4 }),
+      report({ date: '2026-07-17', createdAt: '2026-07-17T09:45:01.000Z', orderId: 'order-b', hours: 3 }),
+      report({ date: '2026-07-17', createdAt: '2026-07-17T09:45:02.000Z', orderId: 'order-c', hours: 1 }),
+      report({ date: '2026-07-17', createdAt: '2026-07-17T09:50:00.000Z', orderId: 'order-a', hours: 4 }),
+      report({ date: '2026-07-17', createdAt: '2026-07-17T09:50:01.000Z', orderId: 'order-b', hours: 3 }),
+      report({ date: '2026-07-17', createdAt: '2026-07-17T09:50:02.000Z', orderId: 'order-c', hours: 1 }),
+      report({ date: '2026-07-17', createdAt: '2026-07-17T09:56:00.000Z', orderId: 'order-a', hours: 4 }),
+      report({ date: '2026-07-17', createdAt: '2026-07-17T09:56:01.000Z', orderId: 'order-b', hours: 3 }),
+      report({ date: '2026-07-17', createdAt: '2026-07-17T09:56:02.000Z', orderId: 'order-c', hours: 1 }),
+    ];
+
+    const result = analyze(reports, '2026-07-17', '2026-07-17');
+
+    expect(result.groups).toHaveLength(3);
+    expect(result.groups.every((group) => group.confidence === 'HIGH')).toBe(true);
+    expect(result.groups.every((group) => group.evidence.includes('REPEATED_IMPORT_SESSION'))).toBe(true);
+    expect(result.copyBatches.filter((batch) => batch.repeatedImportSessionOf !== null)).toHaveLength(2);
+  });
+
+it('keeps the original repeated session in analysis even without an earlier source day', () => {
+  const reports = [
+    report({ date: '2026-07-17', createdAt: '2026-07-17T09:45:00.000Z', orderId: 'order-a', hours: 4 }),
+    report({ date: '2026-07-17', createdAt: '2026-07-17T09:45:01.000Z', orderId: 'order-b', hours: 3 }),
+    report({ date: '2026-07-17', createdAt: '2026-07-17T09:50:00.000Z', orderId: 'order-a', hours: 4 }),
+    report({ date: '2026-07-17', createdAt: '2026-07-17T09:50:01.000Z', orderId: 'order-b', hours: 3 }),
+  ];
+
+  const result = analyze(reports, '2026-07-17', '2026-07-17');
+  const original = result.copyBatches.find((batch) => batch.id === 'batch-0001');
+  const repeated = result.copyBatches.find((batch) => batch.repeatedImportSessionOf === 'batch-0001');
+
+  expect(original).toMatchObject({ sourceMatch: 'NO_SOURCE', likelihood: 'STRONG' });
+  expect(repeated).toMatchObject({ sourceMatch: 'EXACT', repeatedImportSessionOf: 'batch-0001' });
+  expect(result.groups.every((group) => group.evidence.includes('REPEATED_IMPORT_SESSION'))).toBe(true);
+});

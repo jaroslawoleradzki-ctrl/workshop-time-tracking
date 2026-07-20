@@ -69,12 +69,14 @@ function batch(params: {
   id: string;
   reportIds: string[];
   startedAt: string;
-  sourceMatch?: 'REPEATED' | 'EXACT' | 'PARTIAL';
+  sourceMatch?: 'REPEATED' | 'EXACT' | 'PARTIAL' | 'NONE' | 'NO_SOURCE';
   repetitionFactor?: number;
   likelihood?: 'STRONG' | 'POSSIBLE';
   sourceHistoryUncertain?: boolean;
   createAuditCoverage?: number;
   userId?: string;
+  sourceDate?: string | null;
+  repeatedImportSessionOf?: string | null;
 }) {
   const finishedAt = new Date(new Date(params.startedAt).getTime() + 100).toISOString();
   return {
@@ -86,13 +88,14 @@ function batch(params: {
     startedAt: params.startedAt,
     finishedAt,
     durationMs: 100,
-    sourceDate: '2026-07-01',
+    sourceDate: params.sourceDate === undefined ? '2026-07-01' : params.sourceDate,
     sourceMatch: params.sourceMatch || 'EXACT',
     repetitionFactor: params.repetitionFactor ?? 1,
     createAuditCoverage: params.createAuditCoverage ?? 1,
     explicitCopyAuditId: null,
     sourceHistoryUncertain: params.sourceHistoryUncertain ?? false,
     likelihood: params.likelihood || 'STRONG',
+    repeatedImportSessionOf: params.repeatedImportSessionOf ?? null,
   };
 }
 
@@ -177,6 +180,73 @@ describe('repair manifest v2 classification', () => {
       deleteRecordsWithPredecessor: 1,
       batchesDegradedForPreconditions: 0,
     });
+  });
+
+
+
+  it('keeps original repeated import session and deletes redundant waves without prior-day source', () => {
+    const firstAt = '2026-07-17T09:45:00.000Z';
+    const secondAt = '2026-07-17T09:50:00.000Z';
+    const thirdAt = '2026-07-17T09:56:00.000Z';
+    const input = analysis([
+      batch({
+        id: 'batch-original',
+        reportIds: ['original-a', 'original-b'],
+        startedAt: firstAt,
+        sourceMatch: 'NO_SOURCE',
+        repetitionFactor: 0,
+        sourceDate: null,
+      }),
+      batch({
+        id: 'batch-repeat-1',
+        reportIds: ['repeat-1-a', 'repeat-1-b'],
+        startedAt: secondAt,
+        sourceDate: '2026-07-17',
+        repeatedImportSessionOf: 'batch-original',
+      }),
+      batch({
+        id: 'batch-repeat-2',
+        reportIds: ['repeat-2-a', 'repeat-2-b'],
+        startedAt: thirdAt,
+        sourceDate: '2026-07-17',
+        repeatedImportSessionOf: 'batch-original',
+      }),
+    ], [
+      group('HIGH', [
+        record('original-a', firstAt, 'batch-original'),
+        record('repeat-1-a', secondAt, 'batch-repeat-1'),
+        record('repeat-2-a', thirdAt, 'batch-repeat-2'),
+      ], {
+        id: 'group-a',
+        evidence: ['SOURCE_SET_MATCH', 'REPEATED_IMPORT_SESSION', 'CREATE_AUDIT_MATCH'],
+      }),
+      group('HIGH', [
+        record('original-b', '2026-07-17T09:45:01.000Z', 'batch-original', { hours: '6.00' }),
+        record('repeat-1-b', '2026-07-17T09:50:01.000Z', 'batch-repeat-1', { hours: '6.00' }),
+        record('repeat-2-b', '2026-07-17T09:56:01.000Z', 'batch-repeat-2', { hours: '6.00' }),
+      ], {
+        id: 'group-b',
+        identityHours: '6.00',
+        evidence: ['SOURCE_SET_MATCH', 'REPEATED_IMPORT_SESSION', 'CREATE_AUDIT_MATCH'],
+      }),
+    ]);
+
+    const result = buildRepairManifest(input, OPTIONS);
+
+    expect(result.actions.map((action) => [action.batchId, action.action, action.reasonCode])).toEqual([
+      ['batch-original', 'KEEP', 'ORIGINAL_COPY_BATCH'],
+      ['batch-repeat-1', 'DELETE', 'REDUNDANT_COPY_BATCH'],
+      ['batch-repeat-2', 'DELETE', 'REDUNDANT_COPY_BATCH'],
+    ]);
+    expect(result.actions.find((action) => action.batchId === 'batch-repeat-1')).toMatchObject({
+      predecessorBatchIds: ['batch-original'],
+      preconditionIssues: [],
+      records: [
+        { reportId: 'repeat-1-a', predecessor: { reportId: 'original-a', batchId: 'batch-original' } },
+        { reportId: 'repeat-1-b', predecessor: { reportId: 'original-b', batchId: 'batch-original' } },
+      ],
+    });
+    expect(result.summary.actionsByType).toMatchObject({ KEEP: 1, DELETE: 2, REVIEW: 0 });
   });
 
   it('creates a deterministic SHA-256 business fingerprint', () => {

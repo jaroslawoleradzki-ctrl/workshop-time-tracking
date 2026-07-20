@@ -57,6 +57,7 @@ const copyBatchSchema = z.object({
   explicitCopyAuditId: z.string().nullable(),
   sourceHistoryUncertain: z.boolean(),
   likelihood: z.enum(['STRONG', 'POSSIBLE', 'NONE']),
+  repeatedImportSessionOf: z.string().nullable().optional(),
 }).passthrough();
 
 export const duplicateAnalysisFileSchema = z.object({
@@ -177,6 +178,7 @@ const COPY_HISTORY_EVIDENCE = new Set([
   'COPY_BATCH_REPEATED_SOURCE_SET',
   'MULTIPLE_SOURCE_MATCHING_BATCHES',
   'CASCADE_FROM_HIGH_SOURCE_GROUP',
+  'REPEATED_IMPORT_SESSION',
 ]);
 
 function isoDate(value: string, field: string) {
@@ -300,16 +302,33 @@ function stableRecordHistory(record: DuplicateRecord) {
   return record.deletedAt === null && updateDelay >= 0 && updateDelay <= 1_000;
 }
 
+function hasCompleteBatchEvidence(batch: CopyBatch, copyBurstWindowMs: number) {
+  return batch.likelihood === 'STRONG'
+    && batch.durationMs <= copyBurstWindowMs
+    && (batch.createAuditCoverage === 1 || batch.explicitCopyAuditId !== null)
+    && !batch.sourceHistoryUncertain;
+}
+
 function trustedCopyBatch(batch: CopyBatch, copyBurstWindowMs: number) {
   const matchIsConsistent =
     (batch.sourceMatch === 'EXACT' && batch.repetitionFactor === 1)
     || (batch.sourceMatch === 'REPEATED' && batch.repetitionFactor >= 2);
-  return batch.likelihood === 'STRONG'
+  return hasCompleteBatchEvidence(batch, copyBurstWindowMs)
     && matchIsConsistent
-    && batch.sourceDate !== null
-    && batch.durationMs <= copyBurstWindowMs
-    && (batch.createAuditCoverage === 1 || batch.explicitCopyAuditId !== null)
-    && !batch.sourceHistoryUncertain;
+    && batch.sourceDate !== null;
+}
+
+function trustedRepeatedImportPredecessor(
+  earlierBatch: CopyBatch,
+  currentBatch: CopyBatch,
+  copyBurstWindowMs: number,
+) {
+  return currentBatch.repeatedImportSessionOf === earlierBatch.id
+    && hasCompleteBatchEvidence(earlierBatch, copyBurstWindowMs)
+    && earlierBatch.date === currentBatch.date
+    && earlierBatch.employeeId === currentBatch.employeeId
+    && earlierBatch.createdByUserId === currentBatch.createdByUserId
+    && earlierBatch.reportIds.length === currentBatch.reportIds.length;
 }
 
 function actionFromBatch(
@@ -373,7 +392,8 @@ function historicalPredecessorCandidates(
       && earlierBatch.employeeId === batch.employeeId
       && earlierBatch.createdByUserId === batch.createdByUserId
       && timestamp(earlierBatch.startedAt, 'startedAt') < timestamp(batch.startedAt, 'startedAt')
-      && trustedCopyBatch(earlierBatch, copyBurstWindowMs),
+      && (trustedCopyBatch(earlierBatch, copyBurstWindowMs)
+        || trustedRepeatedImportPredecessor(earlierBatch, batch, copyBurstWindowMs)),
     );
   }).sort((left, right) =>
     timestamp(left.createdAt, 'createdAt') - timestamp(right.createdAt, 'createdAt')
@@ -519,7 +539,8 @@ export function buildRepairManifest(
         group.evidence.some((evidence) => COPY_HISTORY_EVIDENCE.has(evidence))
         && (group.creationSpanMs <= analysis.parameters.copyBurstWindowMs
           || group.evidence.includes('COPY_BATCH_REPEATED_SOURCE_SET')
-          || group.evidence.includes('CASCADE_FROM_HIGH_SOURCE_GROUP')),
+          || group.evidence.includes('CASCADE_FROM_HIGH_SOURCE_GROUP')
+          || group.evidence.includes('REPEATED_IMPORT_SESSION')),
       );
       const recordsHaveStableHistory = records.every(stableRecordHistory);
       const legacyEveryRecordHasEarlierCopy = allReportsMappedToHighGroups && records.every((record) => {
@@ -587,11 +608,23 @@ export function buildRepairManifest(
             && !batchReportIds.has(other.id)
             && timestamp(other.createdAt, 'createdAt') < timestamp(record.createdAt, 'createdAt'));
         });
-        const canKeep = copyEvidenceIsComplete
+        const laterRepeatedImportSession = analysis.copyBatches.some((candidate) =>
+          candidate.repeatedImportSessionOf === batch.id
+          && candidate.date === batch.date
+          && candidate.employeeId === batch.employeeId
+          && candidate.createdByUserId === batch.createdByUserId
+          && candidate.reportIds.length === batch.reportIds.length
+          && trustedCopyBatch(candidate, analysis.parameters.copyBurstWindowMs));
+        const canKeepRepeatedImportOriginal = laterRepeatedImportSession
+          && hasCompleteBatchEvidence(batch, analysis.parameters.copyBurstWindowMs)
+          && noInternalDuplicates
+          && noEarlierDuplicate;
+        const canKeep = (copyEvidenceIsComplete
           && batch.sourceMatch === 'EXACT'
           && batch.repetitionFactor === 1
           && noInternalDuplicates
-          && noEarlierDuplicate;
+          && noEarlierDuplicate)
+          || canKeepRepeatedImportOriginal;
 
         if (canKeep && groups.length === 0) {
           action = actionFromBatch(
