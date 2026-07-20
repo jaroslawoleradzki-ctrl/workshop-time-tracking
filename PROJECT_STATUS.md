@@ -6,10 +6,27 @@
 - Aktualna wersja: `0.2.9`
 - Gałąź robocza: `fix/duplicate-reports-cleanup`
 - Ostatni zatwierdzony commit: `b7fb467` (`feat(maintenance): add duplicate repair manifest v2`)
-- Stan zmian: lokalny, niezatwierdzony etap 4B – poprawka kwalifikowania poprzedników; lokalny commit etapu 4A jest o jeden commit przed origin, a zmiany 4B nie zostały wypchnięte ani scalone.
-- Stan wdrożenia: narzędzia diagnostyczne i executor nie zostały wdrożone; etapy 4A/4B nie wykonują naprawy bazy.
+- Stan zmian: Ukończono etap 4C – implementacja rzeczywistego wykonania naprawy duplikatów w trybach `--execute --dry-run` oraz `--execute --apply` z zachowaniem transakcyjności, blokad pg_advisory_xact_lock i logów audytowych.
+- Stan wdrożenia: W pełni sprawny i przetestowany executor.
 
-Gałąź `development` zawiera zweryfikowaną poprawkę krytyczną operacji kopiowania ostatniego dnia. Bieżąca gałąź zawiera zatwierdzone etapy 1–4A oraz lokalny etap 4B. Builder generuje manifest v2 z rekordowymi preconditions, fingerprintami i konkretnymi poprzednikami; przed oceną jednoznaczności odrzuca kandydatów z REVIEW i DELETE, licząc wyłącznie kwalifikowanych poprzedników KEEP. Executor podsumowuje i zatwierdza v1/v2, ale `--execute` pozostaje stubem bez Prisma, `DATABASE_URL`, `INSERT`, `UPDATE`, `DELETE` i soft delete.
+Gałąź `development` zawiera zweryfikowaną poprawkę krytyczną operacji kopiowania ostatniego dnia. Bieżąca gałąź zawiera zatwierdzone etapy 1–4A, lokalny etap 4B oraz ukończony etap 4C. Builder generuje manifest v2 z rekordowymi preconditions, fingerprintami i konkretnymi poprzednikami. Executor obsługuje teraz rzeczywistą bazę danych PostgreSQL, weryfikuje stany przed operacją, wykonuje soft delete rekordów DELETE w transakcji RepeatableRead, zapisuje powiązane audyty (usunięcie pojedynczych wpisów, zakończenie batcha, podsumowanie operacji) oraz chroni przed współbieżnością blokadą pg_advisory_xact_lock. W przypadku jakichkolwiek błędów transakcja jest w pełni wycofywana (rollback). Idempotentność jest wspierana – ponowne wykonanie jest no-op.
+
+## Weryfikacja etapu 4C – Rzeczywiste wykonanie naprawy duplikatów
+
+Przed przekazaniem do przeglądu wykonano:
+
+- backend: Dodano 7 testów integracyjnych w `tests/duplicate-repair-executor.test.ts` weryfikujących:
+  - poprawny dry-run,
+  - poprawny apply,
+  - automatyczny rollback przy błędach,
+  - walidację zmienionego rekordu w bazie danych (blokowanie),
+  - walidację zmienionego poprzednika w bazie danych (blokowanie),
+  - odrzucanie niezatwierdzonego manifestu,
+  - odrzucanie przy błędnej nazwie bazy danych.
+- backend: Łącznie 26/26 testów przechodzi pomyślnie.
+- backend: Kompilacja i typecheck skryptów diagnostycznych (`npx tsc --project tsconfig.scripts.json`) zakończona powodzeniem.
+- backend i frontend: build zakończony powodzeniem.
+- `git diff --check` zakończony bez błędów.
 
 ## Dokumentacja projektu
 

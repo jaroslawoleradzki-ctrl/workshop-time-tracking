@@ -1,7 +1,10 @@
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { z } from 'zod';
+import { PrismaClient, Prisma } from '@prisma/client';
+import prisma from '../src/utils/prisma';
+import { logChange } from '../src/utils/audit';
 import {
   REPAIR_MANIFEST_VERSION,
   ReportPreconditions,
@@ -10,6 +13,266 @@ import {
 
 export const REPAIR_EXECUTION_STUB_MESSAGE = 'Repair execution not implemented yet.';
 export const LEGACY_REPAIR_MANIFEST_VERSION = 1 as const;
+
+export function getDatabaseNameFromUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const name = parsed.pathname.substring(1);
+    if (!name) throw new Error('Empty database name');
+    return name;
+  } catch (e) {
+    const match = url.match(/\/([a-zA-Z0-9_-]+)(?:\?|$)/);
+    if (match && match[1]) {
+      return match[1];
+    }
+    throw new Error('Nieprawidłowy format DATABASE_URL');
+  }
+}
+
+export function computeExecutionFingerprint(manifest: ExecutorRepairManifestV2): string {
+  const approvedDeletes = manifest.actions
+    .filter((a) => a.action === 'DELETE' && a.approved === true)
+    .sort((a, b) => a.batchId.localeCompare(b.batchId));
+
+  const payload = {
+    manifestVersion: manifest.manifestVersion,
+    analysisSha256: manifest.analysisSha256,
+    approvedActions: approvedDeletes.map((a: any) => ({
+      batchId: a.batchId,
+      approvedBy: a.approvedBy,
+      approvedAt: a.approvedAt,
+      approvalNote: a.approvalNote,
+      reportIds: [...a.reportIds].sort(),
+      records: (a.records || [])
+        .map((r: any) => ({
+          reportId: r.reportId,
+          fingerprint: r.fingerprint,
+          predecessorReportId: r.predecessor.reportId,
+          predecessorFingerprint: r.predecessor.fingerprint,
+        }))
+        .sort((a: any, b: any) => a.reportId.localeCompare(b.reportId)),
+    })),
+  };
+
+  const hash = createHash('sha256');
+  hash.update(JSON.stringify(payload));
+  return hash.digest('hex');
+}
+
+export function fingerprintToUuid(fingerprint: string): string {
+  const clean = fingerprint.replace(/[^a-f0-9]/gi, '').toLowerCase();
+  if (clean.length < 32) throw new Error('Fingerprint too short');
+  return [
+    clean.substring(0, 8),
+    clean.substring(8, 12),
+    clean.substring(12, 16),
+    clean.substring(16, 20),
+    clean.substring(20, 32),
+  ].join('-');
+}
+
+interface ValidationConflict {
+  batchId: string;
+  reportId?: string;
+  type: string;
+  message: string;
+}
+
+export function validateManifestState(
+  actionsToValidate: any[],
+  dbReports: any[],
+  completedBatchMap: Map<string, any>,
+): ValidationConflict[] {
+  const conflicts: ValidationConflict[] = [];
+  const dbReportMap = new Map<string, any>();
+  for (const report of dbReports) {
+    dbReportMap.set(report.id, report);
+  }
+
+  for (const action of actionsToValidate) {
+    const isBatchAlreadyCompleted = completedBatchMap.has(action.batchId);
+
+    for (const record of action.records || []) {
+      const dbRecord = dbReportMap.get(record.reportId);
+      const dbPredecessor = dbReportMap.get(record.predecessor.reportId);
+
+      if (!dbRecord) {
+        conflicts.push({
+          batchId: action.batchId,
+          reportId: record.reportId,
+          type: 'TARGET_NOT_FOUND',
+          message: `Rekord do usunięcia ${record.reportId} nie istnieje w bazie.`,
+        });
+        continue;
+      }
+
+      if (!dbPredecessor) {
+        conflicts.push({
+          batchId: action.batchId,
+          reportId: record.predecessor.reportId,
+          type: 'PREDECESSOR_NOT_FOUND',
+          message: `Zachowywany poprzednik ${record.predecessor.reportId} nie istnieje w bazie.`,
+        });
+        continue;
+      }
+
+      if (dbRecord.deletedAt !== null) {
+        if (!isBatchAlreadyCompleted) {
+          conflicts.push({
+            batchId: action.batchId,
+            reportId: record.reportId,
+            type: 'TARGET_ALREADY_DELETED',
+            message: `Rekord do usunięcia ${record.reportId} jest już oznaczony jako usunięty w bazie.`,
+          });
+        }
+      } else if (isBatchAlreadyCompleted) {
+        conflicts.push({
+          batchId: action.batchId,
+          reportId: record.reportId,
+          type: 'TARGET_NOT_DELETED_BUT_COMPLETED',
+          message: `Akcja ${action.batchId} jest oznaczona jako wykonana, ale rekord ${record.reportId} w bazie nie jest usunięty.`,
+        });
+      }
+
+      if (dbPredecessor.deletedAt !== null) {
+        conflicts.push({
+          batchId: action.batchId,
+          reportId: record.predecessor.reportId,
+          type: 'PREDECESSOR_DELETED',
+          message: `Zachowywany poprzednik ${record.predecessor.reportId} jest usunięty w bazie.`,
+        });
+      }
+
+      const checkPrecondition = (key: string, dbVal: any, expectedVal: any) => {
+        if (key === 'hours') {
+          if (Number(dbVal) !== Number(expectedVal)) {
+            conflicts.push({
+              batchId: action.batchId,
+              reportId: record.reportId,
+              type: 'PRECONDITION_MISMATCH',
+              message: `Rekord ${record.reportId} ma niezgodną liczbę godzin: w bazie ${Number(dbVal)}, oczekiwano ${Number(expectedVal)}.`,
+            });
+          }
+          return;
+        }
+        if (key === 'createdAt' || key === 'updatedAt' || key === 'deletedAt') {
+          if (!dbVal && !expectedVal) return;
+          if (!dbVal || !expectedVal || new Date(dbVal).getTime() !== new Date(expectedVal).getTime()) {
+            conflicts.push({
+              batchId: action.batchId,
+              reportId: record.reportId,
+              type: 'PRECONDITION_MISMATCH',
+              message: `Rekord ${record.reportId} ma niezgodne pole ${key}.`,
+            });
+          }
+          return;
+        }
+        if (dbVal !== expectedVal) {
+          conflicts.push({
+            batchId: action.batchId,
+            reportId: record.reportId,
+            type: 'PRECONDITION_MISMATCH',
+            message: `Rekord ${record.reportId} ma niezgodne pole ${key}: w bazie ${dbVal}, oczekiwano ${expectedVal}.`,
+          });
+        }
+      };
+
+      const pc = record.preconditions;
+      checkPrecondition('employeeId', dbRecord.employeeId, pc.employeeId);
+      checkPrecondition('date', dbRecord.date.toISOString().slice(0, 10), pc.date);
+      checkPrecondition('orderId', dbRecord.orderId, pc.orderId);
+      checkPrecondition('hours', dbRecord.hours, pc.hours);
+      checkPrecondition('workTimeTypeCode', dbRecord.workTimeTypeCode, pc.workTimeTypeCode);
+      checkPrecondition('createdByUserId', dbRecord.createdByUserId, pc.createdByUserId);
+      checkPrecondition('modifiedByUserId', dbRecord.modifiedByUserId, pc.modifiedByUserId);
+      checkPrecondition('createdAt', dbRecord.createdAt, pc.createdAt);
+      checkPrecondition('updatedAt', dbRecord.updatedAt, pc.updatedAt);
+      if (!isBatchAlreadyCompleted) {
+        checkPrecondition('deletedAt', dbRecord.deletedAt, pc.deletedAt);
+      }
+
+      const dbFingerprint = reportBusinessFingerprint({
+        date: dbRecord.date.toISOString().slice(0, 10),
+        employeeId: dbRecord.employeeId,
+        orderId: dbRecord.orderId,
+        hours: dbRecord.hours.toString(),
+        workTimeTypeCode: dbRecord.workTimeTypeCode,
+      });
+      if (dbFingerprint !== record.fingerprint) {
+        conflicts.push({
+          batchId: action.batchId,
+          reportId: record.reportId,
+          type: 'FINGERPRINT_MISMATCH',
+          message: `Rekord ${record.reportId} ma niezgodny fingerprint biznesowy.`,
+        });
+      }
+
+      const predPc = record.predecessor.preconditions;
+      const checkPredPrecondition = (key: string, dbVal: any, expectedVal: any) => {
+        if (key === 'hours') {
+          if (Number(dbVal) !== Number(expectedVal)) {
+            conflicts.push({
+              batchId: action.batchId,
+              reportId: record.predecessor.reportId,
+              type: 'PREDECESSOR_PRECONDITION_MISMATCH',
+              message: `Poprzednik ${record.predecessor.reportId} ma niezgodną liczbę godzin: w bazie ${Number(dbVal)}, oczekiwano ${Number(expectedVal)}.`,
+            });
+          }
+          return;
+        }
+        if (key === 'createdAt' || key === 'updatedAt' || key === 'deletedAt') {
+          if (!dbVal && !expectedVal) return;
+          if (!dbVal || !expectedVal || new Date(dbVal).getTime() !== new Date(expectedVal).getTime()) {
+            conflicts.push({
+              batchId: record.predecessor.batchId,
+              reportId: record.predecessor.reportId,
+              type: 'PREDECESSOR_PRECONDITION_MISMATCH',
+              message: `Poprzednik ${record.predecessor.reportId} ma niezgodne pole ${key}.`,
+            });
+          }
+          return;
+        }
+        if (dbVal !== expectedVal) {
+          conflicts.push({
+            batchId: record.predecessor.batchId,
+            reportId: record.predecessor.reportId,
+            type: 'PREDECESSOR_PRECONDITION_MISMATCH',
+            message: `Poprzednik ${record.predecessor.reportId} ma niezgodne pole ${key}: w bazie ${dbVal}, oczekiwano ${expectedVal}.`,
+          });
+        }
+      };
+
+      checkPredPrecondition('employeeId', dbPredecessor.employeeId, predPc.employeeId);
+      checkPredPrecondition('date', dbPredecessor.date.toISOString().slice(0, 10), predPc.date);
+      checkPredPrecondition('orderId', dbPredecessor.orderId, predPc.orderId);
+      checkPredPrecondition('hours', dbPredecessor.hours, predPc.hours);
+      checkPredPrecondition('workTimeTypeCode', dbPredecessor.workTimeTypeCode, predPc.workTimeTypeCode);
+      checkPredPrecondition('createdByUserId', dbPredecessor.createdByUserId, predPc.createdByUserId);
+      checkPredPrecondition('modifiedByUserId', dbPredecessor.modifiedByUserId, predPc.modifiedByUserId);
+      checkPredPrecondition('createdAt', dbPredecessor.createdAt, predPc.createdAt);
+      checkPredPrecondition('updatedAt', dbPredecessor.updatedAt, predPc.updatedAt);
+      checkPredPrecondition('deletedAt', dbPredecessor.deletedAt, predPc.deletedAt);
+
+      const dbPredFingerprint = reportBusinessFingerprint({
+        date: dbPredecessor.date.toISOString().slice(0, 10),
+        employeeId: dbPredecessor.employeeId,
+        orderId: dbPredecessor.orderId,
+        hours: dbPredecessor.hours.toString(),
+        workTimeTypeCode: dbPredecessor.workTimeTypeCode,
+      });
+      if (dbPredFingerprint !== record.predecessor.fingerprint) {
+        conflicts.push({
+          batchId: action.batchId,
+          reportId: record.predecessor.reportId,
+          type: 'PREDECESSOR_FINGERPRINT_MISMATCH',
+          message: `Poprzednik ${record.predecessor.reportId} ma niezgodny fingerprint biznesowy.`,
+        });
+      }
+    }
+  }
+
+  return conflicts;
+}
 
 const actionNames = ['KEEP', 'DELETE', 'REVIEW'] as const;
 const confidenceNames = ['HIGH', 'MEDIUM', 'LOW'] as const;
@@ -230,7 +493,14 @@ export interface ApprovalDetails {
 export type ExecutorArguments =
   | { mode: 'summary'; manifestPath: string }
   | { mode: 'approve'; manifestPath: string; batchIds: string[]; approvedBy: string; approvalNote: string }
-  | { mode: 'execute'; manifestPath: string };
+  | {
+      mode: 'execute';
+      manifestPath: string;
+      subMode: 'dry-run' | 'apply';
+      confirmDatabase?: string;
+      confirmation?: string;
+      approvedBy?: string;
+    };
 
 function issueText(error: z.ZodError) {
   return error.issues.map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`).join('; ');
@@ -570,22 +840,305 @@ export async function summarizeManifestFile(manifestArgument: string) {
   return formatRepairSummary(await readJsonFile(manifestPath));
 }
 
-export function validateExecutionStub(input: unknown) {
-  const manifest = parseRepairManifest(input);
+export async function executeManifestFile(
+  manifestArgument: string,
+  options?: {
+    subMode: 'dry-run' | 'apply';
+    confirmDatabase?: string;
+    confirmation?: string;
+    approvedBy?: string;
+  },
+) {
+  const manifestPath = await resolvedManifestPath(manifestArgument);
+  const manifest = parseRepairManifest(await readJsonFile(manifestPath)) as ExecutorRepairManifestV2;
+
   if (manifest.manifestVersion !== REPAIR_MANIFEST_VERSION) {
     throw new Error(
       `Tryb --execute wymaga manifestVersion ${REPAIR_MANIFEST_VERSION}. Manifest v1 służy wyłącznie do --summary i --approve.`,
     );
   }
-  if (approvedDeleteActions(manifest).length === 0) {
+
+  const approvedDeletes = approvedDeleteActions(manifest) as ExecutorRepairManifestV2['actions'][number][];
+  if (approvedDeletes.length === 0) {
     throw new Error('Manifest nie zawiera zatwierdzonych akcji DELETE.');
   }
-  return REPAIR_EXECUTION_STUB_MESSAGE;
-}
 
-export async function executeManifestFile(manifestArgument: string) {
-  const manifestPath = await resolvedManifestPath(manifestArgument);
-  return validateExecutionStub(await readJsonFile(manifestPath));
+  if (!options) {
+    return REPAIR_EXECUTION_STUB_MESSAGE;
+  }
+
+  if (options.subMode === 'apply') {
+    if (!options.confirmDatabase) {
+      throw new Error('Podtryb --apply wymaga parametru --confirm-database.');
+    }
+    if (!options.confirmation) {
+      throw new Error('Podtryb --apply wymaga parametru --confirmation.');
+    }
+    if (options.confirmation !== 'APPLY APPROVED DUPLICATE REPAIR') {
+      throw new Error('Parametr --confirmation musi mieć dokładną wartość "APPLY APPROVED DUPLICATE REPAIR".');
+    }
+    if (!options.approvedBy) {
+      throw new Error('Podtryb --apply wymaga parametru --approved-by.');
+    }
+
+    if (!z.string().uuid().safeParse(options.approvedBy).success) {
+      throw new Error('Parametr --approved-by musi być prawidłowym UUID użytkownika bazodanowego.');
+    }
+
+    const envDbUrl = process.env.DATABASE_URL || '';
+    const actualDbName = getDatabaseNameFromUrl(envDbUrl);
+    if (options.confirmDatabase !== actualDbName) {
+      throw new Error(`Błędna nazwa bazy danych: podano "${options.confirmDatabase}", oczekiwano "${actualDbName}".`);
+    }
+
+    const executorUser = await prisma.user.findUnique({
+      where: { id: options.approvedBy },
+    });
+    if (!executorUser) {
+      throw new Error(`Użytkownik wykonujący o UUID "${options.approvedBy}" nie istnieje w bazie.`);
+    }
+  }
+
+  const executionFingerprint = computeExecutionFingerprint(manifest);
+  const executionId = fingerprintToUuid(executionFingerprint);
+
+  const candidateAudits = await prisma.auditLog.findMany({
+    where: {
+      tableName: 'work_time_reports',
+      action: 'CREATE',
+    },
+  });
+  const completedBatchMap = new Map<string, any>();
+  for (const audit of candidateAudits) {
+    if (audit.newValues && typeof audit.newValues === 'object') {
+      const nv = audit.newValues as Record<string, any>;
+      if (nv.eventType === 'REPAIR_BATCH_COMPLETED') {
+        completedBatchMap.set(nv.batchId, nv);
+      }
+    }
+  }
+
+  const executionAudit = await prisma.auditLog.findFirst({
+    where: {
+      recordId: executionId,
+      action: 'CREATE',
+    },
+  });
+
+  if (executionAudit) {
+    return `ALREADY_COMPLETED\nExecution ID: ${executionId}\nFingerprint: ${executionFingerprint}\nCała operacja została już pomyślnie wykonana wcześniej.`;
+  }
+
+  const actionsToExecute = approvedDeletes.filter((a) => !completedBatchMap.has(a.batchId));
+  if (actionsToExecute.length === 0) {
+    return `ALREADY_COMPLETED\nExecution ID: ${executionId}\nFingerprint: ${executionFingerprint}\nWszystkie zatwierdzone batche z tego manifestu zostały już wykonane wcześniej.`;
+  }
+
+  const targetReportIds = new Set<string>();
+  const predecessorReportIds = new Set<string>();
+  for (const action of actionsToExecute) {
+    for (const record of action.records || []) {
+      targetReportIds.add(record.reportId);
+      predecessorReportIds.add(record.predecessor.reportId);
+    }
+  }
+  const allReportIds = [...targetReportIds, ...predecessorReportIds];
+
+  if (options.subMode === 'dry-run') {
+    const dbReports = await prisma.workTimeReport.findMany({
+      where: {
+        id: { in: allReportIds },
+      },
+    });
+
+    const conflicts = validateManifestState(actionsToExecute, dbReports, completedBatchMap);
+    if (conflicts.length > 0) {
+      const details = conflicts.map((c) => `[${c.batchId}] ${c.message}`).join('\n');
+      console.error(`Walidacja dry-run zakończona konfliktami:\n${details}`);
+      return `BLOCKED\nZnaleziono konflikty: ${conflicts.length}. Naprawa zablokowana.`;
+    }
+
+    return `READY\nExecution ID: ${executionId}\nFingerprint: ${executionFingerprint}\nDry run zakończony sukcesem. Brak konfliktów. Batche do naprawy: ${actionsToExecute.map((a) => a.batchId).join(', ')}.`;
+  }
+
+  try {
+    const result = await prisma.$transaction(
+      async (tx) => {
+        const lockKey = 'duplicate-repair-executor';
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+
+        const txExecutionAudit = await tx.auditLog.findFirst({
+          where: {
+            recordId: executionId,
+            action: 'CREATE',
+          },
+        });
+
+        if (txExecutionAudit) {
+          return { status: 'ALREADY_COMPLETED' as const };
+        }
+
+        const txCandidateAudits = await tx.auditLog.findMany({
+          where: {
+            tableName: 'work_time_reports',
+            action: 'CREATE',
+          },
+        });
+        const txCompletedBatchMap = new Map<string, any>();
+        for (const audit of txCandidateAudits) {
+          if (audit.newValues && typeof audit.newValues === 'object') {
+            const nv = audit.newValues as Record<string, any>;
+            if (nv.eventType === 'REPAIR_BATCH_COMPLETED') {
+              txCompletedBatchMap.set(nv.batchId, nv);
+            }
+          }
+        }
+
+        const txActionsToExecute = approvedDeletes.filter((a) => !txCompletedBatchMap.has(a.batchId));
+        if (txActionsToExecute.length === 0) {
+          return { status: 'ALREADY_COMPLETED' as const };
+        }
+
+        const txTargetReportIds = new Set<string>();
+        const txPredecessorReportIds = new Set<string>();
+        for (const action of txActionsToExecute) {
+          for (const record of action.records || []) {
+            txTargetReportIds.add(record.reportId);
+            txPredecessorReportIds.add(record.predecessor.reportId);
+          }
+        }
+        const txAllReportIds = [...txTargetReportIds, ...txPredecessorReportIds];
+
+        if (txAllReportIds.length > 0) {
+          await tx.$queryRaw(
+            Prisma.sql`
+              SELECT id
+              FROM work_time_reports
+              WHERE id::text IN (${Prisma.join(txAllReportIds)})
+              FOR UPDATE
+            `,
+          );
+        }
+
+        const dbReports = await tx.workTimeReport.findMany({
+          where: {
+            id: { in: txAllReportIds },
+          },
+        });
+
+        const conflicts = validateManifestState(txActionsToExecute, dbReports, txCompletedBatchMap);
+        if (conflicts.length > 0) {
+          const details = conflicts.map((c) => `[${c.batchId}] ${c.message}`).join('\n');
+          throw new Error(`Walidacja stanu bazy w transakcji wykazała konflikty:\n${details}`);
+        }
+
+        const commonTime = new Date();
+        let totalDeletedCount = 0;
+
+        for (const action of txActionsToExecute) {
+          const reportIdsInAction = action.records?.map((r: any) => r.reportId) || [];
+          if (reportIdsInAction.length === 0) continue;
+
+          const updateResult = await tx.workTimeReport.updateMany({
+            where: {
+              id: { in: reportIdsInAction },
+              deletedAt: null,
+            },
+            data: {
+              deletedAt: commonTime,
+              modifiedByUserId: options.approvedBy,
+            },
+          });
+
+          if (updateResult.count !== reportIdsInAction.length) {
+            throw new Error(
+              `Niezgodna liczba zaktualizowanych rekordów dla batcha ${action.batchId}: zaktualizowano ${updateResult.count}, oczekiwano ${reportIdsInAction.length}.`,
+            );
+          }
+
+          totalDeletedCount += updateResult.count;
+
+          for (const record of action.records || []) {
+            const dbRecord = dbReports.find((r) => r.id === record.reportId);
+            await logChange(
+              {
+                tableName: 'work_time_reports',
+                recordId: record.reportId,
+                action: 'DELETE',
+                oldValues: dbRecord,
+                newValues: {
+                  deletedAt: commonTime,
+                  modifiedByUserId: options.approvedBy,
+                },
+                userId: options.approvedBy!,
+              },
+              { client: tx, rethrow: true },
+            );
+          }
+
+          const batchAuditId = randomUUID();
+          await logChange(
+            {
+              tableName: 'work_time_reports',
+              recordId: batchAuditId,
+              action: 'CREATE',
+              newValues: {
+                eventType: 'REPAIR_BATCH_COMPLETED',
+                batchId: action.batchId,
+                executionId,
+                reportIds: reportIdsInAction,
+                recordsCount: reportIdsInAction.length,
+                status: 'COMPLETED',
+              },
+              userId: options.approvedBy!,
+            },
+            { client: tx, rethrow: true },
+          );
+        }
+
+        await logChange(
+          {
+            tableName: 'work_time_reports',
+            recordId: executionId,
+            action: 'CREATE',
+            newValues: {
+              eventType: 'REPAIR_EXECUTION_COMPLETED',
+              executionId,
+              executionFingerprint,
+              manifestSha256: manifest.analysisSha256,
+              batches: txActionsToExecute.map((a) => a.batchId),
+              recordsCount: totalDeletedCount,
+              executedByUserId: options.approvedBy,
+              executedAt: commonTime.toISOString(),
+              status: 'COMPLETED',
+            },
+            userId: options.approvedBy!,
+          },
+          { client: tx, rethrow: true },
+        );
+
+        return {
+          status: 'SUCCESS' as const,
+          executionId,
+          executionFingerprint,
+          totalDeletedCount,
+          batchesCount: txActionsToExecute.length,
+        };
+      },
+      {
+        timeout: 30000,
+        isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+      },
+    );
+
+    if (result.status === 'ALREADY_COMPLETED') {
+      return `ALREADY_COMPLETED\nExecution ID: ${executionId}\nFingerprint: ${executionFingerprint}\nCała operacja została już pomyślnie wykonana wcześniej.`;
+    }
+
+    return `COMPLETED\nExecution ID: ${result.executionId}\nFingerprint: ${result.executionFingerprint}\nNaprawa zakończona powodzeniem. Zaktualizowano rekordów: ${result.totalDeletedCount} w ${result.batchesCount} batchach.`;
+  } catch (error: any) {
+    throw new Error(`Błąd wykonania naprawy (TRANSACTION ROLLBACK): ${error.message}`);
+  }
 }
 
 export function usage() {
@@ -593,9 +1146,8 @@ export function usage() {
     'Użycie:',
     '  npm run duplicates:repair -- --manifest reports/.../repair-manifest.json --summary',
     '  npm run duplicates:repair -- --manifest reports/.../repair-manifest.json --approve batch-id --approved-by "Imię i nazwisko" --note "Opis weryfikacji"',
-    '  npm run duplicates:repair -- --manifest reports/.../repair-manifest.json --execute',
-    '',
-    'Executor nie importuje Prisma, nie używa DATABASE_URL i nie łączy się z bazą.',
+    '  npm run duplicates:repair -- --manifest reports/.../repair-manifest.json --execute --dry-run',
+    '  npm run duplicates:repair -- --manifest reports/.../repair-manifest.json --execute --apply --confirm-database NazwaBazy --confirmation --approved-by UuidUzytkownika',
   ].join('\n');
 }
 
@@ -612,6 +1164,9 @@ export function parseExecutorArguments(argv: string[]): ExecutorArguments {
   const batchIds: string[] = [];
   let approvedBy: string | null = null;
   let approvalNote: string | null = null;
+  let subMode: 'dry-run' | 'apply' | null = null;
+  let confirmDatabase: string | null = null;
+  let confirmation: string | null = null;
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -636,6 +1191,20 @@ export function parseExecutorArguments(argv: string[]): ExecutorArguments {
       if (approvalNote !== null) throw new Error('--note może wystąpić tylko raz.');
       approvalNote = argumentValue(argv, index, argument);
       index += 1;
+    } else if (argument === '--dry-run') {
+      if (subMode !== null) throw new Error('Można wybrać tylko jeden podtryb: --dry-run albo --apply.');
+      subMode = 'dry-run';
+    } else if (argument === '--apply') {
+      if (subMode !== null) throw new Error('Można wybrać tylko jeden podtryb: --dry-run albo --apply.');
+      subMode = 'apply';
+    } else if (argument === '--confirm-database') {
+      if (confirmDatabase !== null) throw new Error('--confirm-database może wystąpić tylko raz.');
+      confirmDatabase = argumentValue(argv, index, argument);
+      index += 1;
+    } else if (argument === '--confirmation') {
+      if (confirmation !== null) throw new Error('--confirmation może wystąpić tylko raz.');
+      confirmation = argumentValue(argv, index, argument);
+      index += 1;
     } else {
       throw new Error(`Nieznany argument: ${argument}.\n${usage()}`);
     }
@@ -644,18 +1213,51 @@ export function parseExecutorArguments(argv: string[]): ExecutorArguments {
   if (!manifestPath) throw new Error(`Wymagany jest --manifest.\n${usage()}`);
   const modeCount = Number(summary) + Number(execute) + Number(batchIds.length > 0);
   if (modeCount !== 1) throw new Error('Należy wybrać dokładnie jeden tryb: --summary, --approve albo --execute.');
+
   if (batchIds.length > 0) {
     if (!approvedBy || !approvalNote) {
       throw new Error('Tryb --approve wymaga --approved-by oraz --note.');
     }
+    if (subMode || confirmDatabase || confirmation) {
+      throw new Error('Podtryby --dry-run, --apply i powiązane flagi nie są dozwolone w trybie --approve.');
+    }
     return { mode: 'approve', manifestPath, batchIds, approvedBy, approvalNote };
   }
+
+  if (execute) {
+    if (subMode === null) {
+      throw new Error('Tryb --execute wymaga podania podtrybu: --dry-run albo --apply.');
+    }
+    if (subMode === 'apply') {
+      if (!confirmDatabase) {
+        throw new Error('Podtryb --apply wymaga parametru --confirm-database.');
+      }
+      if (!confirmation) {
+        throw new Error('Podtryb --apply wymaga parametru --confirmation.');
+      }
+      if (!approvedBy) {
+        throw new Error('Podtryb --apply wymaga parametru --approved-by.');
+      }
+    } else {
+      if (confirmDatabase || confirmation) {
+        throw new Error('Parametry --confirm-database i --confirmation są dozwolone wyłącznie w podtrybie --apply.');
+      }
+    }
+    return {
+      mode: 'execute',
+      manifestPath,
+      subMode,
+      confirmDatabase: confirmDatabase || undefined,
+      confirmation: confirmation || undefined,
+      approvedBy: approvedBy || undefined,
+    };
+  }
+
   if (approvedBy || approvalNote) {
     throw new Error('--approved-by i --note są dozwolone wyłącznie w trybie --approve.');
   }
-  return summary
-    ? { mode: 'summary', manifestPath }
-    : { mode: 'execute', manifestPath };
+
+  return { mode: 'summary', manifestPath };
 }
 
 async function main() {
@@ -682,7 +1284,14 @@ async function main() {
     process.stdout.write(await summarizeManifestFile(arguments_.manifestPath));
     return;
   }
-  process.stdout.write(`${await executeManifestFile(arguments_.manifestPath)}\n`);
+
+  const result = await executeManifestFile(arguments_.manifestPath, {
+    subMode: arguments_.subMode,
+    confirmDatabase: arguments_.confirmDatabase,
+    confirmation: arguments_.confirmation,
+    approvedBy: arguments_.approvedBy,
+  });
+  process.stdout.write(`${result}\n`);
 }
 
 if (require.main === module) {
