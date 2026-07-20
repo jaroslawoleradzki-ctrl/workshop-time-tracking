@@ -12,7 +12,7 @@ To nie jest mechanizm naprawy. Skrypt:
 - nie zmienia wejściowego raportu;
 - zapisuje wyłącznie trzy nowe pliki lokalne w `backend/reports/`.
 
-Każdy manifest ma `requiresApproval: true`, `approved: false`, `readOnly: true` oraz `databaseOperationsPerformed: false`. Przyszłe wykonanie naprawy nie jest częścią tego etapu.
+Każdy manifest ma `manifestVersion: 1`, `requiresApproval: true`, `approved: false`, `readOnly: true` oraz `databaseOperationsPerformed: false`. Builder nie wykonuje naprawy.
 
 ## Uruchomienie
 
@@ -104,7 +104,7 @@ Przed jakimkolwiek przyszłym etapem naprawy należy co najmniej:
 4. rozstrzygnąć wszystkie REVIEW niezależnie od poziomu confidence;
 5. utworzyć kopię bazy i przeprowadzić osobny proces zatwierdzenia.
 
-Ustawienie `approved` nie jest modyfikowane przez builder. Ten etap nie dostarcza wykonawcy manifestu.
+Ustawienie `approved` nie jest modyfikowane przez builder. Zatwierdzanie wybranych akcji DELETE i read-only stub wykonania zapewnia opisany osobno [Duplicate Repair Executor](duplicate-repair-executor.md).
 
 ## Ograniczenia
 

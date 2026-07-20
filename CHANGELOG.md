@@ -10,6 +10,7 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Dodano `PROJECT_STATUS.md` oraz obowiązkową procedurę rozpoczęcia sesji i przekazania pracy między ChatGPT i Codexem w `docs/session-start.md`; powiązano procedurę z zasadami w `AGENTS.md`.
 - Dodano read-only skrypt `reports:analyze-duplicates` do analizy historycznych duplikatów `work_time_reports`, z konserwatywną klasyfikacją `HIGH`/`MEDIUM`/`LOW`, raportami JSON/CSV i testami jednostkowymi.
 - Dodano read-only skrypt `duplicates:repair-plan`, który z `duplicate-analysis.json` tworzy wymagający zatwierdzenia Repair Manifest z akcjami KEEP/DELETE/REVIEW, zależnościami między batchami oraz podsumowaniami JSON/Markdown/CSV; narzędzie nie łączy się z bazą i nie wykonuje naprawy.
+- Dodano pojedynczy moduł `duplicates:repair` z trybami `--summary`, `--approve` i bezpiecznym stubem `--execute`; zatwierdzenia są zapisywane wyłącznie przy akcjach DELETE w wersjonowanym manifeście, bez użycia Prisma i bez dostępu do bazy.
 
 ## [0.2.9] (Development) - 2026-07-20
 

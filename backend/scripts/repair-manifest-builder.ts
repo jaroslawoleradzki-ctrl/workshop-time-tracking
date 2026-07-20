@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export type RepairActionName = 'KEEP' | 'DELETE' | 'REVIEW';
 export type RepairConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
+export const REPAIR_MANIFEST_VERSION = 1 as const;
 
 const confidenceSchema = z.enum(['HIGH', 'MEDIUM', 'LOW']);
 
@@ -99,11 +100,12 @@ export interface RepairAction {
 }
 
 export interface RepairManifest {
+  manifestVersion: typeof REPAIR_MANIFEST_VERSION;
   generatedAt: string;
   analysisFile: string;
   analysisSha256: string;
   requiresApproval: true;
-  approved: false;
+  approved: boolean;
   readOnly: true;
   databaseOperationsPerformed: false;
   summary: {
@@ -474,6 +476,7 @@ export function buildRepairManifest(
   }
 
   return {
+    manifestVersion: REPAIR_MANIFEST_VERSION,
     generatedAt: options.generatedAt,
     analysisFile: options.analysisFile,
     analysisSha256: options.analysisSha256,

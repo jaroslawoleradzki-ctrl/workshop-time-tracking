@@ -5,11 +5,11 @@
 - Projekt: Workshop Time Tracking
 - Aktualna wersja: `0.2.9`
 - Gałąź robocza: `fix/duplicate-reports-cleanup`
-- Ostatni zatwierdzony commit: `a710334` (`feat(maintenance): add read-only duplicate report analyzer`)
-- Stan zmian: lokalny, niezatwierdzony etap 2 – read-only Repair Manifest Builder; zmiany nie zostały wypchnięte ani scalone.
-- Stan wdrożenia: analizator i builder manifestu nie zostały wdrożone; etap 2 nie łączy się z bazą danych.
+- Ostatni zatwierdzony commit: `36c884b` (`feat(maintenance): add read-only duplicate repair manifest builder`)
+- Stan zmian: lokalny, niezatwierdzony etap 3 – Duplicate Repair Executor; zmiany nie zostały wypchnięte ani scalone.
+- Stan wdrożenia: narzędzia diagnostyczne i executor nie zostały wdrożone; etap 3 nie łączy się z bazą danych i nie wykonuje naprawy.
 
-Gałąź `development` zawiera zweryfikowaną poprawkę krytyczną operacji kopiowania ostatniego dnia. Bieżąca gałąź zawiera zatwierdzony etap 1 analizy oraz lokalny etap 2, który wyłącznie czyta `duplicate-analysis.json` i zapisuje Repair Manifest JSON/Markdown/CSV. Builder nie importuje Prisma, nie używa `DATABASE_URL` i nie wykonuje `INSERT`, `UPDATE`, `DELETE` ani soft delete.
+Gałąź `development` zawiera zweryfikowaną poprawkę krytyczną operacji kopiowania ostatniego dnia. Bieżąca gałąź zawiera zatwierdzone etapy 1 i 2 oraz lokalny etap 3: jeden executor z trybem podsumowania, atomowym zatwierdzaniem akcji DELETE w tym samym manifeście i stubem wykonania. Executor nie importuje Prisma, nie używa `DATABASE_URL` i nie wykonuje `INSERT`, `UPDATE`, `DELETE` ani soft delete.
 
 ## Dokumentacja projektu
 
@@ -63,7 +63,21 @@ Lint frontendu nie uruchomił się, ponieważ istniejący skrypt odwołuje się 
 - wszystkie propozycje DELETE wymagają ręcznej weryfikacji, a manifest pozostaje `approved: false`,
 - skrypt nie utworzył połączenia z bazą i zapisał wyłącznie pliki w ignorowanym katalogu `backend/reports/`.
 
-Lint frontendu nadal nie uruchamia się, ponieważ istniejący skrypt odwołuje się do `eslint`, którego nie ma w zależnościach projektu. Nie zmieniano zależności poza zakresem etapu 2.
+Lint frontendu nadal nie uruchamia się, ponieważ istniejący skrypt odwołuje się do `eslint`, którego nie ma w zależnościach projektu. Nie zmieniano zależności poza zakresem narzędzi naprawczych.
+
+## Weryfikacja Duplicate Repair Executor
+
+- 10 testów jednostkowych executora zakończonych powodzeniem,
+- pełny backend: 51 testów zakończonych powodzeniem,
+- frontend: 8 testów zakończonych powodzeniem,
+- typecheck skryptów diagnostycznych zakończony powodzeniem,
+- build backendu i frontendu zakończony powodzeniem,
+- tryb summary nie zmienia manifestu ani nie tworzy plików,
+- approve odrzuca KEEP, REVIEW i brakujący batch bez częściowego zapisu,
+- execute weryfikuje `manifestVersion: 1`, wymagane pola oraz zatwierdzone DELETE i zwraca wyłącznie komunikat stubu,
+- moduł nie importuje Prisma, nie korzysta z `DATABASE_URL` i nie otwiera połączenia z bazą.
+
+Lint frontendu nadal nie uruchamia się, ponieważ w zależnościach projektu nie ma programu `eslint`; nie rozszerzano zależności w ramach etapu 3.
 
 ## Znane ustalenia wymagające uwagi
 
