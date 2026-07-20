@@ -12,7 +12,7 @@ To nie jest mechanizm naprawy. Skrypt:
 - nie zmienia wejściowego raportu;
 - zapisuje wyłącznie trzy nowe pliki lokalne w `backend/reports/`.
 
-Każdy manifest ma `manifestVersion: 1`, `requiresApproval: true`, `approved: false`, `readOnly: true` oraz `databaseOperationsPerformed: false`. Builder nie wykonuje naprawy.
+Nowe manifesty mają `manifestVersion: 2`, `requiresApproval: true`, globalne `approved: false`, `readOnly: true` oraz `databaseOperationsPerformed: false`. Każda propozycja DELETE otrzymuje własne `approved: false`. Builder nie wykonuje naprawy. Istniejące manifesty v1 pozostają czytelne dla podsumowania i zatwierdzania, lecz nie mają danych wystarczających do przyszłego wykonania.
 
 ## Uruchomienie
 
@@ -41,7 +41,7 @@ backend/reports/repair-plan-YYYYMMDD-HHMMSS/
 
 Zawartość:
 
-- `repair-manifest.json` – kompletny, maszynowo czytelny plan wraz z akcjami, powodami, dowodami i poprzednimi batchami;
+- `repair-manifest.json` – kompletny, maszynowo czytelny plan wraz z akcjami, powodami, dowodami, snapshotami rekordów DELETE i konkretnymi poprzednikami;
 - `repair-summary.md` – podsumowanie KEEP/DELETE/REVIEW, podział według pewności, najczęstsze powody, ostrzeżenia i pełna lista pozycji wymagających ręcznej weryfikacji;
 - `repair-summary.csv` – jeden wiersz na batch, przygotowany do filtrowania w Excelu. Nierozpoznane odwołania do batcha są dodawane jako osobne, syntetyczne wiersze `unresolved:<groupId>` z akcją REVIEW.
 
@@ -75,9 +75,25 @@ DELETE jest możliwe wyłącznie dla całego batcha, gdy jednocześnie:
 4. `createAuditCoverage` wynosi 1 albo istnieje jawny audyt operacji kopiowania;
 5. historia źródła nie jest oznaczona jako niepewna;
 6. każdy rekord jest aktywny i nie ma późniejszej istotnej aktualizacji;
-7. każdy rekord ma wcześniejszy identyczny odpowiednik z innego, również wiarygodnego batcha utworzonego przez tego samego użytkownika.
+7. każdy rekord ma dokładnie jeden wcześniejszy identyczny odpowiednik z innego, również wiarygodnego batcha utworzonego przez tego samego użytkownika;
+8. konkretny poprzednik jest aktywny, należy do akcji KEEP, nie należy do bieżącego batcha ani żadnej akcji DELETE i ma ten sam fingerprint biznesowy.
 
-Identyfikatory tych wcześniejszych partii są zapisywane w `predecessorBatchIds`. Dowody grup są kopiowane do `decisionEvidence`. Dzięki temu propozycja jest możliwa do ręcznego prześledzenia.
+Dla każdego rekordu DELETE manifest zapisuje `reportId`, pełne `preconditions`, fingerprint oraz obiekt `predecessor` z konkretnym `reportId`, `batchId`, snapshotem i fingerprintem poprzednika. `reportIds` jest generowane z rekordów DELETE, a executor sprawdza zgodność obu reprezentacji. Jeżeli poprzednika nie ma, jest ich więcej niż jeden, ma inny klucz biznesowy albo nie jest zachowywany przez KEEP, cały batch trafia do REVIEW z listą `preconditionIssues`.
+
+### Snapshot i fingerprint
+
+Snapshot obejmuje rzeczywiste pola raportu i dane dostępne w analizie: `employeeId`, `date`, `orderId`, `orderNumber`, `orderName`, `hours`, `workTimeTypeCode`, `createdAt`, `updatedAt`, `deletedAt`, `createdByUserId`, `modifiedByUserId`, `createAuditId` i `copyBatchId`.
+
+Fingerprint ma format `sha256:<hex>` i jest liczony przez standardowy moduł Node.js z jawnie uporządkowanego zestawu:
+
+1. wersja algorytmu `work-time-report-business-v1`;
+2. `date` jako `YYYY-MM-DD`;
+3. `employeeId`;
+4. `orderId`, przy czym brak zlecenia jest JSON `null`;
+5. `hours` znormalizowane do dwóch miejsc po przecinku;
+6. `workTimeTypeCode`.
+
+`updatedAt`, `deletedAt`, autorzy i dane audytu nie należą do fingerprintu biznesowego, lecz pozostają osobnymi, dokładnymi preconditions. Zmiana któregokolwiek z nich będzie mogła zostać wykryta przed przyszłym wykonaniem bez zmiany znaczenia biznesowego fingerprintu.
 
 ### Warunki KEEP
 
@@ -104,7 +120,7 @@ Przed jakimkolwiek przyszłym etapem naprawy należy co najmniej:
 4. rozstrzygnąć wszystkie REVIEW niezależnie od poziomu confidence;
 5. utworzyć kopię bazy i przeprowadzić osobny proces zatwierdzenia.
 
-Ustawienie `approved` nie jest modyfikowane przez builder. Zatwierdzanie wybranych akcji DELETE i read-only stub wykonania zapewnia opisany osobno [Duplicate Repair Executor](duplicate-repair-executor.md).
+Builder ustawia `approved: false` przy każdej akcji DELETE i globalne `approved: false`. Zatwierdzanie wybranych akcji DELETE oraz read-only stub wykonania zapewnia opisany osobno [Duplicate Repair Executor](duplicate-repair-executor.md).
 
 ## Ograniczenia
 
@@ -113,6 +129,7 @@ Ustawienie `approved` nie jest modyfikowane przez builder. Zatwierdzanie wybrany
 - Builder operuje na całych batchach. Mieszany batch z rekordami prawidłowymi i nadmiarowymi zawsze wymaga REVIEW.
 - Pole `updatedAt` nie jest pełnym dziennikiem zmian; jego stabilność jest tylko jednym z wymaganych sygnałów.
 - Akcja DELETE nie jest zgodą na usunięcie i nie może być wykonana automatycznie na podstawie samego manifestu.
+- Konserwatywny wymóg dokładnie jednego poprzednika może znacząco zmniejszyć liczbę propozycji DELETE; jest to zamierzone.
 
 ## Testy
 
@@ -124,4 +141,4 @@ npm test -- tests/repair-manifest-builder.test.ts
 npm exec tsc -- --project tsconfig.scripts.json
 ```
 
-Obejmują KEEP, DELETE, LOW/MEDIUM jako REVIEW, wewnętrznie powtórzony zestaw, zmienioną historię, brakujący batch, błędne przypisanie rekordu oraz deterministyczność eksportu.
+Obejmują manifest v2, KEEP/DELETE/REVIEW, fingerprint i normalizację, dokładnie jednego poprzednika, brak lub wielu poprzedników, konflikt z DELETE, niezgodny klucz biznesowy, zgodność `reportIds` z `records`, zmienioną historię, brakujący batch i deterministyczność eksportu.

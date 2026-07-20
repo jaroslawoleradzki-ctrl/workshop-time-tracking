@@ -80,6 +80,30 @@ describe('duplicate report classification', () => {
     expect(result.highCandidates).toHaveLength(0);
   });
 
+  it('exports the complete record state required by Repair Manifest v2', () => {
+    const result = analyze([
+      report({ date: '2026-07-02', createdAt: '2026-07-02T08:00:00.000Z', hours: 4 }),
+      report({ date: '2026-07-02', createdAt: '2026-07-02T14:00:00.000Z', hours: 4 }),
+    ]);
+
+    expect(result.groups[0].records[0]).toMatchObject({
+      date: '2026-07-02',
+      employeeId: EMPLOYEE_ID,
+      orderId: 'order-a',
+      orderNumber: '530-2-01',
+      orderName: 'Produkt testowy',
+      hours: '4.00',
+      workTimeTypeCode: 'G',
+      createdAt: '2026-07-02T08:00:00.000Z',
+      updatedAt: '2026-07-02T08:00:00.000Z',
+      deletedAt: null,
+      createdByUserId: USER_ID,
+      modifiedByUserId: null,
+      createAuditId: expect.any(String),
+      copyBatchId: expect.any(String),
+    });
+  });
+
   it('recognizes one valid copy operation without creating duplicate candidates', () => {
     const reports = [
       report({ date: '2026-07-01', createdAt: '2026-07-01T08:00:00.000Z', orderId: 'order-a', hours: 4 }),

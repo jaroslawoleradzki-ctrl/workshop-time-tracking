@@ -4,6 +4,8 @@
 
 Ten dokument opisuje docelową architekturę wykonania zatwierdzonego Repair Manifestu przez tryb `--execute`. Nie jest implementacją. Na tym etapie nie powstaje kod naprawczy, migracja ani połączenie z bazą danych.
 
+Etap 4A zrealizował część przygotowawczą: builder generuje `manifestVersion: 2` z pełnymi snapshotami targetów, biznesowymi fingerprintami SHA-256 i dokładnie jednym konkretnym poprzednikiem dla każdego DELETE. Executor obsługuje summary/approve dla v1/v2 i waliduje v2, lecz `--execute` nadal jest stubem bez dostępu do bazy. Poniższy przebieg transakcyjny pozostaje projektem przyszłego etapu wykonawczego.
+
 Zakładany efekt przyszłego wykonania to wyłącznie kontrolowany soft delete zatwierdzonych, nadmiarowych rekordów `work_time_reports`. Akcje `KEEP` i `REVIEW` nigdy nie zmieniają danych.
 
 Projekt opiera się na następujących zasadach:
@@ -18,7 +20,7 @@ Projekt opiera się na następujących zasadach:
 
 ## Stan istniejącego rozwiązania
 
-Obecny manifest ma `manifestVersion: 1`. Zawiera akcje batchy, `reportIds`, `predecessorBatchIds`, klasyfikację i metadane zatwierdzenia. W bazie nie istnieje encja batcha ani pole `copyBatchId`; batch jest syntetycznym wynikiem analizatora. „Istnienie batcha” można więc zweryfikować tylko w manifeście, a nie przez zapytanie do bazy.
+Historyczny manifest v1 zawiera akcje batchy, `reportIds`, `predecessorBatchIds`, klasyfikację i metadane zatwierdzenia. Manifest v2 dodaje rekordowe preconditions, fingerprint oraz konkretny obiekt poprzednika. W bazie nadal nie istnieje encja batcha ani pole `copyBatchId`; batch jest syntetycznym wynikiem analizatora. „Istnienie batcha” można więc zweryfikować tylko w manifeście, a nie przez zapytanie do bazy.
 
 Model `WorkTimeReport` udostępnia między innymi:
 
@@ -42,7 +44,7 @@ Zatwierdzony zestaw jest traktowany jako jedna jednostka biznesowa. Błąd jedne
 
 Manifest v1 nie zawiera wystarczających preconditions do wiarygodnego wykrycia, że rekord został zmieniony po analizie. Nie zawiera również konkretnych `predecessorReportIds`, tylko syntetyczne identyfikatory batchy. Etap wykonawczy nie powinien rekonstruować tych informacji heurystycznie.
 
-Przed implementacją wykonania potrzebny jest nowy, jawnie wersjonowany kontrakt manifestu. Zalecenie: `manifestVersion: 2`. Tryb wykonawczy ma odrzucać v1 z instrukcją ponownego wygenerowania analizy i planu. Nie wolno automatycznie konwertować v1 podczas `--execute`.
+Jawnie wersjonowany kontrakt `manifestVersion: 2` jest zaimplementowany w etapie 4A. Tryb `--execute` odrzuca v1 z instrukcją ponownego wygenerowania analizy i planu. Nie konwertuje v1 automatycznie i nadal nie wykonuje naprawy.
 
 ### Manifest pozostaje jedynym wejściem decyzji
 
@@ -56,21 +58,23 @@ Plik `duplicate-analysis.json` może być zachowany jako materiał dowodowy, ale
 
 ## Wymagany kontrakt manifestu wykonawczego
 
-Manifest v2 powinien zachować dotychczasowe dane i dodać niezmienny zestaw preconditions. Dla każdego rekordu proponowanego do usunięcia potrzebne są:
+Manifest v2 zachowuje dotychczasowe dane i dodaje zestaw preconditions. Dla każdego rekordu proponowanego do usunięcia zapisuje:
 
 - `reportId`;
 - oczekiwane `date`, `employeeId`, `orderId`, `hours` i `workTimeTypeCode`;
 - oczekiwane `createdByUserId`, `createdAt` i `updatedAt`;
 - oczekiwane `deletedAt: null`;
 - `batchId` zatwierdzonej akcji;
-- co najmniej jeden konkretny `predecessorReportId` przeznaczony do zachowania;
-- oczekiwany snapshot każdego poprzednika w zakresie pól tożsamości, `updatedAt` i `deletedAt`.
+- dokładnie jeden konkretny `predecessorReportId` przeznaczony do zachowania;
+- batch poprzednika, pełny snapshot i fingerprint poprzednika.
 
-Ponadto manifest powinien zawierać:
+Etap 4A używa fingerprintu biznesowego rekordu obejmującego datę, pracownika, `orderId`, znormalizowane godziny i kod typu czasu. `createdAt`, `updatedAt`, `deletedAt`, autorzy, audyt i `copyBatchId` pozostają w snapshotach i są walidowane niezależnie.
+
+Przed prawdziwym wykonaniem kontrakt lub osobny zatwierdzony kontekst musi jeszcze zapewnić:
 
 - identyfikator użytkownika zatwierdzającego w postaci UUID, niezależnie od czytelnego `approvedBy`;
 - stabilny skrót niezmiennej części planu, niezależny od kolejności kluczy JSON;
-- stabilny fingerprint każdej akcji, obejmujący jej rekordy, preconditions i poprzedników;
+- stabilny fingerprint całej akcji, obejmujący jej rekordy, preconditions i poprzedników;
 - wersję algorytmu budującego plan;
 - zakres analizy i SHA-256 pliku analizy;
 - niebędącą sekretem tożsamość źródłowej bazy/środowiska oraz oczekiwaną wersję schematu;
@@ -397,7 +401,7 @@ repair-manifest.json
 
 ## Otwarte pytania
 
-1. Skąd lokalny CLI ma pozyskać wiarygodny UUID użytkownika wykonującego: z nowego obowiązkowego parametru, uwierzytelnionego kontekstu czy dedykowanej tożsamości serwisowej?
+1. Skąd lokalny CLI ma pozyskać wiarygodny UUID zatwierdzającego i wykonującego: z nowych obowiązkowych parametrów, uwierzytelnionego kontekstu czy dedykowanej tożsamości serwisowej?
 2. Czy zatwierdzający i wykonujący muszą być dwiema różnymi osobami?
 3. Czy dopuścić częściowe approval manifestu zgodnie z obecną semantyką etapu 3, czy produkcyjne wykonanie ma wymagać `manifest.approved: true` dla wszystkich DELETE?
 4. Czy utworzyć dedykowany rejestr wykonań z unikalnym fingerprintem, czy zaakceptować wariant minimalny oparty na `audit_logs` i advisory lock?
@@ -410,24 +414,22 @@ repair-manifest.json
 
 Przed rozpoczęciem implementacji należy formalnie zatwierdzić:
 
-1. podniesienie kontraktu do manifestu v2 i odrzucanie v1 przez prawdziwe `--execute`;
-2. dokładny zestaw preconditions i sposób wskazywania `predecessorReportIds`;
-3. źródło UUID użytkownika wykonującego oraz zasadę rozdziału ról approver/executor;
-4. semantykę częściowego approval;
-5. wybór rejestru idempotencji: dedykowana tabela z unikalnym kluczem albo świadomie zaakceptowany wariant `audit_logs`;
-6. obowiązkowy backup/PITR i okno wstrzymania zapisów raportów;
-7. limity liczby rekordów i czasów oczekiwania;
-8. format audytu operacyjnego i procedurę odtworzenia.
+1. uzupełnienie kontekstu wykonania o tożsamość docelowej bazy, wersję schematu i fingerprint całej akcji;
+2. źródło UUID użytkownika wykonującego oraz zasadę rozdziału ról approver/executor;
+3. semantykę częściowego approval;
+4. wybór rejestru idempotencji: dedykowana tabela z unikalnym kluczem albo świadomie zaakceptowany wariant `audit_logs`;
+5. obowiązkowy backup/PITR i okno wstrzymania zapisów raportów;
+6. limity liczby rekordów i czasów oczekiwania;
+7. format audytu operacyjnego i procedurę odtworzenia.
 
 ## Rekomendowana kolejność implementacji
 
-1. Zatwierdzić powyższe decyzje, zwłaszcza wersję manifestu, tożsamość wykonującego i rejestr idempotencji.
-2. Rozszerzyć analizator/builder o manifest v2 z pełnymi snapshotami targetów i konkretnymi poprzednikami; nie dodawać heurystyk do executora.
-3. Rozszerzyć etap approval o stabilny UUID zatwierdzającego i ochronę skrótu niezmiennej części planu.
-4. Zaimplementować wyłącznie walidację offline v2, konflikty i deterministyczny fingerprint; pokryć ją testami bez bazy.
-5. Przygotować warstwę transakcyjną z globalną advisory lock, zbiorczymi blokadami wierszy i odczytami preconditions.
-6. Dodać soft delete oraz audyt w jednej transakcji, z wymuszeniem błędu audytu i dokładnego row count.
-7. Dodać testy integracyjne: rollback każdego błędu, równoległe wykonania, zmieniony rekord, brak poprzednika, już usunięty rekord i retry po commit.
-8. Przeprowadzić próbę na kopii produkcyjnej bazy z rzeczywistym manifestem i zmierzyć czas blokad.
-9. Zatwierdzić runbook, backup, recovery i okno utrzymaniowe.
-10. Dopiero po osobnej akceptacji uruchomić etap wykonawczy na produkcji.
+1. Ukończono: manifest v2 z pełnymi snapshotami targetów i konkretnymi poprzednikami, walidacja offline oraz testy bez bazy.
+2. Zatwierdzić pozostałe decyzje, zwłaszcza tożsamość wykonującego, docelowej bazy i rejestr idempotencji.
+3. Rozszerzyć approval o stabilny UUID zatwierdzającego oraz dodać fingerprint całej akcji i ochronę niezmiennej części planu.
+4. Przygotować warstwę transakcyjną z globalną advisory lock, zbiorczymi blokadami wierszy i odczytami preconditions.
+5. Dodać soft delete oraz audyt w jednej transakcji, z wymuszeniem błędu audytu i dokładnego row count.
+6. Dodać testy integracyjne: rollback każdego błędu, równoległe wykonania, zmieniony rekord, brak poprzednika, już usunięty rekord i retry po commit.
+7. Przeprowadzić próbę na kopii produkcyjnej bazy z rzeczywistym manifestem i zmierzyć czas blokad.
+8. Zatwierdzić runbook, backup, recovery i okno utrzymaniowe.
+9. Dopiero po osobnej akceptacji uruchomić etap wykonawczy na produkcji.

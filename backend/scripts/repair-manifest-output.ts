@@ -21,6 +21,7 @@ function reasonCounts(actions: RepairAction[]) {
 
 export function repairManifestCsv(manifest: RepairManifest) {
   const headers = [
+    'manifest_version',
     'batch_id',
     'action',
     'confidence',
@@ -30,6 +31,9 @@ export function repairManifestCsv(manifest: RepairManifest) {
     'report_ids',
     'affected_groups',
     'predecessor_batch_ids',
+    'delete_records_with_preconditions',
+    'delete_records_with_predecessor',
+    'precondition_issues',
     'decision_evidence',
     'requires_manual_review',
     'date',
@@ -42,6 +46,7 @@ export function repairManifestCsv(manifest: RepairManifest) {
     'likelihood',
   ];
   const rows = manifest.actions.map((action) => [
+    manifest.manifestVersion,
     action.batchId,
     action.action,
     action.confidence,
@@ -51,6 +56,11 @@ export function repairManifestCsv(manifest: RepairManifest) {
     action.reportIds.join('|'),
     action.affectedGroups.join('|'),
     action.predecessorBatchIds.join('|'),
+    action.action === 'DELETE' ? action.records?.length || 0 : 0,
+    action.action === 'DELETE'
+      ? action.records?.filter((record) => Boolean(record.predecessor)).length || 0
+      : 0,
+    action.preconditionIssues.join('|'),
     action.decisionEvidence.join('|'),
     action.requiresManualReview,
     action.date,
@@ -73,6 +83,7 @@ export function repairManifestMarkdown(manifest: RepairManifest) {
     '> **READ-ONLY:** dokument jest propozycją. Nie wykonano żadnej operacji na bazie danych.',
     '',
     `- Wygenerowano: ${manifest.generatedAt}`,
+    `- Wersja manifestu: **${manifest.manifestVersion}**`,
     `- Plik analizy: \`${manifest.analysisFile}\``,
     `- SHA-256 analizy: \`${manifest.analysisSha256}\``,
     `- Wymaga zatwierdzenia: **tak**`,
@@ -90,6 +101,9 @@ export function repairManifestMarkdown(manifest: RepairManifest) {
     `| REVIEW | ${summary.actionsByType.REVIEW} |`,
     `| Rekordy KEEP | ${summary.recordsByAction.KEEP} |`,
     `| Rekordy DELETE (propozycje) | ${summary.recordsByAction.DELETE} |`,
+    `| Rekordy DELETE z preconditions | ${summary.deleteRecordsWithPreconditions} |`,
+    `| Rekordy DELETE z jednoznacznym poprzednikiem | ${summary.deleteRecordsWithPredecessor} |`,
+    `| Batche zdegradowane przez brak preconditions | ${summary.batchesDegradedForPreconditions} |`,
     `| Rekordy REVIEW | ${summary.recordsByAction.REVIEW} |`,
     `| Nierozpoznane batche | ${summary.unresolvedActions} |`,
     '',
@@ -133,8 +147,11 @@ export function repairManifestTerminalSummary(manifest: RepairManifest, outputDi
   const { summary } = manifest;
   return [
     'Repair Manifest Builder (READ-ONLY)',
+    `Manifest version: ${manifest.manifestVersion}`,
     `Batche: ${summary.batches}; akcje: ${summary.actions}; rekordy: ${summary.records}`,
     `KEEP: ${summary.actionsByType.KEEP}; DELETE (propozycje): ${summary.actionsByType.DELETE}; REVIEW: ${summary.actionsByType.REVIEW}`,
+    `Rekordy DELETE z preconditions i poprzednikiem: ${summary.deleteRecordsWithPredecessor}/${summary.recordsByAction.DELETE}`,
+    `Batche zdegradowane przez brak preconditions: ${summary.batchesDegradedForPreconditions}`,
     `Pliki zapisano w: ${outputDirectory}`,
     'Nie wykonano żadnej operacji na bazie danych. Manifest wymaga ręcznego zatwierdzenia.',
   ].join('\n') + '\n';

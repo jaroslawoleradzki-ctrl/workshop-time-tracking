@@ -5,11 +5,11 @@
 - Projekt: Workshop Time Tracking
 - Aktualna wersja: `0.2.9`
 - Gałąź robocza: `fix/duplicate-reports-cleanup`
-- Ostatni zatwierdzony commit: `36c884b` (`feat(maintenance): add read-only duplicate repair manifest builder`)
-- Stan zmian: lokalny, niezatwierdzony etap 3 – Duplicate Repair Executor; zmiany nie zostały wypchnięte ani scalone.
-- Stan wdrożenia: narzędzia diagnostyczne i executor nie zostały wdrożone; etap 3 nie łączy się z bazą danych i nie wykonuje naprawy.
+- Ostatni zatwierdzony commit: `3240e8e` (`docs(maintenance): design duplicate repair executor stage 4`)
+- Stan zmian: lokalny, niezatwierdzony etap 4A – Repair Manifest v2; zmiany nie zostały wypchnięte ani scalone.
+- Stan wdrożenia: narzędzia diagnostyczne i executor nie zostały wdrożone; etap 4A nie wykonuje naprawy bazy.
 
-Gałąź `development` zawiera zweryfikowaną poprawkę krytyczną operacji kopiowania ostatniego dnia. Bieżąca gałąź zawiera zatwierdzone etapy 1 i 2 oraz lokalny etap 3: jeden executor z trybem podsumowania, atomowym zatwierdzaniem akcji DELETE w tym samym manifeście i stubem wykonania. Executor nie importuje Prisma, nie używa `DATABASE_URL` i nie wykonuje `INSERT`, `UPDATE`, `DELETE` ani soft delete.
+Gałąź `development` zawiera zweryfikowaną poprawkę krytyczną operacji kopiowania ostatniego dnia. Bieżąca gałąź zawiera zatwierdzone etapy 1–3 i projekt architektury etapu 4 oraz lokalny etap 4A. Builder generuje manifest v2 z rekordowymi preconditions, fingerprintami i konkretnymi poprzednikami. Executor podsumowuje i zatwierdza v1/v2, ale `--execute` pozostaje stubem bez Prisma, `DATABASE_URL`, `INSERT`, `UPDATE`, `DELETE` i soft delete.
 
 ## Dokumentacja projektu
 
@@ -52,7 +52,7 @@ Lint frontendu nie uruchomił się, ponieważ istniejący skrypt odwołuje się 
 - punkt wejścia `reports:analyze-duplicates -- --help` zakończony powodzeniem bez połączenia z bazą,
 - istniejący lokalny `duplicate-analysis.json` został wykorzystany jako wejście etapu 2; dokumentacja nie przypisuje tego pliku do środowiska produkcyjnego.
 
-## Weryfikacja Repair Manifest Builder
+## Historyczna weryfikacja Repair Manifest Builder v1
 
 - 10 testów jednostkowych buildera zakończonych powodzeniem,
 - pełny backend: 41 testów zakończonych powodzeniem,
@@ -65,19 +65,27 @@ Lint frontendu nie uruchomił się, ponieważ istniejący skrypt odwołuje się 
 
 Lint frontendu nadal nie uruchamia się, ponieważ istniejący skrypt odwołuje się do `eslint`, którego nie ma w zależnościach projektu. Nie zmieniano zależności poza zakresem narzędzi naprawczych.
 
-## Weryfikacja Duplicate Repair Executor
+## Weryfikacja Repair Manifest v2 i executora
 
-- 10 testów jednostkowych executora zakończonych powodzeniem,
-- pełny backend: 51 testów zakończonych powodzeniem,
-- frontend: 8 testów zakończonych powodzeniem,
+- 8 testów klasyfikatora analizatora zakończonych powodzeniem,
+- 14 testów jednostkowych buildera v2 zakończonych powodzeniem,
+- 19 testów jednostkowych executora v1/v2 zakończonych powodzeniem,
+- pełny backend: 65 testów zakończonych powodzeniem,
 - typecheck skryptów diagnostycznych zakończony powodzeniem,
-- build backendu i frontendu zakończony powodzeniem,
-- tryb summary nie zmienia manifestu ani nie tworzy plików,
-- approve odrzuca KEEP, REVIEW i brakujący batch bez częściowego zapisu,
-- execute weryfikuje `manifestVersion: 1`, wymagane pola oraz zatwierdzone DELETE i zwraca wyłącznie komunikat stubu,
-- moduł nie importuje Prisma, nie korzysta z `DATABASE_URL` i nie otwiera połączenia z bazą.
+- `--summary` potwierdzono dla istniejącego v1 i nowego v2,
+- `--approve` zachowuje snapshoty, fingerprinty i poprzedników v2; nie zatwierdzano rzeczywistego manifestu,
+- `--execute` odrzuca v1, waliduje kompletny v2 i nadal zwraca wyłącznie komunikat stubu,
+- ponowny analizator zakresu 2026-06-01–2026-07-24 potwierdził transakcję PostgreSQL READ ONLY na lokalnej bazie; wykrył 4 aktywne raporty i 0 grup podejrzanych,
+- pełny lokalny pipeline dla tej analizy utworzył manifest v2: 1 KEEP, 0 DELETE, 0 REVIEW,
+- na istniejącym bezpiecznym raporcie 504 batchy: v1 miał 8 KEEP, 11 DELETE, 494 REVIEW i 611 rekordów DELETE; v2 ma 8 KEEP, 1 DELETE, 504 REVIEW, 2 rekordy DELETE z konkretnymi poprzednikami i 10 batchy zdegradowanych do REVIEW,
+- moduł executora nie importuje Prisma, nie korzysta z `DATABASE_URL` i nie otwiera połączenia z bazą.
 
-Lint frontendu nadal nie uruchamia się, ponieważ w zależnościach projektu nie ma programu `eslint`; nie rozszerzano zależności w ramach etapu 3.
+- build backendu zakończony powodzeniem,
+- testy frontendu: 8/8 zakończonych powodzeniem,
+- build frontendu zakończony powodzeniem,
+- `git diff --check` zakończony bez błędów.
+
+Lint frontendu nie został uruchomiony, ponieważ `eslint` nadal nie jest zainstalowany w zależnościach projektu. Zgodnie z zakresem etapu 4A nie instalowano nowych zależności tylko w celu lintowania.
 
 ## Znane ustalenia wymagające uwagi
 

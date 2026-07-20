@@ -42,6 +42,8 @@ Sygnatura identycznego wpisu składa się z:
 
 Te pola opisują biznesową treść `WorkTimeReport`. Model nie ma pola komentarza. Różne zlecenie, typ czasu albo liczba godzin zawsze tworzą odrębną grupę.
 
+Każdy rekord grupy w `duplicate-analysis.json` zawiera również kompletny stan potrzebny do zbudowania Repair Manifestu v2: `date`, `employeeId`, `orderId`, czytelne dane zlecenia, znormalizowane `hours`, `workTimeTypeCode`, `createdAt`, `updatedAt`, `deletedAt`, identyfikatory użytkowników, `createAuditId` i `copyBatchId`. Analizator nie tworzy fingerprintów i nie wybiera rekordu do usunięcia; robi to dopiero builder na podstawie pełnego raportu.
+
 Dodatkowe dowody pochodzą z:
 
 - `created_at` i `created_by_user_id` – kolejność, odstępy i wspólny twórca;
@@ -97,7 +99,7 @@ Terminal pokazuje liczby grup według poziomu, rozpoznane partie, podstawowe dan
 
 ## Testy
 
-Testy klasyfikatora nie wymagają połączenia z bazą:
+Testy klasyfikatora nie wymagają połączenia z bazą i obejmują także kompletność danych rekordu przekazywanych do manifestu v2:
 
 ```bash
 cd backend
@@ -111,6 +113,6 @@ cd backend
 npm test
 ```
 
-## Etap 2 – plan naprawy
+## Etap 2/4A – plan naprawy
 
-Pełny `duplicate-analysis.json` może być wejściem do osobnego, nadal read-only narzędzia tworzącego propozycję KEEP/DELETE/REVIEW. Zasady bezpieczeństwa, uruchomienie i format wyników opisuje dokument [Repair Manifest Builder](duplicate-repair-plan.md). Etap 2 nie łączy się z bazą i nie wykonuje żadnej naprawy.
+Pełny `duplicate-analysis.json` jest wejściem do osobnego, nadal read-only narzędzia tworzącego propozycję KEEP/DELETE/REVIEW w formacie `manifestVersion: 2`. Zasady bezpieczeństwa, fingerprintu i wyboru konkretnego poprzednika opisuje dokument [Repair Manifest Builder](duplicate-repair-plan.md). Builder nie łączy się z bazą i nie wykonuje żadnej naprawy.
