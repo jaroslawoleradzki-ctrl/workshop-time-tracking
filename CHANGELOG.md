@@ -12,6 +12,7 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Dodano read-only skrypt `duplicates:repair-plan`, który z `duplicate-analysis.json` tworzy wymagający zatwierdzenia Repair Manifest z akcjami KEEP/DELETE/REVIEW, zależnościami między batchami oraz podsumowaniami JSON/Markdown/CSV; narzędzie nie łączy się z bazą i nie wykonuje naprawy.
 - Dodano pojedynczy moduł `duplicates:repair` z trybami `--summary`, `--approve` i bezpiecznym stubem `--execute`; zatwierdzenia są zapisywane wyłącznie przy akcjach DELETE w wersjonowanym manifeście, bez użycia Prisma i bez dostępu do bazy.
 - Rozszerzono Repair Manifest do `manifestVersion: 2`: każda propozycja DELETE ma pełne preconditions, deterministyczny fingerprint SHA-256 i dokładnie jednego konkretnego poprzednika z akcji KEEP; niejednoznaczne batche trafiają do REVIEW. Executor zachowuje summary/approve dla v1 i v2, natomiast stub `--execute` wymaga kompletnego v2 i nadal nie łączy się z bazą.
+- Rozszerzono detektor duplikatów o v2 rozpoznający powtórzone sesje importu na tym samym pracowniku i dniu przez porównanie wielozbiorów całych partii oraz dowód `REPEATED_IMPORT_SESSION`.
 
 ### Fixed
 - Poprawiono kwalifikowanie poprzedników w Repair Manifest Builder: kandydaci z REVIEW i DELETE są odrzucani przed oceną jednoznaczności, dzięki czemu nie powodują fałszywego `MULTIPLE_PREDECESSORS`; cały batch nadal trafia do REVIEW, jeżeli choć jeden rekord nie ma dokładnie jednego poprzednika KEEP.
