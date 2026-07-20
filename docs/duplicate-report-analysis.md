@@ -60,12 +60,13 @@ Historyczna funkcja kopiowania zapisywała osobny audyt `CREATE` dla każdego ut
 3. Aktywne rekordy z zakresu są grupowane według pełnej sygnatury biznesowej. Rekordy usunięte są liczone w podsumowaniu, ale nie trafiają na listę kandydatów do dalszego porządkowania.
 4. Rekordy tego samego pracownika, dnia i użytkownika są dzielone na krótkie partie. Domyślne okno wynosi 5 sekund.
 5. Wielozbiór każdej partii jest porównywany z ostatnim wcześniejszym dniem tego pracownika, który istniał w chwili tworzenia partii.
-6. Analiza wykrywa dokładne powielenie zestawu, wielokrotne utworzenie całego zestawu i dziedziczenie wcześniej wykrytej partii `HIGH` przez kolejne dni.
-7. Każda grupa identycznych aktywnych rekordów otrzymuje poziom `HIGH`, `MEDIUM` albo `LOW` wraz z listą kodów dowodowych.
+6. Analiza wykrywa dokładne powielenie zestawu, wielokrotne utworzenie całego zestawu, dziedziczenie wcześniej wykrytej partii `HIGH` przez kolejne dni oraz powtórzone sesje importu na tym samym pracowniku i dniu.
+7. Detektor v2 porównuje wielozbiory całych krótkich partii dla tej samej pary pracownik–data–użytkownik. Jeżeli późniejsza partia ma identyczny zestaw sygnatur biznesowych jak wcześniejsza partia, zostaje oznaczona jako `repeatedImportSessionOf`, otrzymuje dowód `REPEATED_IMPORT_SESSION` i może podnieść grupy do `HIGH` tylko przy pełnym audycie, stabilnej historii oraz jednoznacznej wcześniejszej partii zachowywanej przez builder manifestu.
+8. Każda grupa identycznych aktywnych rekordów otrzymuje poziom `HIGH`, `MEDIUM` albo `LOW` wraz z listą kodów dowodowych.
 
 ## Poziomy pewności
 
-- `HIGH` – cała grupa jest objęta partiami zgodnymi ze źródłem, audyt lub jawny audyt operacji potwierdza twórcę, historia nie wskazuje późniejszych zmian, a zestaw został powtórzony co najmniej dwukrotnie albo jest dalszym etapem potwierdzonego lawinowego kopiowania.
+- `HIGH` – cała grupa jest objęta partiami zgodnymi ze źródłem albo powtórzonymi sesjami importu, audyt lub jawny audyt operacji potwierdza twórcę, historia nie wskazuje późniejszych zmian, a zestaw został powtórzony co najmniej dwukrotnie albo jest dalszym etapem potwierdzonego lawinowego kopiowania.
 - `MEDIUM` – zestaw prawdopodobnie pochodzi z kopiowania, lecz może być pojedynczym poprawnym przeniesieniem już istniejących identycznych wpisów albo ma niepełne dowody.
 - `LOW` – rekordy są biznesowo identyczne, ale czas utworzenia, brak zgodnego źródła lub brak historii nie pozwala wiarygodnie przypisać ich do błędnego kopiowania. Przykładem są dwa ręczne wpisy utworzone w różnych godzinach.
 
@@ -95,7 +96,7 @@ Terminal pokazuje liczby grup według poziomu, rozpoznane partie, podstawowe dan
 - Szybka ręczna seria może przypominać kopiowanie, zwłaszcza gdy składa się z jednego rekordu.
 - Użytkownik systemu nie jest relacyjnie powiązany z pracownikiem, którego czas raportuje.
 - Dla pracowników z raportami w zakresie odczytywany jest także wcześniejszy kontekst do daty `--to`; na dużych bazach analizę warto dzielić na krótsze okresy.
-- Klasyfikacja jest wsparciem dla człowieka, a nie automatyczną decyzją o usunięciu danych.
+- Klasyfikacja jest wsparciem dla człowieka, a nie automatyczną decyzją o usunięciu danych. Detektor v2 podnosi pewność dla powtórzonych sesji importu, ale rekordy bez kompletnego audytu, ze zmianami historii, z częściowym zestawem lub bez jednoznacznego poprzednika nadal pozostają do `REVIEW` w manifeście.
 
 ## Testy
 

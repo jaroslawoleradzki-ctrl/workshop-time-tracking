@@ -72,6 +72,7 @@ export interface CopyBatchAnalysis {
   explicitCopyAuditId: string | null;
   sourceHistoryUncertain: boolean;
   likelihood: 'STRONG' | 'POSSIBLE' | 'NONE';
+  repeatedImportSessionOf: string | null;
 }
 
 export interface DuplicateGroupRecord {
@@ -393,6 +394,7 @@ function buildCopyBatches(
           : comparison.sourceMatch === 'PARTIAL' || strongMatch
             ? 'POSSIBLE'
             : 'NONE',
+        repeatedImportSessionOf: null,
       });
       segment = [];
     };
@@ -412,12 +414,39 @@ function buildCopyBatches(
     finishSegment();
   }
 
-  return batches.sort(
+  const sortedBatches = batches.sort(
     (left, right) =>
       left.date.localeCompare(right.date) ||
       left.startedAt.localeCompare(right.startedAt) ||
       left.id.localeCompare(right.id),
   );
+
+  const reportsById = new Map(allReports.map((report) => [report.id, report]));
+  const firstSessionBySignature = new Map<string, CopyBatchAnalysis>();
+  for (const batch of sortedBatches) {
+    const reports = batch.reportIds
+      .map((id) => reportsById.get(id))
+      .filter((report): report is NormalizedReport => Boolean(report));
+    if (reports.length !== batch.reportIds.length || reports.length < 2) continue;
+    const signature = [...multiset(reports).entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, count]) => `${key}=${count}`)
+      .join('\u001e');
+    const sessionKey = `${batch.date}\u001f${batch.employeeId}\u001f${batch.createdByUserId}\u001f${signature}`;
+    const first = firstSessionBySignature.get(sessionKey);
+    if (!first) {
+      firstSessionBySignature.set(sessionKey, batch);
+      continue;
+    }
+    batch.repeatedImportSessionOf = first.id;
+    batch.sourceDate = first.date;
+    batch.sourceReportCount = first.reportIds.length;
+    batch.sourceMatch = 'EXACT';
+    batch.repetitionFactor = 1;
+    if (batch.createAuditCoverage === 1 || batch.explicitCopyAuditId) batch.likelihood = 'STRONG';
+  }
+
+  return sortedBatches;
 }
 
 function recordView(
@@ -514,6 +543,10 @@ export function analyzeDuplicateReports(
     const repeatedInsideBatch = matchingBatches.some(
       (batch) => batch.sourceMatch === 'REPEATED' && batch.repetitionFactor >= 2,
     );
+    const repeatedImportSession = groupBatches.some((batch) => batch.repeatedImportSessionOf !== null);
+    const repeatedImportSessionBatchIds = new Set(
+      groupBatches.filter((batch) => batch.repeatedImportSessionOf !== null).map((batch) => batch.id),
+    );
     const parallelMatchingBatches =
       matchingBatches.length >= 2 && matchingBatchSpan <= windowMs;
     const sourceGroups = matchingBatches
@@ -550,10 +583,16 @@ export function analyzeDuplicateReports(
     if (sameCreator) evidence.push('SAME_CREATOR');
     if (targetHistoryUncertain || sourceHistoryUncertain) evidence.push('HISTORY_CHANGED_OR_INCOMPLETE');
 
-    const highCopyEvidence = repeatedInsideBatch || parallelMatchingBatches || Boolean(inheritedHighGroup);
+    if (repeatedImportSession) evidence.push('REPEATED_IMPORT_SESSION');
+
+    const allCoveredByRepeatedImportSessions = reports.every((report) => {
+      const batch = batchByReportId.get(report.id);
+      return batch ? repeatedImportSessionBatchIds.has(batch.id) : false;
+    });
+    const highCopyEvidence = repeatedInsideBatch || parallelMatchingBatches || Boolean(inheritedHighGroup) || repeatedImportSession;
     if (
       highCopyEvidence &&
-      allCoveredByMatchingBatches &&
+      (allCoveredByMatchingBatches || allCoveredByRepeatedImportSessions) &&
       auditIsStrong &&
       !targetHistoryUncertain &&
       !sourceHistoryUncertain

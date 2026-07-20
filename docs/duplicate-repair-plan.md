@@ -101,6 +101,7 @@ KEEP wymaga pełnego, stabilnego batcha `EXACT` z `repetitionFactor: 1`, komplet
 
 - Jeżeli żaden rekord batcha nie należy do grupy duplikatów, powodem jest `VALID_COPY_WITHOUT_DUPLICATES`.
 - Jeżeli późniejsze rekordy tworzą grupy `HIGH`, ale w bieżącym batchu nie ma wcześniejszych ani wewnętrznych duplikatów, powodem jest `ORIGINAL_COPY_BATCH`.
+- Dowód `REPEATED_IMPORT_SESSION` z detektora v2 jest traktowany jako historia kopiowania/importu na równi z innymi silnymi dowodami. Builder nadal wymaga pełnych preconditions i dokładnie jednego wcześniejszego poprzednika z batcha `KEEP`; brak takiego poprzednika pozostawia batch w `REVIEW`.
 
 Wszystkie pozostałe konfiguracje przechodzą do REVIEW. Szczególnie dotyczy to batcha zawierającego wielokrotność zestawu źródłowego, gdy nie można bezpiecznie usunąć całej partii.
 
