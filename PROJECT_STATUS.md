@@ -5,11 +5,11 @@
 - Projekt: Workshop Time Tracking
 - Aktualna wersja: `0.2.9`
 - Gałąź robocza: `fix/duplicate-reports-cleanup`
-- Ostatni zatwierdzony commit: `3240e8e` (`docs(maintenance): design duplicate repair executor stage 4`)
-- Stan zmian: lokalny, niezatwierdzony etap 4A – Repair Manifest v2; zmiany nie zostały wypchnięte ani scalone.
-- Stan wdrożenia: narzędzia diagnostyczne i executor nie zostały wdrożone; etap 4A nie wykonuje naprawy bazy.
+- Ostatni zatwierdzony commit: `b7fb467` (`feat(maintenance): add duplicate repair manifest v2`)
+- Stan zmian: lokalny, niezatwierdzony etap 4B – poprawka kwalifikowania poprzedników; lokalny commit etapu 4A jest o jeden commit przed origin, a zmiany 4B nie zostały wypchnięte ani scalone.
+- Stan wdrożenia: narzędzia diagnostyczne i executor nie zostały wdrożone; etapy 4A/4B nie wykonują naprawy bazy.
 
-Gałąź `development` zawiera zweryfikowaną poprawkę krytyczną operacji kopiowania ostatniego dnia. Bieżąca gałąź zawiera zatwierdzone etapy 1–3 i projekt architektury etapu 4 oraz lokalny etap 4A. Builder generuje manifest v2 z rekordowymi preconditions, fingerprintami i konkretnymi poprzednikami. Executor podsumowuje i zatwierdza v1/v2, ale `--execute` pozostaje stubem bez Prisma, `DATABASE_URL`, `INSERT`, `UPDATE`, `DELETE` i soft delete.
+Gałąź `development` zawiera zweryfikowaną poprawkę krytyczną operacji kopiowania ostatniego dnia. Bieżąca gałąź zawiera zatwierdzone etapy 1–4A oraz lokalny etap 4B. Builder generuje manifest v2 z rekordowymi preconditions, fingerprintami i konkretnymi poprzednikami; przed oceną jednoznaczności odrzuca kandydatów z REVIEW i DELETE, licząc wyłącznie kwalifikowanych poprzedników KEEP. Executor podsumowuje i zatwierdza v1/v2, ale `--execute` pozostaje stubem bez Prisma, `DATABASE_URL`, `INSERT`, `UPDATE`, `DELETE` i soft delete.
 
 ## Dokumentacja projektu
 
@@ -65,7 +65,7 @@ Lint frontendu nie uruchomił się, ponieważ istniejący skrypt odwołuje się 
 
 Lint frontendu nadal nie uruchamia się, ponieważ istniejący skrypt odwołuje się do `eslint`, którego nie ma w zależnościach projektu. Nie zmieniano zależności poza zakresem narzędzi naprawczych.
 
-## Weryfikacja Repair Manifest v2 i executora
+## Historyczna weryfikacja Repair Manifest v2 – etap 4A
 
 - 8 testów klasyfikatora analizatora zakończonych powodzeniem,
 - 14 testów jednostkowych buildera v2 zakończonych powodzeniem,
@@ -86,6 +86,25 @@ Lint frontendu nadal nie uruchamia się, ponieważ istniejący skrypt odwołuje 
 - `git diff --check` zakończony bez błędów.
 
 Lint frontendu nie został uruchomiony, ponieważ `eslint` nadal nie jest zainstalowany w zależnościach projektu. Zgodnie z zakresem etapu 4A nie instalowano nowych zależności tylko w celu lintowania.
+
+## Weryfikacja kwalifikowania poprzedników – etap 4B
+
+- 19 testów jednostkowych buildera v2 zakończonych powodzeniem,
+- 19 testów jednostkowych executora v1/v2 zakończonych powodzeniem,
+- pełny backend: 70/70 testów zakończonych powodzeniem,
+- frontend: 8/8 testów zakończonych powodzeniem,
+- typecheck skryptów diagnostycznych zakończony powodzeniem,
+- build backendu i frontendu zakończony powodzeniem,
+- `git diff --check` zakończony bez błędów,
+- nie uruchamiano ponownie analizatora; builder otrzymał istniejący bezpieczny `duplicate-analysis-20260720-101544/duplicate-analysis.json`,
+- przed poprawką manifest v2 miał 8 KEEP, 1 DELETE, 504 REVIEW, 2 rekordy DELETE i 10 batchy zdegradowanych przez brak preconditions,
+- po poprawce manifest v2 ma 8 KEEP, 2 DELETE, 503 REVIEW, 8 rekordów DELETE z konkretnymi poprzednikami i 9 batchy zdegradowanych,
+- wyłącznie `batch-1136` zmienił klasyfikację z REVIEW na DELETE; wskazuje 6 rekordów na zachowywany `batch-1134`,
+- `batch-1145` i `batch-1151` pozostały REVIEW, ponieważ odpowiednio 21 i 51 rekordów nadal nie ma kwalifikowanego poprzednika KEEP,
+- wygenerowany manifest pozostaje `approved: false`; nie uruchamiano `--approve` ani prawdziwego wykonania,
+- builder i executor nie połączyły się z bazą, a `--execute` nadal jest stubem.
+
+Lint frontendu nie został uruchomiony, ponieważ `eslint` nie jest dostępny w zależnościach projektu. Nie instalowano nowych zależności w ramach etapu 4B.
 
 ## Znane ustalenia wymagające uwagi
 

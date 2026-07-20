@@ -3,6 +3,7 @@ import {
   DuplicateAnalysisFile,
   buildRepairManifest,
   createReportPreconditions,
+  qualifiedPredecessorCandidates,
   reportBusinessFingerprint,
 } from '../scripts/repair-manifest-builder';
 import {
@@ -262,7 +263,7 @@ describe('repair manifest v2 classification', () => {
     expect(result.summary.batchesDegradedForPreconditions).toBe(0);
   });
 
-  it('degrades a batch with multiple possible predecessors to REVIEW', () => {
+  it('uses the sole KEEP predecessor when another earlier candidate belongs to DELETE', () => {
     const input = twoBatchHistory();
     const thirdAt = '2026-07-02T08:02:00.000Z';
     input.copyBatches.push(batch({ id: 'batch-0003', reportIds: ['report-3'], startedAt: thirdAt }));
@@ -272,10 +273,15 @@ describe('repair manifest v2 classification', () => {
     const third = result.actions.find((action) => action.batchId === 'batch-0003');
 
     expect(third).toMatchObject({
-      action: 'REVIEW',
-      reasonCode: 'DELETE_PRECONDITIONS_INCOMPLETE',
+      action: 'DELETE',
+      reasonCode: 'REDUNDANT_COPY_BATCH',
+      predecessorBatchIds: ['batch-0001'],
+      records: [{
+        reportId: 'report-3',
+        predecessor: { reportId: 'report-1', batchId: 'batch-0001' },
+      }],
     });
-    expect(third?.preconditionIssues[0]).toContain('MULTIPLE_PREDECESSORS');
+    expect(third?.preconditionIssues).toEqual([]);
   });
 
   it('never uses a report from another DELETE action as predecessor', () => {
@@ -294,7 +300,166 @@ describe('repair manifest v2 classification', () => {
       .map((item) => item.predecessor.reportId);
 
     expect(predecessors.every((id) => !deleteTargets.has(id))).toBe(true);
-    expect(result.actions.find((action) => action.batchId === 'batch-0003')?.action).toBe('REVIEW');
+    expect(result.actions.find((action) => action.batchId === 'batch-0003')?.action).toBe('DELETE');
+    expect(predecessors).toEqual(['report-1', 'report-1']);
+  });
+
+  it('ignores several REVIEW candidates when exactly one KEEP predecessor remains', () => {
+    const keepAt = '2026-07-02T08:00:00.000Z';
+    const reviewOneAt = '2026-07-02T08:00:01.000Z';
+    const reviewTwoAt = '2026-07-02T08:00:02.000Z';
+    const targetAt = '2026-07-02T08:00:03.000Z';
+    const input = analysis([
+      batch({ id: 'batch-keep', reportIds: ['report-keep'], startedAt: keepAt }),
+      batch({
+        id: 'batch-review-1',
+        reportIds: ['report-review-1', 'unmapped-1'],
+        startedAt: reviewOneAt,
+      }),
+      batch({
+        id: 'batch-review-2',
+        reportIds: ['report-review-2', 'unmapped-2'],
+        startedAt: reviewTwoAt,
+      }),
+      batch({ id: 'batch-target', reportIds: ['report-target'], startedAt: targetAt }),
+    ], [
+      group('HIGH', [
+        record('report-keep', keepAt, 'batch-keep'),
+        record('report-review-1', reviewOneAt, 'batch-review-1'),
+        record('report-review-2', reviewTwoAt, 'batch-review-2'),
+        record('report-target', targetAt, 'batch-target'),
+      ]),
+    ]);
+
+    const result = buildRepairManifest(input, OPTIONS);
+    const target = result.actions.find((action) => action.batchId === 'batch-target');
+
+    expect(result.actions.find((action) => action.batchId === 'batch-review-1')?.action).toBe('REVIEW');
+    expect(result.actions.find((action) => action.batchId === 'batch-review-2')?.action).toBe('REVIEW');
+    expect(target).toMatchObject({
+      action: 'DELETE',
+      predecessorBatchIds: ['batch-keep'],
+      records: [{ predecessor: { reportId: 'report-keep', batchId: 'batch-keep' } }],
+    });
+  });
+
+  it('degrades a batch when two qualified KEEP predecessors remain', () => {
+    const keepAt = '2026-07-02T08:00:00.000Z';
+    const targetAt = '2026-07-02T08:00:01.000Z';
+    const input = analysis([
+      batch({ id: 'batch-keep-1', reportIds: ['report-keep-1'], startedAt: keepAt }),
+      batch({ id: 'batch-keep-2', reportIds: ['report-keep-2'], startedAt: keepAt }),
+      batch({ id: 'batch-target', reportIds: ['report-target'], startedAt: targetAt }),
+    ], [
+      group('HIGH', [
+        record('report-keep-1', keepAt, 'batch-keep-1'),
+        record('report-keep-2', keepAt, 'batch-keep-2'),
+        record('report-target', targetAt, 'batch-target'),
+      ]),
+    ]);
+
+    const result = buildRepairManifest(input, OPTIONS);
+    const target = result.actions.find((action) => action.batchId === 'batch-target');
+
+    expect(result.actions.filter((action) => action.action === 'KEEP')).toHaveLength(2);
+    expect(target).toMatchObject({
+      action: 'REVIEW',
+      reasonCode: 'DELETE_PRECONDITIONS_INCOMPLETE',
+    });
+    expect(target?.preconditionIssues).toEqual([
+      'report-target:MULTIPLE_PREDECESSORS:report-keep-1|report-keep-2',
+    ]);
+  });
+
+  it('leaves a batch in REVIEW when all historical candidates belong to REVIEW', () => {
+    const reviewOneAt = '2026-07-02T08:00:00.000Z';
+    const reviewTwoAt = '2026-07-02T08:00:01.000Z';
+    const targetAt = '2026-07-02T08:00:02.000Z';
+    const input = analysis([
+      batch({
+        id: 'batch-review-1',
+        reportIds: ['report-review-1', 'unmapped-1'],
+        startedAt: reviewOneAt,
+      }),
+      batch({
+        id: 'batch-review-2',
+        reportIds: ['report-review-2', 'unmapped-2'],
+        startedAt: reviewTwoAt,
+      }),
+      batch({ id: 'batch-target', reportIds: ['report-target'], startedAt: targetAt }),
+    ], [
+      group('HIGH', [
+        record('report-review-1', reviewOneAt, 'batch-review-1'),
+        record('report-review-2', reviewTwoAt, 'batch-review-2'),
+        record('report-target', targetAt, 'batch-target'),
+      ]),
+    ]);
+
+    const result = buildRepairManifest(input, OPTIONS);
+    const target = result.actions.find((action) => action.batchId === 'batch-target');
+
+    expect(target).toMatchObject({
+      action: 'REVIEW',
+      reasonCode: 'DELETE_PRECONDITIONS_INCOMPLETE',
+    });
+    expect(target?.preconditionIssues).toEqual([
+      'report-target:MISSING_QUALIFIED_KEEP_PREDECESSOR',
+    ]);
+  });
+
+  it('filters out candidates belonging exclusively to DELETE actions', () => {
+    const candidates = [record(
+      'report-delete',
+      '2026-07-02T08:00:00.000Z',
+      'batch-delete',
+    )];
+    const actionByBatchId = new Map([
+      ['batch-delete', { action: 'DELETE' as const }],
+    ]);
+
+    expect(qualifiedPredecessorCandidates(candidates, actionByBatchId)).toEqual([]);
+  });
+
+  it('keeps an entire mixed batch in REVIEW when one record lacks a KEEP predecessor', () => {
+    const keepAt = '2026-07-02T08:00:00.000Z';
+    const reviewAt = '2026-07-02T08:00:01.000Z';
+    const targetAt = '2026-07-02T08:00:02.000Z';
+    const input = analysis([
+      batch({ id: 'batch-keep', reportIds: ['report-keep'], startedAt: keepAt }),
+      batch({
+        id: 'batch-review',
+        reportIds: ['report-review-a', 'report-review-b', 'unmapped'],
+        startedAt: reviewAt,
+      }),
+      batch({
+        id: 'batch-target',
+        reportIds: ['report-target-a', 'report-target-b'],
+        startedAt: targetAt,
+      }),
+    ], [
+      group('HIGH', [
+        record('report-keep', keepAt, 'batch-keep'),
+        record('report-review-a', reviewAt, 'batch-review'),
+        record('report-target-a', targetAt, 'batch-target'),
+      ], { id: 'group-a' }),
+      group('HIGH', [
+        record('report-review-b', '2026-07-02T08:00:01.010Z', 'batch-review', { hours: '6.00' }),
+        record('report-target-b', '2026-07-02T08:00:02.010Z', 'batch-target', { hours: '6.00' }),
+      ], { id: 'group-b', identityHours: '6.00' }),
+    ]);
+
+    const result = buildRepairManifest(input, OPTIONS);
+    const target = result.actions.find((action) => action.batchId === 'batch-target');
+
+    expect(target).toMatchObject({
+      action: 'REVIEW',
+      reasonCode: 'DELETE_PRECONDITIONS_INCOMPLETE',
+      reportIds: ['report-target-a', 'report-target-b'],
+      affectedRecords: 2,
+    });
+    expect(target?.preconditionIssues).toEqual([
+      'report-target-b:MISSING_QUALIFIED_KEEP_PREDECESSOR',
+    ]);
   });
 
   it('degrades a mismatched business key to REVIEW', () => {

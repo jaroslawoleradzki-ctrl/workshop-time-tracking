@@ -75,10 +75,10 @@ DELETE jest możliwe wyłącznie dla całego batcha, gdy jednocześnie:
 4. `createAuditCoverage` wynosi 1 albo istnieje jawny audyt operacji kopiowania;
 5. historia źródła nie jest oznaczona jako niepewna;
 6. każdy rekord jest aktywny i nie ma późniejszej istotnej aktualizacji;
-7. każdy rekord ma dokładnie jeden wcześniejszy identyczny odpowiednik z innego, również wiarygodnego batcha utworzonego przez tego samego użytkownika;
-8. konkretny poprzednik jest aktywny, należy do akcji KEEP, nie należy do bieżącego batcha ani żadnej akcji DELETE i ma ten sam fingerprint biznesowy.
+7. historyczni kandydaci są najpierw filtrowani do rekordów aktywnych, wcześniejszych, zgodnych biznesowo i należących do wiarygodnych batchy już sklasyfikowanych jako KEEP;
+8. dopiero wśród tak zakwalifikowanych kandydatów każdy rekord musi mieć dokładnie jednego poprzednika, który nie należy do bieżącego batcha ani żadnej akcji DELETE i ma ten sam fingerprint biznesowy.
 
-Dla każdego rekordu DELETE manifest zapisuje `reportId`, pełne `preconditions`, fingerprint oraz obiekt `predecessor` z konkretnym `reportId`, `batchId`, snapshotem i fingerprintem poprzednika. `reportIds` jest generowane z rekordów DELETE, a executor sprawdza zgodność obu reprezentacji. Jeżeli poprzednika nie ma, jest ich więcej niż jeden, ma inny klucz biznesowy albo nie jest zachowywany przez KEEP, cały batch trafia do REVIEW z listą `preconditionIssues`.
+Dla każdego rekordu DELETE manifest zapisuje `reportId`, pełne `preconditions`, fingerprint oraz obiekt `predecessor` z konkretnym `reportId`, `batchId`, snapshotem i fingerprintem poprzednika. `reportIds` jest generowane z rekordów DELETE, a executor sprawdza zgodność obu reprezentacji. Kandydaci z akcji REVIEW i DELETE są odrzucani przed sprawdzeniem liczby poprzedników i nie mogą tworzyć pozornej wieloznaczności. Zero zakwalifikowanych kandydatów KEEP albo więcej niż jeden taki kandydat powoduje REVIEW całego batcha z listą `preconditionIssues`; builder nie wybiera pierwszego UUID i nie dzieli batcha na części.
 
 ### Snapshot i fingerprint
 
@@ -141,4 +141,4 @@ npm test -- tests/repair-manifest-builder.test.ts
 npm exec tsc -- --project tsconfig.scripts.json
 ```
 
-Obejmują manifest v2, KEEP/DELETE/REVIEW, fingerprint i normalizację, dokładnie jednego poprzednika, brak lub wielu poprzedników, konflikt z DELETE, niezgodny klucz biznesowy, zgodność `reportIds` z `records`, zmienioną historię, brakujący batch i deterministyczność eksportu.
+Obejmują manifest v2, KEEP/DELETE/REVIEW, fingerprint i normalizację, dokładnie jednego poprzednika KEEP, odfiltrowanie kandydatów REVIEW/DELETE, dwóch kandydatów KEEP, brak zakwalifikowanego poprzednika, batch mieszany, niezgodny klucz biznesowy, zgodność `reportIds` z `records`, zmienioną historię, brakujący batch i deterministyczność eksportu.

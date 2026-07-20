@@ -353,7 +353,7 @@ function actionFromBatch(
   };
 }
 
-function predecessorCandidates(
+function historicalPredecessorCandidates(
   record: DuplicateRecord,
   group: DuplicateGroup,
   batch: CopyBatch,
@@ -380,6 +380,16 @@ function predecessorCandidates(
     || left.id.localeCompare(right.id));
 }
 
+export function qualifiedPredecessorCandidates<T extends { copyBatchId: string | null }>(
+  candidates: T[],
+  actionByBatchId: ReadonlyMap<string, { action: RepairActionName }>,
+) {
+  return candidates.filter((candidate) => {
+    if (!candidate.copyBatchId) return false;
+    return actionByBatchId.get(candidate.copyBatchId)?.action === 'KEEP';
+  });
+}
+
 function buildDeleteRecord(
   record: DuplicateRecord,
   group: DuplicateGroup,
@@ -394,16 +404,23 @@ function buildDeleteRecord(
     return { record: null, issues };
   }
 
-  const candidates = predecessorCandidates(
+  const historicalCandidates = historicalPredecessorCandidates(
     record,
     group,
     batch,
     batchById,
     copyBurstWindowMs,
   );
+  const candidates = qualifiedPredecessorCandidates(
+    historicalCandidates,
+    actionByBatchId,
+  );
 
   if (candidates.length === 0) {
-    issues.push(`${record.id}:MISSING_PREDECESSOR`);
+    const issue = historicalCandidates.length === 0
+      ? 'MISSING_PREDECESSOR'
+      : 'MISSING_QUALIFIED_KEEP_PREDECESSOR';
+    issues.push(`${record.id}:${issue}`);
     return { record: null, issues };
   }
   if (candidates.length > 1) {
@@ -417,13 +434,6 @@ function buildDeleteRecord(
     issues.push(`${record.id}:PREDECESSOR_WITHOUT_BATCH`);
     return { record: null, issues };
   }
-  const predecessorAction = actionByBatchId.get(predecessorBatchId);
-  if (!predecessorAction || predecessorAction.action !== 'KEEP') {
-    const status = predecessorAction?.action || 'UNKNOWN';
-    issues.push(`${record.id}:PREDECESSOR_NOT_CONFIRMED_KEEP:${predecessor.id}:${status}`);
-    return { record: null, issues };
-  }
-
   const preconditions = createReportPreconditions(record);
   const predecessorPreconditions = createReportPreconditions(predecessor);
   const fingerprint = reportBusinessFingerprint(preconditions);
@@ -514,7 +524,7 @@ export function buildRepairManifest(
       const recordsHaveStableHistory = records.every(stableRecordHistory);
       const legacyEveryRecordHasEarlierCopy = allReportsMappedToHighGroups && records.every((record) => {
         const group = groupByReportId.get(record.id);
-        return Boolean(group && predecessorCandidates(
+        return Boolean(group && historicalPredecessorCandidates(
           record,
           group,
           batch,

@@ -4,7 +4,7 @@
 
 Ten dokument opisuje docelową architekturę wykonania zatwierdzonego Repair Manifestu przez tryb `--execute`. Nie jest implementacją. Na tym etapie nie powstaje kod naprawczy, migracja ani połączenie z bazą danych.
 
-Etap 4A zrealizował część przygotowawczą: builder generuje `manifestVersion: 2` z pełnymi snapshotami targetów, biznesowymi fingerprintami SHA-256 i dokładnie jednym konkretnym poprzednikiem dla każdego DELETE. Executor obsługuje summary/approve dla v1/v2 i waliduje v2, lecz `--execute` nadal jest stubem bez dostępu do bazy. Poniższy przebieg transakcyjny pozostaje projektem przyszłego etapu wykonawczego.
+Etap 4A zrealizował część przygotowawczą: builder generuje `manifestVersion: 2` z pełnymi snapshotami targetów, biznesowymi fingerprintami SHA-256 i dokładnie jednym konkretnym poprzednikiem dla każdego DELETE. Etap 4B doprecyzował kwalifikację: jednoznaczność jest oceniana dopiero po odrzuceniu kandydatów z REVIEW i DELETE, więc liczą się wyłącznie wcześniejsze, aktywne i zgodne rekordy z akcji KEEP. Executor obsługuje summary/approve dla v1/v2 i waliduje v2, lecz `--execute` nadal jest stubem bez dostępu do bazy. Poniższy przebieg transakcyjny pozostaje projektem przyszłego etapu wykonawczego.
 
 Zakładany efekt przyszłego wykonania to wyłącznie kontrolowany soft delete zatwierdzonych, nadmiarowych rekordów `work_time_reports`. Akcje `KEEP` i `REVIEW` nigdy nie zmieniają danych.
 
@@ -69,6 +69,8 @@ Manifest v2 zachowuje dotychczasowe dane i dodaje zestaw preconditions. Dla każ
 - batch poprzednika, pełny snapshot i fingerprint poprzednika.
 
 Etap 4A używa fingerprintu biznesowego rekordu obejmującego datę, pracownika, `orderId`, znormalizowane godziny i kod typu czasu. `createdAt`, `updatedAt`, `deletedAt`, autorzy, audyt i `copyBatchId` pozostają w snapshotach i są walidowane niezależnie.
+
+Builder ustala poprzednika sekwencyjnie względem wcześniej sklasyfikowanych batchy. Najpierw sprawdza dotychczasowe warunki czasu, klucza biznesowego, aktywności, historii i audytu, następnie odrzuca kandydatów niebędących KEEP, a dopiero na końcu rozstrzyga zero/jeden/wiele. Rekord z akcji REVIEW lub DELETE nie może być poprzednikiem ani zwiększać liczby kwalifikowanych kandydatów.
 
 Przed prawdziwym wykonaniem kontrakt lub osobny zatwierdzony kontekst musi jeszcze zapewnić:
 
@@ -424,7 +426,7 @@ Przed rozpoczęciem implementacji należy formalnie zatwierdzić:
 
 ## Rekomendowana kolejność implementacji
 
-1. Ukończono: manifest v2 z pełnymi snapshotami targetów i konkretnymi poprzednikami, walidacja offline oraz testy bez bazy.
+1. Ukończono: manifest v2 z pełnymi snapshotami targetów, konkretnymi poprzednikami oraz kwalifikacją liczącą wyłącznie kandydatów KEEP; walidacja offline i testy nie wymagają bazy.
 2. Zatwierdzić pozostałe decyzje, zwłaszcza tożsamość wykonującego, docelowej bazy i rejestr idempotencji.
 3. Rozszerzyć approval o stabilny UUID zatwierdzającego oraz dodać fingerprint całej akcji i ochronę niezmiennej części planu.
 4. Przygotować warstwę transakcyjną z globalną advisory lock, zbiorczymi blokadami wierszy i odczytami preconditions.
