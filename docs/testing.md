@@ -2,9 +2,9 @@
 
 ## Testy istniejące
 
-Backend używa Vitest i Supertest. `backend/tests/version.test.ts` sprawdza `/api/version`; `integration.test.ts` sprawdza health check (200 lub 503), odrzucenie błędnego logowania oraz ochronę tras bez tokenu.
+Backend używa Vitest i Supertest. `backend/tests/version.test.ts` sprawdza `/api/version`; `integration.test.ts` sprawdza health check (200 lub 503), odrzucenie błędnego logowania oraz ochronę tras bez tokenu. `copy-last-day.test.ts` sprawdza kontrakt i walidację kopiowania, wybór pracownika i źródła, soft delete, limit, role, rollback audytu oraz serializację 2 i 20 równoległych żądań na deterministycznym modelu transakcji.
 
-Frontend używa Vitest, Happy DOM i React Testing Library. `frontend/src/test/App.test.tsx` sprawdza renderowanie logowania oraz pobranie i błąd pobrania wersji. `frontend/src/test/setup.ts` zapewnia asercje DOM i pamięci webowe.
+Frontend używa Vitest, Happy DOM i React Testing Library. `frontend/src/test/App.test.tsx` sprawdza renderowanie logowania oraz pobranie i błąd pobrania wersji. `ReportingPanel.test.tsx` sprawdza `employeeId`, blokadę przycisku, wieloklik/klawiaturę, odblokowanie po błędzie i komunikat `409`. `frontend/src/test/setup.ts` zapewnia asercje DOM i pamięci webowe.
 
 ## Polecenia
 
@@ -23,11 +23,11 @@ Backend nie definiuje skryptu lint. Oba skrypty testowe wykonują `vitest run`.
 - logowanie obu ról, wygaśnięcie sesji i ograniczenia menu/API;
 - utworzenie, edycja i soft delete pracownika, zlecenia oraz wpisu czasu;
 - wymaganie zlecenia według rodzaju czasu i ostrzeżenia 8/12/24 godzin;
-- kopiowanie ostatniej wcześniejszej daty, również przy nieaktywnych rekordach;
+- kopiowanie ostatniej wcześniejszej daty wyłącznie wybranego pracownika: pojedynczo, dwuklikiem, z dwóch kart, przez dwóch liderów i przy niepustym celu;
 - import poprawny, częściowy, błędny, duplikat i przywrócenie soft delete;
 - wszystkie cztery raporty, filtry, XLSX i CSV;
 - migracja na kopii produkcyjnej, health check, logi i responsywność laptop/tablet.
 
 ## Braki pokrycia
 
-Automatyczne testy nie obejmują poprawnego logowania, CRUD i autoryzacji ról, reguł raportowania, ostrzeżeń, kopiowania, soft delete, audytu, importów, analityki/eksportów, migracji, Nginx/Docker ani pełnych interakcji widoków. Nie ma testów E2E. Testy backendu zależne od bazy dopuszczają niedostępność bazy tylko dla health checku.
+Automatyczne testy nie obejmują pełnego poprawnego logowania, całego CRUD, ostrzeżeń, importów, analityki/eksportów, migracji, Nginx/Docker ani pełnych interakcji widoków. Krytyczne kopiowanie ma testy endpointu i modelu transakcji, lecz repozytorium nadal nie ma automatycznego E2E ani testu współbieżności uruchamianego na rzeczywistym PostgreSQL. Testy backendu zależne od bazy dopuszczają niedostępność bazy tylko dla health checku.
