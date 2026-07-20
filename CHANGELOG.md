@@ -9,6 +9,17 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Rozbudowano strukturę dokumentacji o reguły biznesowe, specyfikację importów i eksportów, konfigurację, testowanie, runbook operacyjny oraz instrukcję użytkownika; uzupełniono także architekturę i indeks dokumentacji.
 - Dodano `PROJECT_STATUS.md` oraz obowiązkową procedurę rozpoczęcia sesji i przekazania pracy między ChatGPT i Codexem w `docs/session-start.md`; powiązano procedurę z zasadami w `AGENTS.md`.
 
+## [0.2.9] (Development) - 2026-07-20
+
+### Added
+- Dodano transakcyjną blokadę advisory PostgreSQL dla pary pracownik–data docelowa, limit 100 wpisów źródłowych oraz strukturalne logowanie operacji kopiowania.
+- Dodano testy backendu dla walidacji, soft delete, atomowego audytu i współbieżności (w tym 20 równoległych żądań) oraz testy blokady interfejsu.
+
+### Fixed
+- Funkcja „Kopiuj ostatni dzień” kopiuje teraz wyłącznie aktywne wpisy aktualnie wybranego pracownika z jego ostatniej wcześniejszej daty.
+- Niepusty dzień docelowy jest odrzucany odpowiedzią `409`, a równoległe lub wielokrotne uruchomienia nie mogą dopisać kolejnych kompletów.
+- Kopiowanie wpisów i zapis jednego audytu operacji są atomowe; błąd audytu wycofuje całą operację.
+
 ## [0.2.8] (Development) - 2026-07-04
 
 ### Added

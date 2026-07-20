@@ -17,7 +17,7 @@ flowchart LR
 - React renderuje UI, przechowuje token i użytkownika w `localStorage`, stan nawigacji w `sessionStorage`, waliduje formularze i wywołuje względne `/api`.
 - Nginx serwuje build SPA i przekazuje `/api` do backendu.
 - Express składa middleware CORS/JSON/logowania, uwierzytelnianie JWT, kontrolę ról i routery: auth, users, employees, orders, work-time-types, reports, analytics, imports.
-- Routery zawierają walidację i logikę biznesową oraz bezpośrednio wywołują Prisma; osobnej warstwy serwisów/repozytoriów nie ma.
+- Routery zawierają większość walidacji i logiki biznesowej oraz bezpośrednio wywołują Prisma. Krytyczna operacja kopiowania czasu ma wydzielony serwis transakcyjny; ogólnej warstwy repozytoriów nie ma.
 - Prisma mapuje modele i migracje na PostgreSQL. Logger Pino zapisuje żądania i błędy na stdout/stderr.
 
 ## Model danych
@@ -60,11 +60,13 @@ sequenceDiagram
 
 Import: Multer przechowuje plik w pamięci, SheetJS odczytuje pierwszy arkusz, router waliduje każdy wiersz i tworzy/aktualizuje rekord oraz audyt. Po pętli zapisuje `ImportHistory`. Nie ma transakcji całego pliku.
 
+Kopiowanie ostatniego dnia: React wysyła `employeeId` i datę docelową. API wymaga roli `admin` albo `leader`, rozpoczyna transakcję Prisma i uzyskuje transakcyjną blokadę advisory PostgreSQL z klucza wyliczonego dla tej pary. Po blokadzie sprawdza pusty cel, wybiera ostatnią wcześniejszą datę tego pracownika, tworzy maksymalnie 100 wpisów przez `createMany` i zapisuje jeden `AuditLog`. Commit następuje dopiero po powodzeniu audytu. Blokada jest utrzymywana przez PostgreSQL do końca transakcji, więc działa również pomiędzy różnymi procesami i instancjami API.
+
 ## Soft delete, audyt i błędy
 
 `Employee`, `Order` i `WorkTimeReport` używają `deletedAt`; większość odczytów filtruje `null`. Usunięcie pracownika dodatkowo go dezaktywuje, a zlecenia ustawia na `CLOSED`. Import może przywrócić pracownika lub zlecenie.
 
-AuditLog jest tworzony pomocniczą funkcją dla zmian pracowników, zleceń i wpisów. Błąd zapisu audytu jest logowany i nie cofa operacji biznesowej. Routery zwracają polskie komunikaty i odpowiednie kody 4xx/5xx; końcowy middleware obsługuje błędy nieprzechwycone. React pokazuje błędy lokalnie, a globalne 401/403 czyszczą sesję. Middleware ról zwraca niestandardowy kod 430 przy braku roli.
+AuditLog jest tworzony pomocniczą funkcją dla zmian pracowników, zleceń i wpisów. Domyślnie dotychczasowe wywołania jedynie logują błąd audytu. Operacja kopiowania przekazuje klienta bieżącej transakcji i wymaga ponownego rzucenia błędu, dlatego brak audytu cofa cały kopiowany komplet. Routery zwracają polskie komunikaty i odpowiednie kody 4xx/5xx; końcowy middleware obsługuje błędy nieprzechwycone. React pokazuje błędy lokalnie, a globalne 401/403 czyszczą sesję. Middleware ról zwraca niestandardowy kod 430 przy braku roli.
 
 ## Daty i wdrożenie
 

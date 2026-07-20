@@ -1,8 +1,14 @@
+import { randomUUID } from 'crypto';
 import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
-import { AuthRequest, authenticateJWT } from '../middlewares/auth';
+import { AuthRequest, authenticateJWT, requireRole } from '../middlewares/auth';
 import { logChange } from '../utils/audit';
 import logger from '../utils/logger';
+import {
+  CopyLastDayError,
+  copyLastDayForEmployee,
+  copyLastDayRequestSchema,
+} from '../services/copy-last-day';
 
 const router = Router();
 
@@ -343,114 +349,129 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// POST /copy-last-day - copy entries from the last day that has entries
-router.post('/copy-last-day', async (req: AuthRequest, res: Response) => {
-  const { date } = req.body; // Target date (YYYY-MM-DD)
+// POST /copy-last-day - atomically copy the selected employee's last active day
+router.post(
+  '/copy-last-day',
+  requireRole(['admin', 'leader']),
+  async (req: AuthRequest, res: Response) => {
+    const requestIdHeader = req.headers['x-request-id'];
+    const requestId =
+      (Array.isArray(requestIdHeader) ? requestIdHeader[0] : requestIdHeader) || randomUUID();
+    const startedAt = Date.now();
+    const parsedRequest = copyLastDayRequestSchema.safeParse(req.body);
 
-  if (!date) {
-    return res.status(400).json({ message: 'Bieżąca data (date) jest wymagana' });
-  }
+    res.setHeader('X-Request-Id', requestId);
 
-  try {
-    const targetDate = new Date(date);
-
-    // 1. Find the last day containing reports before targetDate
-    const lastReport = await prisma.workTimeReport.findFirst({
-      where: {
-        deletedAt: null,
-        date: {
-          lt: targetDate,
+    if (!parsedRequest.success) {
+      logger.warn(
+        {
+          requestId,
+          userId: req.user!.id,
+          employeeId: typeof req.body?.employeeId === 'string' ? req.body.employeeId : null,
+          sourceDate: null,
+          targetDate: typeof req.body?.date === 'string' ? req.body.date : null,
+          sourceCount: 0,
+          createdCount: 0,
+          status: 'validation_error',
+          durationMs: Date.now() - startedAt,
+          issues: parsedRequest.error.issues.map((issue) => ({
+            path: issue.path.join('.'),
+            message: issue.message,
+          })),
         },
-      },
-      orderBy: { date: 'desc' },
-      select: { date: true },
-    });
+        'Copy last day rejected',
+      );
 
-    if (!lastReport) {
-      return res.status(400).json({ message: 'Brak wpisów w bazie danych z dni poprzedzających do skopiowania.' });
-    }
-
-    // 2. Fetch all reports from that day
-    const reportsToCopy = await prisma.workTimeReport.findMany({
-      where: {
-        date: lastReport.date,
-        deletedAt: null,
-      },
-      include: {
-        employee: true,
-        order: true,
-      },
-    });
-
-    if (reportsToCopy.length === 0) {
-      return res.status(400).json({ message: 'Brak aktywnego czasu pracy do skopiowania.' });
-    }
-
-    // 3. Filter out employees or orders that are currently soft-deleted
-    const validReports = reportsToCopy.filter((r) => {
-      // Check if employee is active and not deleted
-      if (r.employee.deletedAt || !r.employee.isActive) return false;
-      // Check if order is not deleted (if order is required)
-      if (r.orderId && r.order?.deletedAt) return false;
-      return true;
-    });
-
-    // 4. Create new reports for targetDate
-    const createdReports = [];
-    for (const report of validReports) {
-      const newReport = await prisma.workTimeReport.create({
-        data: {
-          date: targetDate,
-          employeeId: report.employeeId,
-          orderId: report.orderId,
-          hours: report.hours,
-          workTimeTypeCode: report.workTimeTypeCode,
-          createdByUserId: req.user!.id,
-        },
-        include: {
-          order: {
-            select: {
-              orderNumber: true,
-              productCode: true,
-              productName: true,
-              accountingAccount: true,
-            },
-          },
-          workTimeType: {
-            select: {
-              code: true,
-              name: true,
-            },
-          },
-        },
+      return res.status(400).json({
+        message: 'Nieprawidłowe dane żądania kopiowania.',
+        code: 'INVALID_COPY_REQUEST',
+        errors: parsedRequest.error.flatten().fieldErrors,
+        requestId,
       });
+    }
 
-      // Log audit
-      await logChange({
-        tableName: 'work_time_reports',
-        recordId: newReport.id,
-        action: 'CREATE',
-        newValues: newReport,
+    const { employeeId, date } = parsedRequest.data;
+
+    try {
+      const result = await copyLastDayForEmployee({
+        employeeId,
+        targetDate: date,
         userId: req.user!.id,
+        requestId,
       });
 
-      createdReports.push({
-        ...newReport,
-        hours: Number(newReport.hours),
+      logger.info(
+        {
+          requestId,
+          operationId: result.operationId,
+          userId: req.user!.id,
+          employeeId: result.employeeId,
+          sourceDate: result.sourceDate,
+          targetDate: result.targetDate,
+          sourceCount: result.sourceCount,
+          createdCount: result.createdCount,
+          status: 'success',
+          durationMs: Date.now() - startedAt,
+        },
+        'Copy last day completed',
+      );
+
+      return res.status(201).json({
+        message: `Skopiowano ${result.createdCount} wpisów z dnia ${result.sourceDate}.`,
+        requestId,
+        employeeId: result.employeeId,
+        sourceDate: result.sourceDate,
+        targetDate: result.targetDate,
+        createdCount: result.createdCount,
+      });
+    } catch (error) {
+      if (error instanceof CopyLastDayError) {
+        logger.warn(
+          {
+            requestId,
+            userId: req.user!.id,
+            employeeId,
+            sourceDate: error.context.sourceDate || null,
+            targetDate: date,
+            sourceCount: error.context.sourceCount || 0,
+            createdCount: 0,
+            status: error.code,
+            durationMs: Date.now() - startedAt,
+          },
+          'Copy last day rejected',
+        );
+
+        return res.status(error.statusCode).json({
+          message: error.message,
+          code: error.code,
+          requestId,
+          employeeId,
+          targetDate: date,
+        });
+      }
+
+      logger.error(
+        {
+          err: error,
+          requestId,
+          userId: req.user!.id,
+          employeeId,
+          sourceDate: null,
+          targetDate: date,
+          sourceCount: 0,
+          createdCount: 0,
+          status: 'error',
+          durationMs: Date.now() - startedAt,
+        },
+        'Copy last day failed',
+      );
+      return res.status(500).json({
+        message: 'Błąd podczas kopiowania wpisów.',
+        code: 'COPY_LAST_DAY_FAILED',
+        requestId,
       });
     }
-
-    const formattedLastDate = lastReport.date.toISOString().split('T')[0];
-
-    return res.status(201).json({
-      message: `Skopiowano wpisy z dnia ${formattedLastDate}`,
-      copiedFromDate: formattedLastDate,
-      reports: createdReports,
-    });
-  } catch (error) {
-    logger.error(error, 'Błąd podczas kopiowania wpisów');
-    return res.status(500).json({ message: 'Błąd podczas kopiowania wpisów' });
-  }
-});
+  },
+);
 
 export default router;

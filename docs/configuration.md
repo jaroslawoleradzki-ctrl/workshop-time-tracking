@@ -7,7 +7,7 @@
 | `DATABASE_URL` | tak | brak | backend, Prisma | połączenie PostgreSQL | `postgresql://app_user:CHANGE_ME@localhost:5432/time_reporting?schema=public` |
 | `JWT_SECRET` | produkcja: tak | wbudowana wartość deweloperska | backend | podpis JWT | losowy ciąg co najmniej 32 bajtów, np. wynik menedżera sekretów |
 | `PORT` | nie | `5000` | backend | port nasłuchu API | `5000` |
-| `APP_VERSION` | nie | wersja z `backend/package.json` | backend/Docker | odpowiedź `/api/version` | `0.2.8` |
+| `APP_VERSION` | nie | wersja z `backend/package.json` | backend/Docker | odpowiedź `/api/version` | `0.2.9` |
 | `NODE_ENV` | nie | `development` w endpointzie wersji | backend | format logów i opis środowiska | `production` |
 
 Nie znaleziono zmiennych środowiskowych frontendu (`VITE_*`); frontend korzysta ze względnych ścieżek `/api`.
