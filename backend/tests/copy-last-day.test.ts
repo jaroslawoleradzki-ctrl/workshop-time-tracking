@@ -25,6 +25,11 @@ interface FakeEmployee {
   deletedAt: Date | null;
 }
 
+interface FakeOrder {
+  id: string;
+  deletedAt: Date | null;
+}
+
 interface FakeReport {
   id: string;
   date: Date;
@@ -46,11 +51,21 @@ function sameDate(left: Date, right: Date) {
   return left.getTime() === right.getTime();
 }
 
-function matchesReportWhere(report: FakeReport, where: any) {
+function matchesReportWhere(report: FakeReport, where: any, orders: FakeOrder[]) {
   if (where.employeeId && report.employeeId !== where.employeeId) return false;
   if (where.deletedAt === null && report.deletedAt !== null) return false;
   if (where.date instanceof Date && !sameDate(report.date, where.date)) return false;
   if (where.date?.lt && report.date.getTime() >= where.date.lt.getTime()) return false;
+  if (where.OR) {
+    const matchesEligibleOrder = where.OR.some((condition: any) => {
+      if (condition.orderId === null) return report.orderId === null;
+      if (condition.order?.deletedAt === null && report.orderId) {
+        return orders.some((order) => order.id === report.orderId && order.deletedAt === null);
+      }
+      return false;
+    });
+    if (!matchesEligibleOrder) return false;
+  }
   return true;
 }
 
@@ -82,11 +97,13 @@ class FakeTransaction {
     count: (args: any) => Promise<number>;
     findFirst: (args: any) => Promise<any>;
     findMany: (args: any) => Promise<any[]>;
+    create: (args: any) => Promise<any>;
     createMany: (args: any) => Promise<{ count: number }>;
   } = {
     count: async () => 0,
     findFirst: async () => null,
     findMany: async () => [],
+    create: async () => null,
     createMany: async () => ({ count: 0 }),
   };
 
@@ -109,21 +126,22 @@ class FakeTransaction {
 
     this.workTimeReport.count = async ({ where }: any) => {
       this.ensureSnapshot();
-      return this.reports!.filter((report) => matchesReportWhere(report, where)).length;
+      return this.reports!.filter((report) => matchesReportWhere(report, where, this.owner.orders)).length;
     };
 
     this.workTimeReport.findFirst = async ({ where }: any) => {
       this.ensureSnapshot();
       const reports = this.reports!
-        .filter((report) => matchesReportWhere(report, where))
+        .filter((report) => matchesReportWhere(report, where, this.owner.orders))
         .sort((left, right) => right.date.getTime() - left.date.getTime());
       return reports[0] ? { date: reports[0].date } : null;
     };
 
-    this.workTimeReport.findMany = async ({ where }: any) => {
+    this.workTimeReport.findMany = async ({ where, take }: any) => {
       this.ensureSnapshot();
-      return this.reports!
-        .filter((report) => matchesReportWhere(report, where))
+      this.owner.lastSourceTake = take;
+      const reports = this.reports!
+        .filter((report) => matchesReportWhere(report, where, this.owner.orders))
         .sort((left, right) => {
           const createdDifference = left.createdAt.getTime() - right.createdAt.getTime();
           return createdDifference || left.id.localeCompare(right.id);
@@ -134,6 +152,26 @@ class FakeTransaction {
           hours: report.hours,
           workTimeTypeCode: report.workTimeTypeCode,
         }));
+      return typeof take === 'number' ? reports.slice(0, take) : reports;
+    };
+
+    this.workTimeReport.create = async ({ data }: any) => {
+      this.ensureSnapshot();
+      await this.owner.waitBeforeSingleCreate();
+      const report: FakeReport = {
+        id: randomUUID(),
+        ...data,
+        createdAt: new Date(),
+        deletedAt: null,
+      };
+      this.reports!.push(report);
+      return {
+        ...report,
+        order: report.orderId
+          ? this.owner.orders.find((order) => order.id === report.orderId) || null
+          : null,
+        workTimeType: { code: report.workTimeTypeCode, name: 'Godziny standardowe' },
+      };
     };
 
     this.workTimeReport.createMany = async ({ data }: any) => {
@@ -175,13 +213,58 @@ class FakeTransaction {
 class FakePrismaClient {
   users: FakeUser[] = [];
   employees: FakeEmployee[] = [];
+  orders: FakeOrder[] = [];
   reports: FakeReport[] = [];
   auditLogs: FakeAuditLog[] = [];
   failAudit = false;
+  lastSourceTake: number | undefined;
   private lockTails = new Map<string, Promise<void>>();
+  private singleCreatePause: { signal: () => void; wait: Promise<void> } | null = null;
 
   user = {
     findUnique: async ({ where }: any) => this.users.find((user) => user.id === where.id) || null,
+  };
+
+  employee = {
+    findUnique: async ({ where }: any) =>
+      this.employees.find(
+        (employee) =>
+          employee.id === where.id &&
+          (where.deletedAt !== null || employee.deletedAt === null),
+      ) || null,
+  };
+
+  workTimeType = {
+    findUnique: async ({ where }: any) =>
+      where.code === 'G'
+        ? { code: 'G', name: 'Godziny standardowe', requiresOrder: false }
+        : null,
+  };
+
+  order = {
+    findUnique: async ({ where }: any) =>
+      this.orders.find(
+        (order) => order.id === where.id && (where.deletedAt !== null || order.deletedAt === null),
+      ) || null,
+  };
+
+  workTimeReport = {
+    findMany: async ({ where }: any) =>
+      this.reports
+        .filter((report) => matchesReportWhere(report, where, this.orders))
+        .map((report) => ({
+          hours: report.hours,
+          workTimeTypeCode: report.workTimeTypeCode,
+        })),
+  };
+
+  auditLog = {
+    create: async ({ data }: any) => {
+      if (this.failAudit) throw new Error('Simulated audit failure');
+      const entry = { id: randomUUID(), data };
+      this.auditLogs.push(entry);
+      return entry;
+    },
   };
 
   reset() {
@@ -194,10 +277,19 @@ class FakePrismaClient {
       { id: EMPLOYEE_A_ID, isActive: true, deletedAt: null },
       { id: EMPLOYEE_B_ID, isActive: true, deletedAt: null },
     ];
+    this.orders = [];
     this.reports = [];
     this.auditLogs = [];
     this.failAudit = false;
+    this.lastSourceTake = undefined;
     this.lockTails.clear();
+    this.singleCreatePause = null;
+  }
+
+  seedOrder(deletedAt: Date | null = null) {
+    const order = { id: randomUUID(), deletedAt };
+    this.orders.push(order);
+    return order.id;
   }
 
   seedReport(params: {
@@ -228,6 +320,27 @@ class FakePrismaClient {
         sameDate(report.date, targetDate) &&
         report.deletedAt === null,
     );
+  }
+
+  pauseNextSingleCreate() {
+    let signal!: () => void;
+    let release!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      signal = resolve;
+    });
+    const wait = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.singleCreatePause = { signal, wait };
+    return { entered, release };
+  }
+
+  async waitBeforeSingleCreate() {
+    const pause = this.singleCreatePause;
+    if (!pause) return;
+    this.singleCreatePause = null;
+    pause.signal();
+    await pause.wait;
   }
 
   async acquireLock(key: string) {
@@ -276,6 +389,18 @@ function copyRequest(userId = LEADER_ID, employeeId = EMPLOYEE_A_ID, date = '202
     .post('/api/reports/copy-last-day')
     .set('Authorization', `Bearer ${tokenFor(userId)}`)
     .send({ employeeId, date });
+}
+
+function createReportRequest(employeeId = EMPLOYEE_A_ID, date = '2026-07-16') {
+  return request(app)
+    .post('/api/reports')
+    .set('Authorization', `Bearer ${tokenFor(LEADER_ID)}`)
+    .send({
+      employeeId,
+      date,
+      hours: 8,
+      workTimeTypeCode: 'G',
+    });
 }
 
 beforeAll(async () => {
@@ -335,6 +460,23 @@ describe('POST /api/reports/copy-last-day', () => {
     expect(fakePrisma.activeReports(EMPLOYEE_A_ID, '2026-07-16')[0].hours).toBe(4);
   });
 
+  it('does not fall back when the newest source day only contains a deleted order', async () => {
+    const deletedOrderId = fakePrisma.seedOrder(new Date());
+    fakePrisma.seedReport({ employeeId: EMPLOYEE_A_ID, date: '2026-07-14', hours: 2 });
+    fakePrisma.seedReport({
+      employeeId: EMPLOYEE_A_ID,
+      date: '2026-07-15',
+      hours: 4,
+      orderId: deletedOrderId,
+    });
+
+    const response = await copyRequest().expect(404);
+
+    expect(response.body.code).toBe('SOURCE_DAY_NOT_FOUND');
+    expect(fakePrisma.activeReports(EMPLOYEE_A_ID, '2026-07-16')).toHaveLength(0);
+    expect(fakePrisma.activeReports(EMPLOYEE_A_ID, '2026-07-14')).toHaveLength(1);
+  });
+
   it('returns 404 when no source day exists', async () => {
     const response = await copyRequest().expect(404);
 
@@ -389,6 +531,23 @@ describe('POST /api/reports/copy-last-day', () => {
     expect(fakePrisma.auditLogs).toHaveLength(1);
   });
 
+  it('serializes a regular report insert before copy-last-day for the same employee and date', async () => {
+    fakePrisma.seedReport({ employeeId: EMPLOYEE_A_ID, date: '2026-07-15', hours: 4 });
+    const pause = fakePrisma.pauseNextSingleCreate();
+    const regularRequest = createReportRequest().then((response) => response);
+
+    await pause.entered;
+    const copy = copyRequest().then((response) => response);
+    pause.release();
+
+    const [regularResponse, copyResponse] = await Promise.all([regularRequest, copy]);
+
+    expect(regularResponse.status).toBe(201);
+    expect(copyResponse.status).toBe(409);
+    expect(copyResponse.body.code).toBe('TARGET_DAY_NOT_EMPTY');
+    expect(fakePrisma.activeReports(EMPLOYEE_A_ID, '2026-07-16')).toHaveLength(1);
+  });
+
   it('allows only one of 20 parallel requests to create data', async () => {
     fakePrisma.seedReport({ employeeId: EMPLOYEE_A_ID, date: '2026-07-15', hours: 3 });
     fakePrisma.seedReport({ employeeId: EMPLOYEE_A_ID, date: '2026-07-15', hours: 5 });
@@ -419,6 +578,7 @@ describe('POST /api/reports/copy-last-day', () => {
     const response = await copyRequest().expect(422);
 
     expect(response.body.code).toBe('SOURCE_LIMIT_EXCEEDED');
+    expect(fakePrisma.lastSourceTake).toBe(101);
     expect(fakePrisma.activeReports(EMPLOYEE_A_ID, '2026-07-16')).toHaveLength(0);
   });
 

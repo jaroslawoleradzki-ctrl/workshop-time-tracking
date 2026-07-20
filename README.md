@@ -301,5 +301,5 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 ## Status projektu
 
 * **Aktualna wersja**: `0.2.9`
-* **Aktywna gałąź robocza**: `fix/0.2.9-copy-last-day`
+* **Docelowa gałąź integracyjna**: `development`
 * **Status prac**: Aktywny rozwój (Active development)

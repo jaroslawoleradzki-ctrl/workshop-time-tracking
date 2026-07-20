@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { Prisma } from '@prisma/client';
 import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
 import { AuthRequest, authenticateJWT, requireRole } from '../middlewares/auth';
@@ -8,6 +9,7 @@ import {
   CopyLastDayError,
   copyLastDayForEmployee,
   copyLastDayRequestSchema,
+  getReportDayLockKey,
 } from '../services/copy-last-day';
 
 const router = Router();
@@ -154,6 +156,13 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     return res.status(400).json({ message: 'Liczba godzin musi być większa od zera' });
   }
 
+  const parsedDate = new Date(date);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return res.status(400).json({ message: 'Nieprawidłowa data wpisu' });
+  }
+  const workDate = parsedDate.toISOString().slice(0, 10);
+  const reportDate = new Date(`${workDate}T00:00:00.000Z`);
+
   try {
     // 1. Validate employee
     const employee = await prisma.employee.findUnique({
@@ -187,26 +196,39 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     // Calculate warnings
     const warnings = await checkLimits({
       employeeId,
-      dateStr: date,
+      dateStr: workDate,
       hours: hoursNum,
       code: workTimeTypeCode,
     });
 
-    // 4. Create the report
-    const report = await prisma.workTimeReport.create({
-      data: {
-        date: new Date(date),
-        employeeId,
-        orderId: type.requiresOrder ? orderId : null,
-        hours: hoursNum,
-        workTimeTypeCode,
-        createdByUserId: req.user!.id,
+    // 4. Serialize the insert with copy-last-day for this employee and date.
+    // The lock is held by PostgreSQL until the insert transaction commits.
+    const report = await prisma.$transaction(
+      async (tx) => {
+        const lockKey = getReportDayLockKey(employeeId, workDate);
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+
+        return tx.workTimeReport.create({
+          data: {
+            date: reportDate,
+            employeeId,
+            orderId: type.requiresOrder ? orderId : null,
+            hours: hoursNum,
+            workTimeTypeCode,
+            createdByUserId: req.user!.id,
+          },
+          include: {
+            order: true,
+            workTimeType: true,
+          },
+        });
       },
-      include: {
-        order: true,
-        workTimeType: true,
+      {
+        maxWait: 10_000,
+        timeout: 30_000,
+        isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
       },
-    });
+    );
 
     // 5. Log audit
     await logChange({

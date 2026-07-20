@@ -5,10 +5,10 @@
 - Projekt: Workshop Time Tracking
 - Aktualna wersja: `0.2.9`
 - Gałąź robocza: `fix/0.2.9-copy-last-day`
-- Ostatni przygotowany pakiet: krytyczna poprawka kopiowania ostatniego dnia, oczekująca na przegląd i akceptację
-- Commit bazowy: `ab0e3ce` (`docs: add project session workflow and status tracking`); poprawka 0.2.9 nie została jeszcze zatwierdzona
+- Ostatni zatwierdzony commit: `c3c696c` (`fix(reports): secure copy-last-day operation in 0.2.9`)
+- Stan zmian po code review: lokalne, niezatwierdzone i niewysłane do `origin`
 
-Gałąź `fix/0.2.9-copy-last-day` zawiera niezatwierdzoną poprawkę, która kopiuje wyłącznie ostatni aktywny dzień wybranego pracownika, odrzuca niepusty cel i serializuje równoległe żądania w PostgreSQL. Nie wykonano wdrożenia, migracji danych, commita, push ani merge.
+Gałąź `fix/0.2.9-copy-last-day` zawiera zatwierdzony hotfix oraz lokalne poprawki po code review. Data źródłowa jest wybierana niezależnie od stanu powiązanego zlecenia, a wpisy usuniętych zleceń są pomijane dopiero przy pobieraniu wybranego dnia. Zapytanie źródłowe pobiera maksymalnie 101 rekordów, aby wykryć przekroczenie limitu 100. Kopiowanie i zwykły zapis `POST /api/reports` używają wspólnej blokady PostgreSQL dla pary pracownik–data. Nie wykonano wdrożenia, migracji danych ani merge; lokalnych poprawek po code review nie zatwierdzono i nie wysłano.
 
 ## Dokumentacja projektu
 
@@ -30,7 +30,7 @@ Indeks dokumentów znajduje się w `README.md`.
 
 Przed przekazaniem do przeglądu wykonano:
 
-- backend: 22 testy zakończone powodzeniem, w tym 17 scenariuszy kopiowania,
+- backend: 24 testy zakończone powodzeniem, w tym 19 scenariuszy kopiowania,
 - backend: typecheck zakończony powodzeniem,
 - backend: build zakończony powodzeniem,
 - frontend: 8 testów zakończonych powodzeniem, w tym 5 scenariuszy kopiowania,

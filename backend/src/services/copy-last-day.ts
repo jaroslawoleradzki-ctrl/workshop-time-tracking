@@ -6,6 +6,12 @@ import { logChange } from '../utils/audit';
 
 export const MAX_COPY_SOURCE_REPORTS = 100;
 
+export function getReportDayLockKey(employeeId: string, workDate: string) {
+  // Keep this prefix stable so copy and regular report writes coordinate on
+  // the same PostgreSQL advisory lock, including during a rolling update.
+  return `copy-last-day:${employeeId}:${workDate}`;
+}
+
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 function isValidIsoDate(value: string) {
@@ -66,7 +72,7 @@ export async function copyLastDayForEmployee({
   client = prisma,
 }: CopyLastDayParams): Promise<CopyLastDayResult> {
   const targetDateValue = new Date(`${targetDate}T00:00:00.000Z`);
-  const lockKey = `copy-last-day:${employeeId}:${targetDate}`;
+  const lockKey = getReportDayLockKey(employeeId, targetDate);
   const operationId = randomUUID();
 
   // Version 0.2.9 intentionally preserves the existing policy that allows
@@ -120,7 +126,6 @@ export async function copyLastDayForEmployee({
           employeeId,
           deletedAt: null,
           date: { lt: targetDateValue },
-          ...eligibleOrderFilter,
         },
         orderBy: { date: 'desc' },
         select: { date: true },
@@ -148,6 +153,7 @@ export async function copyLastDayForEmployee({
           workTimeTypeCode: true,
         },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: MAX_COPY_SOURCE_REPORTS + 1,
       });
 
       if (sourceReports.length === 0) {
