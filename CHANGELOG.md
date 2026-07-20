@@ -8,6 +8,7 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 - Rozbudowano strukturę dokumentacji o reguły biznesowe, specyfikację importów i eksportów, konfigurację, testowanie, runbook operacyjny oraz instrukcję użytkownika; uzupełniono także architekturę i indeks dokumentacji.
 - Dodano `PROJECT_STATUS.md` oraz obowiązkową procedurę rozpoczęcia sesji i przekazania pracy między ChatGPT i Codexem w `docs/session-start.md`; powiązano procedurę z zasadami w `AGENTS.md`.
+- Dodano read-only skrypt `reports:analyze-duplicates` do analizy historycznych duplikatów `work_time_reports`, z konserwatywną klasyfikacją `HIGH`/`MEDIUM`/`LOW`, raportami JSON/CSV i testami jednostkowymi.
 
 ## [0.2.9] (Development) - 2026-07-20
 

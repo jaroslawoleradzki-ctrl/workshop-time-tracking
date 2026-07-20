@@ -2,7 +2,7 @@
 
 ## Testy istniejące
 
-Backend używa Vitest i Supertest. `backend/tests/version.test.ts` sprawdza `/api/version`; `integration.test.ts` sprawdza health check (200 lub 503), odrzucenie błędnego logowania oraz ochronę tras bez tokenu. `copy-last-day.test.ts` sprawdza kontrakt i walidację kopiowania, wybór pracownika i źródła, soft delete, limit, role, rollback audytu oraz serializację 2 i 20 równoległych żądań na deterministycznym modelu transakcji.
+Backend używa Vitest i Supertest. `backend/tests/version.test.ts` sprawdza `/api/version`; `integration.test.ts` sprawdza health check (200 lub 503), odrzucenie błędnego logowania oraz ochronę tras bez tokenu. `copy-last-day.test.ts` sprawdza kontrakt i walidację kopiowania, wybór pracownika i źródła, soft delete, limit, role, rollback audytu oraz serializację 2 i 20 równoległych żądań na deterministycznym modelu transakcji. `duplicate-report-classifier.test.ts` sprawdza konserwatywną klasyfikację duplikatów, prawidłowe kopiowanie, równoległe partie, lawinowe powielanie, typy bez zlecenia i rozróżnianie godzin.
 
 Frontend używa Vitest, Happy DOM i React Testing Library. `frontend/src/test/App.test.tsx` sprawdza renderowanie logowania oraz pobranie i błąd pobrania wersji. `ReportingPanel.test.tsx` sprawdza `employeeId`, blokadę przycisku, wieloklik/klawiaturę, odblokowanie po błędzie i komunikat `409`. `frontend/src/test/setup.ts` zapewnia asercje DOM i pamięci webowe.
 
@@ -11,6 +11,8 @@ Frontend używa Vitest, Happy DOM i React Testing Library. `frontend/src/test/Ap
 | Obszar | Polecenie |
 |---|---|
 | Test backendu | `cd backend && npm test` |
+| Test klasyfikatora duplikatów | `cd backend && npm test -- tests/duplicate-report-classifier.test.ts` |
+| Typecheck skryptów diagnostycznych | `cd backend && npm exec tsc -- --project tsconfig.scripts.json` |
 | Build backendu | `cd backend && npm run build` |
 | Test frontendu | `cd frontend && npm test` |
 | Lint frontendu | `cd frontend && npm run lint` |

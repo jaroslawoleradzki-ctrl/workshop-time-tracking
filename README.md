@@ -284,6 +284,7 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 * [Architektura](docs/architecture.md) – komponenty, model danych i przepływy.
 * [Konfiguracja](docs/configuration.md) – zmienne środowiskowe i różnice środowisk.
 * [Testowanie](docs/testing.md) – istniejące testy, polecenia i checklista regresji.
+* [Analiza historycznych duplikatów](docs/duplicate-report-analysis.md) – read-only diagnostyka `work_time_reports`, poziomy pewności i raporty JSON/CSV.
 * [Zasady współpracy](AGENTS.md) – standardy dla deweloperów i agentów AI.
 
 ### Wdrożenie i utrzymanie

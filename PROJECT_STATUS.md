@@ -4,12 +4,12 @@
 
 - Projekt: Workshop Time Tracking
 - Aktualna wersja: `0.2.9`
-- Gałąź robocza: `development`
-- Ostatni zatwierdzony commit: `381e2a3` (Merge hotfix `fix/0.2.9-copy-last-day` into `development`)
-- Stan zmian: Scalone do `development`, wypchnięte do GitHub oraz mirrora HomeLab. Working tree jest czysty.
-- Stan wdrożenia: Deployment na serwer klienta nie został jeszcze wykonany. Gałąź hotfixa `fix/0.2.9-copy-last-day` może zostać usunięta.
+- Gałąź robocza: `fix/duplicate-reports-cleanup`
+- Ostatni zatwierdzony commit: `c949b9d` (`docs: update project status after 0.2.9 merge`)
+- Stan zmian: lokalne, niezatwierdzone narzędzie read-only do analizy historycznych duplikatów; zmiany nie zostały wypchnięte ani scalone.
+- Stan wdrożenia: narzędzie diagnostyczne nie zostało wdrożone ani uruchomione na produkcyjnej bazie.
 
-Gałąź `development` zawiera w pełni zweryfikowaną poprawkę krytyczną operacji kopiowania ostatniego dnia ("Copy last day") wraz ze wszystkimi testami integracyjnymi. Zmiany zostały pomyślnie zintegrowane i przetestowane.
+Gałąź `development` zawiera zweryfikowaną poprawkę krytyczną operacji kopiowania ostatniego dnia. Bieżąca gałąź dodaje wyłącznie diagnostykę poza kodem produkcyjnym: klasyfikator, CLI wymuszający transakcję PostgreSQL `READ ONLY`, eksport JSON/CSV, testy jednostkowe i dokumentację. Skrypt nie wykonuje `INSERT`, `UPDATE` ani `DELETE`.
 
 ## Dokumentacja projektu
 
@@ -41,6 +41,16 @@ Przed przekazaniem do przeglądu wykonano:
 - `git diff --check` zakończony bez błędów.
 
 Lint frontendu nie uruchomił się, ponieważ istniejący skrypt odwołuje się do `eslint`, którego nie ma w zależnościach projektu. Nie rozszerzano zależności w ramach poprawki krytycznej.
+
+## Weryfikacja analizatora duplikatów
+
+- 7 testów jednostkowych klasyfikatora zakończonych powodzeniem,
+- pełny backend: 31 testów zakończonych powodzeniem,
+- typecheck skryptów diagnostycznych zakończony powodzeniem,
+- backend i frontend: build zakończony powodzeniem,
+- frontend: 8 testów zakończonych powodzeniem,
+- punkt wejścia `reports:analyze-duplicates -- --help` zakończony powodzeniem bez połączenia z bazą,
+- analizator nie został uruchomiony z zakresem dat ani przeciwko produkcyjnej bazie.
 
 ## Znane ustalenia wymagające uwagi
 

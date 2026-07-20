@@ -17,6 +17,9 @@ cache/
 logs/
 *.log
 
+# Read-only diagnostic reports (may contain production data)
+backend/reports/
+
 # Build output
 frontend/dist/
 
