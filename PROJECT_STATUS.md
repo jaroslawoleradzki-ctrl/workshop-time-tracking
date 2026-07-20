@@ -4,11 +4,12 @@
 
 - Projekt: Workshop Time Tracking
 - Aktualna wersja: `0.2.9`
-- Gałąź robocza: `fix/0.2.9-copy-last-day`
-- Ostatni zatwierdzony commit: `c3c696c` (`fix(reports): secure copy-last-day operation in 0.2.9`)
-- Stan zmian po code review: lokalne, niezatwierdzone i niewysłane do `origin`
+- Gałąź robocza: `development`
+- Ostatni zatwierdzony commit: `381e2a3` (Merge hotfix `fix/0.2.9-copy-last-day` into `development`)
+- Stan zmian: Scalone do `development`, wypchnięte do GitHub oraz mirrora HomeLab. Working tree jest czysty.
+- Stan wdrożenia: Deployment na serwer klienta nie został jeszcze wykonany. Gałąź hotfixa `fix/0.2.9-copy-last-day` może zostać usunięta.
 
-Gałąź `fix/0.2.9-copy-last-day` zawiera zatwierdzony hotfix oraz lokalne poprawki po code review. Data źródłowa jest wybierana niezależnie od stanu powiązanego zlecenia, a wpisy usuniętych zleceń są pomijane dopiero przy pobieraniu wybranego dnia. Zapytanie źródłowe pobiera maksymalnie 101 rekordów, aby wykryć przekroczenie limitu 100. Kopiowanie i zwykły zapis `POST /api/reports` używają wspólnej blokady PostgreSQL dla pary pracownik–data. Nie wykonano wdrożenia, migracji danych ani merge; lokalnych poprawek po code review nie zatwierdzono i nie wysłano.
+Gałąź `development` zawiera w pełni zweryfikowaną poprawkę krytyczną operacji kopiowania ostatniego dnia ("Copy last day") wraz ze wszystkimi testami integracyjnymi. Zmiany zostały pomyślnie zintegrowane i przetestowane.
 
 ## Dokumentacja projektu
 
