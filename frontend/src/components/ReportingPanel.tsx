@@ -12,7 +12,7 @@ import {
   Clock,
   Calendar
 } from 'lucide-react';
-import { UserSession } from '../App';
+import type { UserSession } from '../App';
 
 interface Employee {
   id: string;
@@ -134,6 +134,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
   const [warningData, setWarningData] = useState<WarningResponse | null>(null);
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [validationError, setValidationError] = useState('');
+  const [isCopyingPreviousDay, setIsCopyingPreviousDay] = useState(false);
 
   // Refs for Keyboard Navigation Focus
   const orderInputRef = useRef<HTMLInputElement>(null);
@@ -141,6 +142,16 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
   const saveBtnRef = useRef<HTMLButtonElement>(null);
   const autocompleteContainerRef = useRef<HTMLDivElement>(null);
   const employeeDropdownRef = useRef<HTMLDivElement>(null);
+  const copyPreviousDayInFlightRef = useRef(false);
+  const currentSelectionRef = useRef<{ employeeId: string | null; date: string }>({
+    employeeId: null,
+    date: currentDate,
+  });
+
+  currentSelectionRef.current = {
+    employeeId: currentEmployee?.id || null,
+    date: currentDate,
+  };
 
   // 1. Initial Load: Dictionaries
   useEffect(() => {
@@ -537,6 +548,20 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
 
   // Copy Previous Day handler
   const handleCopyPreviousDay = async () => {
+    if (copyPreviousDayInFlightRef.current) return;
+
+    if (!currentEmployee) {
+      setValidationError('Wybierz pracownika przed skopiowaniem ostatniego dnia.');
+      return;
+    }
+
+    copyPreviousDayInFlightRef.current = true;
+    setIsCopyingPreviousDay(true);
+    setValidationError('');
+
+    const employeeId = currentEmployee.id;
+    const targetDate = currentDate;
+
     try {
       const res = await fetch('/api/reports/copy-last-day', {
         method: 'POST',
@@ -544,19 +569,34 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ date: currentDate })
+        body: JSON.stringify({
+          employeeId,
+          date: targetDate,
+        })
       });
 
       const data = await res.json();
+
+      if (res.status === 409) {
+        setValidationError('Dzień docelowy zawiera już wpisy tego pracownika. Kopiowanie nie zostało wykonane.');
+        return;
+      }
 
       if (!res.ok) {
         throw new Error(data.message || 'Błąd kopiowania');
       }
 
-      notifySuccess(`Pomyślnie skopiowano wpisy z dnia ${data.copiedFromDate}`);
-      fetchDayEntries(currentEmployee.id, currentDate);
+      notifySuccess(`Skopiowano ${data.createdCount} wpisów z dnia ${data.sourceDate}.`);
+
+      const currentSelection = currentSelectionRef.current;
+      if (currentSelection.employeeId) {
+        await fetchDayEntries(currentSelection.employeeId, currentSelection.date);
+      }
     } catch (err: any) {
-      alert(err.message || 'Wystąpił błąd podczas kopiowania poprzedniego dnia.');
+      setValidationError(err.message || 'Wystąpił błąd podczas kopiowania poprzedniego dnia.');
+    } finally {
+      copyPreviousDayInFlightRef.current = false;
+      setIsCopyingPreviousDay(false);
     }
   };
 
@@ -871,12 +911,15 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
             </h3>
             
             <button 
+              type="button"
               className="btn btn-secondary btn-sm" 
               onClick={handleCopyPreviousDay}
-              title="Kopiuj z ostatniego dnia, w którym są zaraportowane godziny"
+              disabled={isCopyingPreviousDay}
+              aria-busy={isCopyingPreviousDay}
+              title={isCopyingPreviousDay ? 'Kopiowanie wpisów w toku' : 'Kopiuj z ostatniego dnia, w którym są zaraportowane godziny'}
             >
               <Copy size={14} />
-              Kopiuj ostatni dzień
+              {isCopyingPreviousDay ? 'Kopiowanie...' : 'Kopiuj ostatni dzień'}
             </button>
           </div>
 

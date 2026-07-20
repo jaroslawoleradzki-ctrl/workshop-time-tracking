@@ -1,6 +1,6 @@
 # Reguły biznesowe
 
-Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.2.8.
+Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.2.9.
 
 ## Role i dostęp
 
@@ -31,13 +31,30 @@ Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.2.8.
 
 ## Kopiowanie poprzedniego dnia
 
-- Operacja znajduje najnowszą datę wcześniejszą od daty docelowej, dla której istnieje jakikolwiek nieusunięty wpis w bazie, a następnie kopiuje wpisy z tej daty dla wszystkich pracowników.
-- Nie jest to wyłącznie poprzedni dzień roboczy wybranego pracownika. Interfejs wysyła tylko datę, bez identyfikatora pracownika.
-- Pomijane są wpisy pracowników usuniętych/nieaktywnych, zleceń usuniętych oraz nieistniejących typów czasu. Status i aktywność zlecenia nie są sprawdzane.
-- Godziny i powiązania są kopiowane bez sprawdzenia ostrzeżeń i bez wykrywania duplikatów dnia docelowego.
+- Operację mogą uruchomić role `admin` i `leader`. Interfejs wysyła identyfikator aktualnie wybranego pracownika oraz datę docelową.
+- Źródłem jest najnowsza data wcześniejsza od docelowej, na której ten pracownik ma co najmniej jeden aktywny wpis. Wpisy usunięte logicznie oraz wpisy powiązane z usuniętym zleceniem nie są kopiowane.
+- Pracownik musi istnieć, być aktywny i nieusunięty. Kopiowane są godziny, rodzaj czasu i opcjonalne zlecenie wyłącznie jego wpisów.
+- Jeżeli dzień docelowy zawiera już aktywny wpis tego pracownika, cała operacja jest odrzucana odpowiedzią `409 Conflict`; nie ma trybu dopisywania, scalania ani nadpisywania.
+- Maksymalny rozmiar źródła wynosi 100 aktywnych wpisów. Przekroczenie limitu kończy operację bez utworzenia danych.
+- Blokada transakcyjna PostgreSQL dla pary `(employeeId, targetDate)` oraz ponowne sprawdzenie dnia po jej uzyskaniu chronią również przed równoległymi żądaniami z wielu kart, użytkowników i instancji API.
+- Ustalenie źródła, utworzenie całego kompletu i jeden audyt operacji są objęte tą samą transakcją. Błąd dowolnego etapu wycofuje wszystkie nowe wpisy.
+- Wersja 0.2.9 zachowuje dotychczasowe dopuszczenie prawidłowych przyszłych dat. Docelowa polityka raportowania przyszłości pozostaje **do potwierdzenia**.
+
+### Kontrakt `POST /api/reports/copy-last-day`
+
+Żądanie:
+
+```json
+{
+  "employeeId": "20000000-0000-4000-8000-000000000001",
+  "date": "2026-07-20"
+}
+```
+
+Odpowiedź sukcesu (`201`) zawiera co najmniej `employeeId`, `sourceDate`, `targetDate` i `createdCount`. Nieprawidłowe dane zwracają `400`, niedostępny pracownik lub brak źródła `404`, niepusty cel `409`, a przekroczenie limitu `422`.
 
 ## Audyt i daty
 
-- `AuditLog` zapisuje `CREATE`, `UPDATE` i `DELETE` wraz z użytkownikiem oraz starymi/nowymi wartościami dla pracowników, zleceń i wpisów czasu. Importy również audytują tworzenie i aktualizację pracowników/zleceń.
+- `AuditLog` zapisuje `CREATE`, `UPDATE` i `DELETE` wraz z użytkownikiem oraz starymi/nowymi wartościami dla pracowników, zleceń i wpisów czasu. Kopiowanie zapisuje jeden atomowy audyt całej operacji z identyfikatorem żądania, datami i licznikami. Importy również audytują tworzenie i aktualizację pracowników/zleceń.
 - Zmiany użytkowników i rodzajów czasu nie są rejestrowane w `AuditLog`.
 - Data raportu jest kolumną PostgreSQL `date`. API tworzy daty przez `new Date(...)`, a odpowiedzi formatuje przez UTC (`toISOString().split('T')[0]`). Przycisk „Dzisiaj” koryguje offset lokalny przeglądarki; początkowa data formularza używa bezpośrednio UTC. Jednolita biznesowa strefa czasowa nie jest skonfigurowana — **do potwierdzenia**.
