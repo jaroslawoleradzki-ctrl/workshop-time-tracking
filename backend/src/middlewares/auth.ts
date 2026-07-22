@@ -1,8 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import * as jwt from 'jsonwebtoken';
 import prisma from '../utils/prisma';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'a_very_secure_and_long_jwt_secret_key_for_workshop_time_reporting';
+import { JWT_SECRET } from '../config';
 
 export interface AuthRequest extends Request {
   user?: {

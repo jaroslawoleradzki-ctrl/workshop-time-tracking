@@ -1,27 +1,56 @@
 # Konfiguracja
 
-## Zmienne środowiskowe
-
-| Nazwa | Wymagana | Domyślna w kodzie | Środowisko | Przeznaczenie | Bezpieczny przykład |
-|---|---:|---|---|---|---|
-| `DATABASE_URL` | tak | brak | backend, Prisma | połączenie PostgreSQL | `postgresql://app_user:CHANGE_ME@localhost:5432/time_reporting?schema=public` |
-| `JWT_SECRET` | produkcja: tak | wbudowana wartość deweloperska | backend | podpis JWT | losowy ciąg co najmniej 32 bajtów, np. wynik menedżera sekretów |
-| `PORT` | nie | `5000` | backend | port nasłuchu API | `5000` |
-| `APP_VERSION` | nie | wersja z `backend/package.json` | backend/Docker | odpowiedź `/api/version` | `0.2.9` |
-| `NODE_ENV` | nie | `development` w endpointzie wersji | backend | format logów i opis środowiska | `production` |
-
-Nie znaleziono zmiennych środowiskowych frontendu (`VITE_*`); frontend korzysta ze względnych ścieżek `/api`.
-
-## Development lokalny
-
-Skopiuj `backend/.env.example` do `backend/.env`, ustaw własne dane PostgreSQL i unikalny sekret, następnie użyj poleceń z [README](../README.md). Przykładowy plik ma `PORT=5001`, podczas gdy kod domyślnie używa 5000 — port lokalny zależy więc od `.env`.
+Konfiguracja produkcyjna i konfiguracja lokalnego backendu są celowo rozdzielone. Docker Compose czyta wyłącznie plik `.env` z katalogu głównego, natomiast backend uruchamiany poza Dockerem może używać `backend/.env`. Oba pliki są ignorowane przez Git; repozytorium zawiera tylko bezpieczne przykłady.
 
 ## Docker Compose
 
-`docker-compose.yml` uruchamia PostgreSQL, backend i Nginx. Obecnie zawiera jawne przykładowe hasło bazy oraz sekret JWT. Przed użyciem poza izolowanym developmentem należy zastąpić je wartościami dostarczanymi spoza repozytorium. Nginx wystawia port 80, API 5000, a PostgreSQL 5432.
+Przed pierwszym uruchomieniem:
 
-## Produkcja i sekrety
+```bash
+cp .env.example .env
+chmod 600 .env
+```
 
-Procedurę wdrożenia opisuje [deployment.md](deployment.md). Produkcja powinna ustawić silny, stabilny `JWT_SECRET`, produkcyjny `DATABASE_URL`, `NODE_ENV=production` oraz właściwy `APP_VERSION`. Sekretów, tokenów, haseł i danych klienta nie należy commitować, logować ani umieszczać w dokumentacji; należy je przechowywać w pliku o ograniczonych prawach poza repozytorium albo w menedżerze sekretów i rotować po ujawnieniu.
+Uzupełnij wszystkie wymagane wartości. Dla sekretów używaj znaków bezpiecznych w URL, np. wyniku `openssl rand -hex 32`, ponieważ dane PostgreSQL są składane w `DATABASE_URL`.
 
-Frontend jest statycznym buildem i nie odczytuje powyższych zmiennych w przeglądarce. Backend ładuje `.env` przez `dotenv`; Prisma wymaga `DATABASE_URL` także podczas generowania/migracji.
+| Nazwa | Wymagana | Domyślna | Przeznaczenie |
+|---|---:|---|---|
+| `WTT_POSTGRES_USER` | tak | brak | użytkownik PostgreSQL i składnik `DATABASE_URL` |
+| `WTT_POSTGRES_PASSWORD` | tak | brak | hasło PostgreSQL i składnik `DATABASE_URL` |
+| `WTT_POSTGRES_DB` | tak | brak | nazwa bazy i składnik `DATABASE_URL` |
+| `WTT_JWT_SECRET` | tak | brak | podpisywanie i weryfikowanie JWT |
+| `WTT_POSTGRES_VOLUME` | tak | brak | dokładna nazwa zewnętrznego wolumenu danych |
+| `WTT_HTTP_PORT` | nie | `80` | port Nginx publikowany na hoście |
+| `WTT_BACKEND_HOST_PORT` | nie | `5000` | port API publikowany na hoście |
+| `WTT_POSTGRES_HOST_PORT` | nie | `5432` | port PostgreSQL publikowany na hoście |
+| `WTT_LOG_LEVEL` | nie | `info` | poziom logowania backendu |
+
+Brak wymaganej wartości zatrzymuje `docker compose config` i `docker compose up` z komunikatem wskazującym jej nazwę. `APP_VERSION` pozostaje śledzoną, literalną wartością wydania w `docker-compose.yml`, a `NODE_ENV=production` jest ustawiane wyłącznie w finalnym etapie `backend/Dockerfile`.
+
+### Istniejący wolumen PostgreSQL
+
+`WTT_POSTGRES_VOLUME` musi wskazywać dokładną nazwę wolumenu zawierającego dane. Zmiana tej wartości może podłączyć pusty lub inny wolumen. Ustawienie nowych wartości `WTT_POSTGRES_USER`, `WTT_POSTGRES_PASSWORD` lub `WTT_POSTGRES_DB` nie zmienia danych dostępowych zapisanych w już zainicjalizowanym PostgreSQL; przy migracji istniejącej instalacji należy zachować dotychczasowe wartości. Rotacja danych dostępowych jest osobną operacją bazodanową.
+
+Zmiana `WTT_JWT_SECRET` natychmiast unieważnia istniejące sesje i wymaga ponownego logowania użytkowników.
+
+## Development lokalny
+
+Backend uruchamiany bez Compose ładuje `backend/.env` przez `dotenv`:
+
+```bash
+cp backend/.env.example backend/.env
+chmod 600 backend/.env
+```
+
+| Nazwa | Wymagana | Domyślna w kodzie | Przeznaczenie |
+|---|---:|---|---|
+| `DATABASE_URL` | tak | brak | bezpośrednie połączenie Prisma z PostgreSQL |
+| `JWT_SECRET` | tak | brak | podpis JWT; backend nie ma sekretu awaryjnego |
+| `PORT` | nie | `5000` | port lokalnego API |
+| `LOG_LEVEL` | nie | zależna od środowiska | poziom logowania |
+
+Plik `backend/.env` nie jest używany przez Docker Compose. Analogicznie, rootowy `.env` nie jest automatycznie ładowany przez backend uruchomiony bez Compose. Frontend nie wymaga zmiennych `VITE_*`; używa względnych ścieżek `/api`.
+
+## Bezpieczeństwo i kopie
+
+Nie commituj, nie wklejaj do zgłoszeń ani nie pokazuj w logach zawartości `.env`, tokenów lub pełnego `DATABASE_URL`. Przechowuj szyfrowaną kopię produkcyjnego `.env` poza repozytorium i ogranicz uprawnienia pliku do właściciela (`chmod 600 .env`). Szczegółowa procedura znajduje się w [deployment.md](deployment.md).

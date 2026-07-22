@@ -3,8 +3,8 @@ import type { Express } from 'express';
 import * as jwt from 'jsonwebtoken';
 import request from 'supertest';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TEST_JWT_SECRET } from './setup-env';
 
-const JWT_SECRET = 'a_very_secure_and_long_jwt_secret_key_for_workshop_time_reporting';
 const ADMIN_ID = '10000000-0000-4000-8000-000000000001';
 const LEADER_ID = '10000000-0000-4000-8000-000000000002';
 const VIEWER_ID = '10000000-0000-4000-8000-000000000003';
@@ -379,7 +379,7 @@ function tokenFor(userId: string) {
       fullName: user.fullName,
       role: user.role,
     },
-    JWT_SECRET,
+    TEST_JWT_SECRET,
     { expiresIn: '1h' },
   );
 }

@@ -4,9 +4,9 @@ import * as jwt from 'jsonwebtoken';
 import prisma from '../utils/prisma';
 import { AuthRequest, authenticateJWT } from '../middlewares/auth';
 import logger from '../utils/logger';
+import { JWT_SECRET } from '../config';
 
 const router = Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'a_very_secure_and_long_jwt_secret_key_for_workshop_time_reporting';
 
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
