@@ -25,15 +25,26 @@ Dokument opisuje proces instalacji, aktualizacji, backupu oraz przywracania apli
    ```
 5. Zweryfikuj status kontenerów:
    ```bash
-   docker ps
+   docker compose ps
    ```
+   PostgreSQL i backend powinny być oznaczone jako `healthy`, a Nginx powinien być uruchomiony.
 
 ## Inicjalizacja bazy danych i zasilanie (Migrations & Seeding)
 
 Od wersji `v0.2.8` cały proces konfiguracji bazy danych po pierwszej instalacji został w pełni zautomatyzowany. Podczas każdego startu kontenera backendu `worktime-api` uruchamiany jest skrypt `docker-entrypoint.sh`, który wykonuje następujące operacje:
 
-1. **Automatyczne migracje Prisma**: Uruchamiane jest polecenie `npx prisma migrate deploy`, które tworzy lub aktualizuje schemat tabel w bazie PostgreSQL do najnowszej wersji.
+1. **Automatyczne migracje Prisma**: Uruchamiane jest polecenie `./node_modules/.bin/prisma migrate deploy`, które korzysta wyłącznie z Prisma CLI zainstalowanej w obrazie i tworzy lub aktualizuje schemat tabel w bazie PostgreSQL do najnowszej wersji.
 2. **Automatyczne zasilanie systemowe (System Seeding)**: Po pomyślnym nałożeniu migracji automatycznie uruchamiany jest skrypt produkcyjnego zasilania bazy (`node dist/prisma/seed.js`). Skrypt ten instaluje wyłącznie niezbędne dane systemowe (domyślnych użytkowników oraz słowniki typów czasu pracy). **Dane demo/przykładowe są z tego procesu wyłączone i nigdy nie uruchamiają się automatycznie.**
+
+### Kolejność uruchamiania usług i healthchecki
+
+Docker Compose uruchamia usługi w następującej kolejności:
+
+1. PostgreSQL przechodzi kontrolę `pg_isready` z użyciem `POSTGRES_USER` i `POSTGRES_DB` z konfiguracji kontenera.
+2. Backend uruchamia migracje i produkcyjny seed, a następnie API. Healthcheck backendu odpytuje co 10 sekund `http://127.0.0.1:5000/api/health`; endpoint zwraca HTTP 200 wyłącznie wtedy, gdy API może wykonać zapytanie do bazy.
+3. Nginx startuje dopiero po uzyskaniu przez backend stanu `healthy`.
+
+Healthcheck backendu ma 60 sekund okresu startowego przeznaczonego na migracje i seed. Stan `unhealthy` nie uruchamia osobnego mechanizmu restartu; wszystkie usługi zachowują politykę `restart: always`.
 
 ### Charakterystyka skryptu zasilającego (System Seed):
 * **Idempotentność**: Skrypt jest w pełni bezpieczny do wielokrotnego uruchamiania. Jeśli rekordy (np. słowniki, role) już istnieją w bazie, nie zostaną one zduplikowane.
@@ -87,14 +98,14 @@ git stash pop
 ### Weryfikacja po wdrożeniu (Post-deployment verification)
 Zaraz po zakończeniu wdrożenia (uruchomieniu kontenerów), wykonaj poniższą sekwenckę poleceń w celu weryfikacji poprawności uruchomienia:
 ```bash
-# Odczekaj 15 sekund na uruchomienie aplikacji i wykonanie migracji Prisma
-sleep 15
+# Sprawdź status i zdrowie kontenerów
+docker compose ps
+
+# Zweryfikuj readiness API i połączenie z bazą
+curl http://localhost/api/health
 
 # Zweryfikuj zwracaną wersję API
 curl http://localhost/api/version
-
-# Sprawdź status i zdrowie kontenerów
-docker compose ps
 
 # Sprawdź ostatnie 50 linii logów backendu pod kątem błędów
 docker logs worktime-api --tail=50
@@ -102,7 +113,8 @@ docker logs worktime-api --tail=50
 
 **Co należy zweryfikować**:
 - Czy polecenie `curl` zwraca prawidłowy obiekt JSON z nowo wdrożoną wersją aplikacji (np. `{"version":"v0.2.6"}`).
-- Czy wszystkie kontenery mają status `running` (oraz czy baza `postgres` jest oznaczona jako `healthy`).
+- Czy wszystkie kontenery mają status `running`, a usługi `postgres` i `backend` są oznaczone jako `healthy`.
+- Czy `/api/health` zwraca HTTP 200 z polami `status: "ok"` i `database: "ok"`.
 - Czy w logach `worktime-api` nie występują błędy połączenia z bazą danych (Connection Refused), niepowodzenia migracji Prisma lub wyjątki krytyczne Node.js.
 
 *Uwaga: Od wersji v0.2.4/v0.2.5, proces instalowania pakietów npm oraz budowania wersji produkcyjnej frontendu (React) odbywa się w pełni automatycznie wewnątrz kontenera Docker (multi-stage build). Oznacza to, że wdrożenie nie wymaga już obecności w repozytorium skompilowanych plików frontendu. Uruchomienie `docker compose up -d --build` samodzielnie pobiera zależności, kompiluje kod i serwuje pliki produkcyjne bez konieczności jakichkolwiek działań manualnych na maszynie hosta. Katalog `frontend/dist` został całkowicie wykluczony z systemu kontroli wersji i nie powinien być nigdy zatwierdzany (committed) do repozytorium.*
@@ -196,7 +208,7 @@ Po wdrożeniu nowej wersji na serwer produkcyjny, należy przeprowadzić ręczny
    ```bash
    docker compose ps
    ```
-   Upewnij się, że wszystkie kontenery są w stanie `running` (a baza danych w stanie `healthy`).
+   Upewnij się, że wszystkie kontenery są w stanie `running`, a baza danych i backend są w stanie `healthy`.
 2. **Weryfikacja wersji API**:
    Wyślij zapytanie do endpointu wersji backendu:
    ```bash
@@ -304,7 +316,8 @@ docker logs -f worktime-api --tail=50
 * **Production (`NODE_ENV=production`)**: Logi są generowane w ustrukturyzowanym formacie **JSON**. Ułatwia to automatyczne zbieranie, parsowanie oraz agregację logów w chmurze przez oprogramowanie takie jak ELK Stack, Logstash, Datadog czy AWS CloudWatch.
 * **Development (lokalnie)**: Logi są formatowane przez bibliotekę **`pino-pretty`** do postaci czytelnych linii tekstowych z kolorowaniem składni na konsoli (np. poziomy `INFO`, `ERROR` w kolorach, czytelne znaczniki czasu).
 
+Rutynowe, poprawne wywołania `/api/health` nie są zapisywane na poziomie `info`. Niedostępność bazy jest rejestrowana jednorazowo jako `warn` przy zmianie stanu, a odzyskanie połączenia jako pojedynczy wpis `info`, dzięki czemu cykliczny healthcheck nie zalewa logów.
+
 ### Rola Pino i `pino-pretty`:
 * **Pino**: Odpowiada za zunifikowane zbieranie logów z poziomami ważności (`info`, `warn`, `error`, `debug`). Dzięki architekturze asynchronicznej minimalizuje narzut procesora podczas operacji wejścia/wyjścia.
 * **pino-pretty**: Narzędzie deweloperskie ułatwiające debugowanie lokalne, wyłączone automatycznie w trybie produkcyjnym w celu zachowania optymalnej wydajności i czystości danych JSON.
-

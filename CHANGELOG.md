@@ -9,6 +9,11 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Rozbudowano strukturę dokumentacji o reguły biznesowe, specyfikację importów i eksportów, konfigurację, testowanie, runbook operacyjny oraz instrukcję użytkownika; uzupełniono także architekturę i indeks dokumentacji.
 - Dodano `PROJECT_STATUS.md` oraz obowiązkową procedurę rozpoczęcia sesji i przekazania pracy między ChatGPT i Codexem w `docs/session-start.md`; powiązano procedurę z zasadami w `AGENTS.md`.
 
+### Changed
+- Dodano backendowy healthcheck kontenera oparty na Node i endpointcie `/api/health`, a uruchomienie Nginx uzależniono od stanu `service_healthy` backendu; PostgreSQL nadal jest warunkiem gotowości backendu.
+- Healthcheck PostgreSQL korzysta z `POSTGRES_USER` i `POSTGRES_DB` kontenera, a rutynowe probe'y backendu nie generują wpisów `info` ani powtarzanych wpisów `error` podczas niedostępności bazy.
+- Testy `/api/health` deterministycznie weryfikują odpowiedzi HTTP 200 i 503 wraz z ich formatem.
+
 ## [0.2.9] (Development) - 2026-07-20
 
 ### Added

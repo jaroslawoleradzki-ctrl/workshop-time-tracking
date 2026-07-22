@@ -1,21 +1,62 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import request from 'supertest';
 import app from '../src/app';
+import prisma from '../src/utils/prisma';
+import logger from '../src/utils/logger';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('API Integration Tests', () => {
   // 1. GET /api/health
   describe('GET /api/health', () => {
-    it('should return health status metadata', async () => {
+    it('should return 200 when the database connection is healthy', async () => {
+      vi.spyOn(prisma, '$queryRaw').mockResolvedValueOnce([{ result: 1 }]);
+      const infoSpy = vi.spyOn(logger, 'info').mockImplementation(() => undefined);
+
       const res = await request(app)
         .get('/api/health')
+        .expect(200)
         .expect('Content-Type', /json/);
 
-      expect([200, 503]).toContain(res.status);
-      // The status can be 200 or 503 depending on database availability in the test environment,
-      // but the response structure must contain the expected keys.
-      expect(res.body).toHaveProperty('status');
-      expect(res.body).toHaveProperty('database');
-      expect(res.body).toHaveProperty('timestamp');
+      expect(res.body).toEqual({
+        status: 'ok',
+        database: 'ok',
+        timestamp: expect.any(String),
+      });
+      expect(Number.isNaN(Date.parse(res.body.timestamp))).toBe(false);
+      expect(infoSpy).not.toHaveBeenCalled();
+    });
+
+    it('should return 503 when Prisma cannot reach the database', async () => {
+      vi.spyOn(prisma, '$queryRaw').mockRejectedValue(new Error('Database unavailable'));
+      const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+      const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+
+      const firstResponse = await request(app)
+        .get('/api/health')
+        .expect(503)
+        .expect('Content-Type', /json/);
+      const repeatedResponse = await request(app)
+        .get('/api/health')
+        .expect(503)
+        .expect('Content-Type', /json/);
+
+      expect(firstResponse.body).toEqual({
+        status: 'error',
+        database: 'error',
+        timestamp: expect.any(String),
+      });
+      expect(repeatedResponse.body).toEqual({
+        status: 'error',
+        database: 'error',
+        timestamp: expect.any(String),
+      });
+      expect(Number.isNaN(Date.parse(firstResponse.body.timestamp))).toBe(false);
+      expect(Number.isNaN(Date.parse(repeatedResponse.body.timestamp))).toBe(false);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(errorSpy).not.toHaveBeenCalled();
     });
   });
 

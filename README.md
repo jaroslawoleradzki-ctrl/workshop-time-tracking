@@ -236,7 +236,8 @@ W środowisku produkcyjnym cała aplikacja jest uruchamiana i koordynowana za po
    docker compose up -d --build
    ```
     * Dane bazy danych PostgreSQL są mapowane na zewnętrzny wolumen Docker `workshop-time-tracking-main_pgdata`.
-    * Kontener backendowy (`worktime-api`) ma skonfigurowany plik `docker-entrypoint.sh`, który przy każdym uruchomieniu kontenera wywołuje automatyczną instalację zaległych migracji (`npx prisma migrate deploy`).
+    * Kontener backendowy (`worktime-api`) ma skonfigurowany plik `docker-entrypoint.sh`, który przy każdym uruchomieniu kontenera wykonuje zaległe migracje lokalną Prisma CLI (`./node_modules/.bin/prisma migrate deploy`) i uruchamia produkcyjny seed przed startem API.
+    * PostgreSQL musi uzyskać stan `healthy`, zanim uruchomi się backend. Backend uzyskuje stan `healthy` dopiero po odpowiedzi HTTP 200 z `/api/health`, która potwierdza również połączenie z bazą. Nginx startuje po osiągnięciu tego stanu przez backend.
     * Kontener frontendu (`worktime-web`) jest budowany automatycznie w oparciu o wieloetapowy plik `Dockerfile` (multi-stage build), co eliminuje potrzebę instalowania pakietów i budowania plików produkcyjnych na maszynie hosta.
 
 Pełne instrukcje dotyczące kopii zapasowych, rollbacków oraz logowania błędów znajdują się w [Instrukcji Wdrożenia (docs/deployment.md)](docs/deployment.md).

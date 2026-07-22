@@ -3,13 +3,13 @@
 ## Stan bieżący
 
 - Projekt: Workshop Time Tracking
-- Aktualna wersja: `0.2.9`
-- Gałąź robocza: `development`
-- Ostatni zatwierdzony commit: `381e2a3` (Merge hotfix `fix/0.2.9-copy-last-day` into `development`)
-- Stan zmian: Scalone do `development`, wypchnięte do GitHub oraz mirrora HomeLab. Working tree jest czysty.
-- Stan wdrożenia: Deployment na serwer klienta nie został jeszcze wykonany. Gałąź hotfixa `fix/0.2.9-copy-last-day` może zostać usunięta.
+- Aktualna wersja produkcyjna: `0.2.9`; trwają prace nad `0.3.0`
+- Gałąź robocza: `feature/0.3.0-deployment-stability`
+- Bazowy commit Etapu 4: `bcd1631` (`chore(runtime): stabilize production container`)
+- Stan zmian: Etap 4 zakończony i zweryfikowany lokalnie w jednym commicie. Commit nie został wysłany do origin.
+- Stan wdrożenia: Wersja `0.3.0` nie została jeszcze wdrożona na serwer klienta.
 
-Gałąź `development` zawiera w pełni zweryfikowaną poprawkę krytyczną operacji kopiowania ostatniego dnia ("Copy last day") wraz ze wszystkimi testami integracyjnymi. Zmiany zostały pomyślnie zintegrowane i przetestowane.
+Etapy stabilizacji wdrożenia `0.3.0` ustaliły stałą nazwę zewnętrznego wolumenu PostgreSQL, ustabilizowały produkcyjny obraz backendu i dostępność Prisma CLI oraz dodały backendowy healthcheck kontenera. Nginx oczekuje teraz na stan `service_healthy` backendu, a backend nadal oczekuje na zdrowy PostgreSQL. Polityka `restart: always` pozostała bez zmian.
 
 ## Dokumentacja projektu
 
@@ -26,6 +26,21 @@ Aktualny pakiet dokumentacyjny obejmuje:
 - changelog i zrealizowane kamienie milowe.
 
 Indeks dokumentów znajduje się w `README.md`.
+
+## Weryfikacja Etapu 4 wersji 0.3.0
+
+Przed utworzeniem commita wykonano:
+
+- backend: 25 testów zakończonych powodzeniem, w tym deterministyczne scenariusze HTTP 200 i 503 endpointu `/api/health`,
+- backend: typecheck zakończony powodzeniem,
+- backend: build zakończony powodzeniem,
+- frontend: 8 testów zakończonych powodzeniem,
+- frontend: typecheck zakończony powodzeniem,
+- frontend: build zakończony powodzeniem,
+- `git diff --check` zakończony bez błędów,
+- kontrola składni YAML `docker-compose.yml` zakończona powodzeniem.
+
+Docker CLI nie jest dostępne w środowisku roboczym, dlatego nie wykonano `docker compose config` ani buildów obrazów. Nie uruchamiano PostgreSQL, kontenerów ani żadnych operacji na wolumenie produkcyjnym. Frontendowy lint nadal nie może się uruchomić, ponieważ istniejący skrypt odwołuje się do `eslint`, którego nie ma w zależnościach projektu; problem nie należy do zakresu Etapu 4.
 
 ## Weryfikacja poprawki 0.2.9
 
