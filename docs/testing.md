@@ -2,7 +2,7 @@
 
 ## Testy istniejące
 
-Backend używa Vitest i Supertest. `backend/tests/version.test.ts` sprawdza `/api/version`; `integration.test.ts` sprawdza health check (200 lub 503), odrzucenie błędnego logowania oraz ochronę tras bez tokenu. `copy-last-day.test.ts` sprawdza kontrakt i walidację kopiowania, wybór pracownika i źródła, soft delete, limit, role, rollback audytu oraz serializację 2 i 20 równoległych żądań na deterministycznym modelu transakcji.
+Backend używa Vitest i Supertest. `backend/tests/version.test.ts` sprawdza `/api/version`; `integration.test.ts` osobno sprawdza odpowiedź 200 healthchecka przy działającym połączeniu Prisma, odpowiedź 503 przy błędzie bazy, format obu odpowiedzi, ograniczenie powtarzanych logów awarii, odrzucenie błędnego logowania oraz ochronę tras bez tokenu. `copy-last-day.test.ts` sprawdza kontrakt i walidację kopiowania, wybór pracownika i źródła, soft delete, limit, role, rollback audytu oraz serializację 2 i 20 równoległych żądań na deterministycznym modelu transakcji.
 
 Frontend używa Vitest, Happy DOM i React Testing Library. `frontend/src/test/App.test.tsx` sprawdza renderowanie logowania oraz pobranie i błąd pobrania wersji. `ReportingPanel.test.tsx` sprawdza `employeeId`, blokadę przycisku, wieloklik/klawiaturę, odblokowanie po błędzie i komunikat `409`. `frontend/src/test/setup.ts` zapewnia asercje DOM i pamięci webowe.
 
@@ -30,4 +30,4 @@ Backend nie definiuje skryptu lint. Oba skrypty testowe wykonują `vitest run`.
 
 ## Braki pokrycia
 
-Automatyczne testy nie obejmują pełnego poprawnego logowania, całego CRUD, ostrzeżeń, importów, analityki/eksportów, migracji, Nginx/Docker ani pełnych interakcji widoków. Krytyczne kopiowanie ma testy endpointu i modelu transakcji, lecz repozytorium nadal nie ma automatycznego E2E ani testu współbieżności uruchamianego na rzeczywistym PostgreSQL. Testy backendu zależne od bazy dopuszczają niedostępność bazy tylko dla health checku.
+Automatyczne testy nie obejmują pełnego poprawnego logowania, całego CRUD, ostrzeżeń, importów, analityki/eksportów, migracji, Nginx/Docker ani pełnych interakcji widoków. Krytyczne kopiowanie ma testy endpointu i modelu transakcji, lecz repozytorium nadal nie ma automatycznego E2E ani testu współbieżności uruchamianego na rzeczywistym PostgreSQL. Testy healthchecka używają kontrolowanych odpowiedzi Prisma i nie wymagają działającej bazy.

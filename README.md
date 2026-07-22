@@ -168,17 +168,21 @@ cd workshop-time-tracking
 ```
 
 ### Krok 2: Uruchomienie bazy danych
-Uruchom lokalną bazę danych PostgreSQL i stwórz bazę `time_reporting` lub uruchom dedykowany kontener w tle:
+Utwórz lokalną konfigurację Compose, uzupełnij wymagane `WTT_*` i utwórz wolumen o nazwie wskazanej przez `WTT_POSTGRES_VOLUME`:
 ```bash
+cp .env.example .env
+chmod 600 .env
+docker volume create workshop-time-tracking-main_pgdata
 docker compose up -d postgres
 ```
+Alternatywnie użyj istniejącej lokalnej instalacji PostgreSQL. Rootowy `.env` nie jest współdzielony z `backend/.env`.
 
 ### Krok 3: Uruchomienie Backend API
 1. Przejdź do katalogu backendu:
    ```bash
    cd backend
    ```
-2. Skopiuj plik `.env.example` jako `.env` i uzupełnij `DATABASE_URL` (np. `postgresql://time_user:secure_db_password@localhost:5432/time_reporting?schema=public`):
+2. Skopiuj backendowy `.env.example` jako `backend/.env`, ustaw `DATABASE_URL` i unikalny `JWT_SECRET`:
    ```bash
    cp .env.example .env
    ```
@@ -227,17 +231,31 @@ docker compose up -d postgres
 
 W środowisku produkcyjnym cała aplikacja jest uruchamiana i koordynowana za pomocą Docker Compose:
 
-1. Przejdź do katalogu projektu na serwerze:
+1. Przy pierwszej instalacji utwórz ignorowaną konfigurację klienta i ustaw jej uprawnienia:
    ```bash
    cd ~/workshop-time-tracking
+   cp .env.example .env
+   chmod 600 .env
    ```
+   Uzupełnij wymagane `WTT_*`, zachowując dokładną nazwę istniejącego wolumenu przy aktualizacji. Sekrety generuj jako wartości bezpieczne w URL, np. `openssl rand -hex 32`.
 2. Zbuduj i uruchom usługi:
    ```bash
    docker compose up -d --build
    ```
-    * Dane bazy danych PostgreSQL są mapowane na zewnętrzny wolumen Docker `workshop-time-tracking-main_pgdata`.
-    * Kontener backendowy (`worktime-api`) ma skonfigurowany plik `docker-entrypoint.sh`, który przy każdym uruchomieniu kontenera wywołuje automatyczną instalację zaległych migracji (`npx prisma migrate deploy`).
+    * Dane PostgreSQL są mapowane na zewnętrzny wolumen wskazany przez `WTT_POSTGRES_VOLUME`.
+    * Kontener backendowy (`worktime-api`) ma skonfigurowany plik `docker-entrypoint.sh`, który przy każdym uruchomieniu kontenera wykonuje zaległe migracje lokalną Prisma CLI (`./node_modules/.bin/prisma migrate deploy`) i uruchamia produkcyjny seed przed startem API.
+    * Prisma Client jest generowany w obrazie z Query Engine dla środowiska Alpine z OpenSSL 3 (`linux-musl-openssl-3.0.x`), a wygenerowane pliki engine'u są kopiowane do finalnego etapu runtime.
+    * PostgreSQL musi uzyskać stan `healthy`, zanim uruchomi się backend. Backend uzyskuje stan `healthy` dopiero po odpowiedzi HTTP 200 z `/api/health`, która potwierdza również połączenie z bazą. Nginx startuje po osiągnięciu tego stanu przez backend.
     * Kontener frontendu (`worktime-web`) jest budowany automatycznie w oparciu o wieloetapowy plik `Dockerfile` (multi-stage build), co eliminuje potrzebę instalowania pakietów i budowania plików produkcyjnych na maszynie hosta.
+
+Po jednorazowej migracji konfiguracji rutynowa aktualizacja serwera nie wymaga `git stash` ani zmian w śledzonych plikach:
+
+```bash
+git pull origin main
+docker compose up -d --build
+```
+
+Plik `.env` pozostaje lokalny, jest ignorowany przez Git i powinien mieć szyfrowaną kopię poza repozytorium. Zmiana `WTT_JWT_SECRET` wyloguje wszystkich użytkowników; zmiana danych PostgreSQL w `.env` nie aktualizuje automatycznie poświadczeń istniejącego wolumenu.
 
 Pełne instrukcje dotyczące kopii zapasowych, rollbacków oraz logowania błędów znajdują się w [Instrukcji Wdrożenia (docs/deployment.md)](docs/deployment.md).
 
@@ -300,6 +318,6 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 
 ## Status projektu
 
-* **Aktualna wersja**: `0.2.9`
+* **Aktualna wersja**: `0.3.0`
 * **Docelowa gałąź integracyjna**: `development`
 * **Status prac**: Aktywny rozwój (Active development)

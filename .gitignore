@@ -21,5 +21,8 @@ logs/
 frontend/dist/
 
 # Local environment files
-.env.local
-.env.*.local
+.env
+.env.*
+!.env.example
+backend/.env
+frontend/.env

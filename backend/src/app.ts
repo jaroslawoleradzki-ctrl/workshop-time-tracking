@@ -19,6 +19,7 @@ import prisma from './utils/prisma';
 import packageJson from '../package.json';
 
 const app = express();
+let databaseHealthStatus: 'unknown' | 'ok' | 'error' = 'unknown';
 
 // Middleware
 app.use(cors());
@@ -26,7 +27,9 @@ app.use(express.json());
 
 // Request logger for debugging
 app.use((req, res, next) => {
-  logger.info(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  if (req.path !== '/api/health') {
+    logger.info(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  }
   next();
 });
 
@@ -44,13 +47,23 @@ app.use('/api/imports', importsRouter);
 app.get('/api/health', async (req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
+
+    if (databaseHealthStatus === 'error') {
+      logger.info('Health check database connection recovered');
+    }
+    databaseHealthStatus = 'ok';
+
     res.status(200).json({
       status: 'ok',
       database: 'ok',
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    logger.error(error, 'Health check database error');
+    if (databaseHealthStatus !== 'error') {
+      logger.warn({ err: error }, 'Health check database unavailable');
+    }
+    databaseHealthStatus = 'error';
+
     res.status(503).json({
       status: 'error',
       database: 'error',

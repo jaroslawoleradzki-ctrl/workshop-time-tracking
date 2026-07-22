@@ -9,31 +9,58 @@ Dokument opisuje proces instalacji, aktualizacji, backupu oraz przywracania apli
 - Dostęp do repozytorium kodu na GitHubie
 
 ## Pierwsza instalacja
+
 1. Sklonuj repozytorium do katalogu docelowego:
    ```bash
    git clone https://github.com/jaroslawoleradzki-ctrl/workshop-time-tracking.git ~/workshop-time-tracking
    cd ~/workshop-time-tracking
    ```
-2. Skopiuj i uzupełnij pliki konfiguracyjne środowiska `.env` w katalogach `backend/` oraz `frontend/` (jeśli są wymagane).
-3. Utwórz zewnętrzny wolumen Docker dla bazy danych PostgreSQL (wymagane w konfiguracji produkcyjnej):
+2. Utwórz produkcyjną konfigurację Compose i ogranicz dostęp do niej:
+   ```bash
+   cp .env.example .env
+   chmod 600 .env
+   ```
+   Uzupełnij wymagane wartości `WTT_*`. Wygeneruj osobne, losowe wartości `WTT_POSTGRES_PASSWORD` i `WTT_JWT_SECRET`, używając znaków bezpiecznych w URL, np.:
+   ```bash
+   openssl rand -hex 32
+   ```
+   Nie pokazuj zawartości `.env` w logach ani zgłoszeniach. Zapisz jego szyfrowaną kopię poza repozytorium. Pełny opis zmiennych znajduje się w [configuration.md](configuration.md).
+3. Utwórz zewnętrzny wolumen o nazwie identycznej z `WTT_POSTGRES_VOLUME`:
    ```bash
    docker volume create workshop-time-tracking-main_pgdata
    ```
-4. Zbuduj i uruchom kontenery w tle:
+   Przykład odpowiada wartości z `.env.example`. Jeżeli wybierzesz inną nazwę, ustaw identyczną w `WTT_POSTGRES_VOLUME`. Nie twórz nowego wolumenu podczas aktualizacji istniejącej instalacji.
+4. Sprawdź konfigurację bez publikowania jej wyniku i zbuduj kontenery:
    ```bash
+   docker compose config >/dev/null
    docker compose up -d --build
    ```
 5. Zweryfikuj status kontenerów:
    ```bash
-   docker ps
+   docker compose ps
    ```
+   PostgreSQL i backend powinny być oznaczone jako `healthy`, a Nginx powinien być uruchomiony.
+
+Pliki `backend/.env` i `frontend/.env` nie konfigurują stosu Compose. `backend/.env` służy wyłącznie uruchamianiu backendu lokalnie poza Dockerem.
 
 ## Inicjalizacja bazy danych i zasilanie (Migrations & Seeding)
 
 Od wersji `v0.2.8` cały proces konfiguracji bazy danych po pierwszej instalacji został w pełni zautomatyzowany. Podczas każdego startu kontenera backendu `worktime-api` uruchamiany jest skrypt `docker-entrypoint.sh`, który wykonuje następujące operacje:
 
-1. **Automatyczne migracje Prisma**: Uruchamiane jest polecenie `npx prisma migrate deploy`, które tworzy lub aktualizuje schemat tabel w bazie PostgreSQL do najnowszej wersji.
+1. **Automatyczne migracje Prisma**: Uruchamiane jest polecenie `./node_modules/.bin/prisma migrate deploy`, które korzysta wyłącznie z Prisma CLI zainstalowanej w obrazie i tworzy lub aktualizuje schemat tabel w bazie PostgreSQL do najnowszej wersji.
 2. **Automatyczne zasilanie systemowe (System Seeding)**: Po pomyślnym nałożeniu migracji automatycznie uruchamiany jest skrypt produkcyjnego zasilania bazy (`node dist/prisma/seed.js`). Skrypt ten instaluje wyłącznie niezbędne dane systemowe (domyślnych użytkowników oraz słowniki typów czasu pracy). **Dane demo/przykładowe są z tego procesu wyłączone i nigdy nie uruchamiają się automatycznie.**
+
+Prisma Client jest generowany po zainstalowaniu OpenSSL w etapie buildera. Konfiguracja `binaryTargets` obejmuje `linux-musl-openssl-3.0.x`, a katalog `node_modules/.prisma` z wygenerowanym Query Engine jest kopiowany z buildera do finalnego obrazu Alpine. Zapewnia to zgodność procesu migracji, produkcyjnego seeda i API z bibliotekami runtime.
+
+### Kolejność uruchamiania usług i healthchecki
+
+Docker Compose uruchamia usługi w następującej kolejności:
+
+1. PostgreSQL przechodzi kontrolę `pg_isready` z użyciem `POSTGRES_USER` i `POSTGRES_DB` z konfiguracji kontenera.
+2. Backend uruchamia migracje i produkcyjny seed, a następnie API. Healthcheck backendu odpytuje co 10 sekund `http://127.0.0.1:5000/api/health`; endpoint zwraca HTTP 200 wyłącznie wtedy, gdy API może wykonać zapytanie do bazy.
+3. Nginx startuje dopiero po uzyskaniu przez backend stanu `healthy`.
+
+Healthcheck backendu ma 60 sekund okresu startowego przeznaczonego na migracje i seed. Stan `unhealthy` nie uruchamia osobnego mechanizmu restartu; wszystkie usługi zachowują politykę `restart: always`.
 
 ### Charakterystyka skryptu zasilającego (System Seed):
 * **Idempotentność**: Skrypt jest w pełni bezpieczny do wielokrotnego uruchamiania. Jeśli rekordy (np. słowniki, role) już istnieją w bazie, nie zostaną one zduplikowane.
@@ -61,40 +88,104 @@ Dla celów prezentacyjnych lub testowych przygotowano osobny skrypt zasilający 
 > Bezwzględnie należy zmienić hasła do tych kont lub dezaktywować konta testowe niezwłocznie po zakończeniu pierwszej instalacji w środowisku produkcyjnym!
 
 ## Aktualizacja aplikacji
-Aktualizacja kodu odbywa się poprzez pobranie zmian z gałęzi `main` i przebudowanie obrazów:
+
+Po wykonaniu opisanej niżej jednorazowej migracji konfiguracji rutynowa aktualizacja produkcji składa się z dwóch poleceń:
+
 ```bash
-cd ~/workshop-time-tracking
-git checkout main
 git pull origin main
 docker compose up -d --build
 ```
 
-### Modyfikacje lokalne na serwerze (Local server modifications)
-Serwery produkcyjne mogą zawierać celowe, lokalne modyfikacje plików konfiguracyjnych (np. zmiany portów w `docker-compose.yml` lub zmiennych środowiskowych). Obecność lokalnych zmian może spowodować błąd wykonania `git pull`.
+Wartości klienta znajdują się w ignorowanym rootowym `.env`, więc `git pull` ich nie zmienia. Rutynowa aktualizacja nie wymaga `git stash`, lokalnej edycji `docker-compose.yml` ani śledzonych plików backendu. Jeżeli `git status --short` nie jest pusty, należy wyjaśnić zmiany zamiast automatycznie je ukrywać.
 
-Przed pobraniem aktualizacji należy zawsze wykonać:
-```bash
-git status
-```
-Jeśli w repozytorium znajdują się lokalne zmiany, zabezpiecz je poleceniem `stash`:
-```bash
-git stash push -m "server local config"
-git pull origin main
-git stash pop
-```
-*Uwaga: Wszelkie ewentualne konflikty scalania (merge conflicts) po wykonaniu `git stash pop` muszą zostać bezwzględnie rozwiązane przed kontynuowaniem procesu wdrożenia.*
+Przed każdą aktualizacją wykonaj backup bazy i upewnij się, że istnieje bezpieczna kopia `.env`. Po aktualizacji wykonaj [weryfikację powdrożeniową](#weryfikacja-po-wdrożeniu-post-deployment-verification).
+
+## Jednorazowa migracja istniejącego serwera do konfiguracji `.env`
+
+Ta procedura jest wymagana przy pierwszym przejściu z wersji `0.2.9` na wersję zawierającą rozdzielenie konfiguracji. Jej celem jest zachowanie dokładnie tego samego wolumenu PostgreSQL i dotychczasowych danych dostępowych. Nie uruchamiaj `docker compose up`, dopóki krok weryfikacji wolumenu nie zakończy się pomyślnie.
+
+1. Przejdź do repozytorium, potwierdź gałąź `main`, zapisz SHA i sprawdź lokalne zmiany:
+   ```bash
+   cd ~/workshop-time-tracking
+   git branch --show-current
+   git rev-parse HEAD
+   git status --short
+   ```
+2. Wykonaj i zweryfikuj kopię bazy:
+   ```bash
+   ./backup-db.sh
+   ls -lh backups/
+   ```
+3. Ustal dokładną nazwę wolumenu aktualnie podłączonego do katalogu danych PostgreSQL:
+   ```bash
+   docker inspect worktime-db --format '{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Name}}{{end}}{{end}}'
+   docker volume inspect NAZWA_Z_POPRZEDNIEGO_POLECENIA
+   ```
+   Zapisz wynik. Pusta wartość albo nieznany wolumen jest warunkiem przerwania wdrożenia.
+4. Odczytaj dotychczasowe wartości użytkownika, hasła i nazwy bazy z lokalnej konfiguracji serwera. Nie wklejaj ich do terminal history, logów ani dokumentacji. Jeżeli `docker-compose.yml` lub `backend/.env` mają lokalne zmiany, zapisz ich wartości w bezpiecznym miejscu poza repozytorium.
+5. Jeszcze przed `git pull` utwórz rootowy `.env` ręcznie według poniższego szablonu i ustaw prawa `600`:
+   ```dotenv
+   WTT_POSTGRES_USER=DOTYCHCZASOWY_UZYTKOWNIK
+   WTT_POSTGRES_PASSWORD=DOTYCHCZASOWE_HASLO
+   WTT_POSTGRES_DB=DOTYCHCZASOWA_BAZA
+   WTT_JWT_SECRET=DOTYCHCZASOWY_SEKRET_JWT
+   WTT_POSTGRES_VOLUME=DOKLADNA_NAZWA_Z_KROKU_3
+   WTT_HTTP_PORT=80
+   WTT_BACKEND_HOST_PORT=5000
+   WTT_POSTGRES_HOST_PORT=5432
+   WTT_LOG_LEVEL=info
+   ```
+   Następnie:
+   ```bash
+   chmod 600 .env
+   ```
+   Użycie dotychczasowego `WTT_JWT_SECRET` zachowuje aktywne sesje. Jego zmiana unieważni wszystkie tokeny i wyloguje użytkowników.
+6. Po zabezpieczeniu wartości usuń jednorazowe lokalne zmiany ze śledzonych plików, aby `git pull` mógł wykonać fast-forward. Najpierw sprawdź zakres, potem przywróć wyłącznie pliki konfiguracyjne, które zostały przeniesione do `.env`:
+   ```bash
+   git diff -- docker-compose.yml backend/.env
+   git restore docker-compose.yml backend/.env
+   git status --short
+   ```
+   Nie używaj rutynowo `git stash`. Jeśli widoczne są inne zmiany, przerwij i wyjaśnij ich pochodzenie.
+7. Pobierz wydanie i sprawdź, czy `.env` pozostał lokalny i ignorowany:
+   ```bash
+   git pull origin main
+   git check-ignore .env
+   test -f .env
+   ```
+8. Zweryfikuj renderowanie Compose bez wypisywania sekretów oraz sprawdź nazwę docelowego wolumenu:
+   ```bash
+   docker compose config >/dev/null
+   docker compose config | sed -n '/^volumes:/,$p'
+   ```
+   Nazwa `volumes.pgdata.name` musi być identyczna z wynikiem kroku 3. W przeciwnym razie popraw `.env` i nie uruchamiaj kontenerów.
+9. Dopiero po zgodności wolumenu przebuduj stos:
+   ```bash
+   docker compose up -d --build
+   docker compose ps
+   ```
+10. Sprawdź healthcheck, wersję, logi migracji oraz obecność danych biznesowych:
+    ```bash
+    curl -f http://localhost/api/health
+    curl -f http://localhost/api/version
+    docker logs worktime-api --tail=100
+    ```
+    Zaloguj się i potwierdź odczyt istniejących pracowników, zleceń oraz raportów.
+
+> [!CAUTION]
+> `POSTGRES_USER`, `POSTGRES_PASSWORD` i `POSTGRES_DB` z Compose są używane do inicjalizacji pustego katalogu danych. Sama zmiana odpowiadających im wartości `WTT_*` nie aktualizuje ról ani haseł w istniejącym wolumenie. Zachowaj stare wartości podczas migracji; ewentualną rotację wykonaj później jako osobną, kontrolowaną operację w PostgreSQL.
 
 ### Weryfikacja po wdrożeniu (Post-deployment verification)
 Zaraz po zakończeniu wdrożenia (uruchomieniu kontenerów), wykonaj poniższą sekwenckę poleceń w celu weryfikacji poprawności uruchomienia:
 ```bash
-# Odczekaj 15 sekund na uruchomienie aplikacji i wykonanie migracji Prisma
-sleep 15
+# Sprawdź status i zdrowie kontenerów
+docker compose ps
+
+# Zweryfikuj readiness API i połączenie z bazą
+curl http://localhost/api/health
 
 # Zweryfikuj zwracaną wersję API
 curl http://localhost/api/version
-
-# Sprawdź status i zdrowie kontenerów
-docker compose ps
 
 # Sprawdź ostatnie 50 linii logów backendu pod kątem błędów
 docker logs worktime-api --tail=50
@@ -102,7 +193,8 @@ docker logs worktime-api --tail=50
 
 **Co należy zweryfikować**:
 - Czy polecenie `curl` zwraca prawidłowy obiekt JSON z nowo wdrożoną wersją aplikacji (np. `{"version":"v0.2.6"}`).
-- Czy wszystkie kontenery mają status `running` (oraz czy baza `postgres` jest oznaczona jako `healthy`).
+- Czy wszystkie kontenery mają status `running`, a usługi `postgres` i `backend` są oznaczone jako `healthy`.
+- Czy `/api/health` zwraca HTTP 200 z polami `status: "ok"` i `database: "ok"`.
 - Czy w logach `worktime-api` nie występują błędy połączenia z bazą danych (Connection Refused), niepowodzenia migracji Prisma lub wyjątki krytyczne Node.js.
 
 *Uwaga: Od wersji v0.2.4/v0.2.5, proces instalowania pakietów npm oraz budowania wersji produkcyjnej frontendu (React) odbywa się w pełni automatycznie wewnątrz kontenera Docker (multi-stage build). Oznacza to, że wdrożenie nie wymaga już obecności w repozytorium skompilowanych plików frontendu. Uruchomienie `docker compose up -d --build` samodzielnie pobiera zależności, kompiluje kod i serwuje pliki produkcyjne bez konieczności jakichkolwiek działań manualnych na maszynie hosta. Katalog `frontend/dist` został całkowicie wykluczony z systemu kontroli wersji i nie powinien być nigdy zatwierdzany (committed) do repozytorium.*
@@ -172,9 +264,9 @@ Skrypt ten automatycznie weryfikuje istnienie pliku, dostępność narzędzi Doc
 
 Alternatywnie (w sytuacjach awaryjnych) można wykonać przywracanie bezpośrednio za pomocą potoku:
 ```bash
-zcat backups/time_reporting_YYYY-MM-DD_HH-MM-SS.sql.gz | docker exec -i worktime-db psql -U time_user -d time_reporting
+zcat backups/time_reporting_YYYY-MM-DD_HH-MM-SS.sql.gz | docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 ```
-*Wskazówka: Zawsze upewnij się, że przywracany plik kopii zapasowej bazy danych odpowiada strukturze schematu bazy danych (Prisma schema) zawartej w wybranym do rollbacku commit hash.*
+Bezpieczniej użyć skryptu `restore-db.sh`. Zawsze upewnij się, że przywracany plik odpowiada strukturze schematu Prisma wybranego commita.
 
 ## Skrypt weryfikacji wydania (Release Verification Script)
 
@@ -182,11 +274,22 @@ Przed publikacją wersji produkcyjnej, deweloper lub agent powinien uruchomić s
 ```bash
 ./scripts/verify-release.sh
 ```
-Domyślnie weryfikuje czystość kodu w Git, zgodność wersji w plikach konfiguracyjnych/dokumentacji oraz poprawne kompilowanie backendu/frontendu. Aby dodatkowo zweryfikować poprawność składniową konfiguracji Docker Compose oraz obecność silnika Docker na serwerze hosta, należy wywołać skrypt z opcją:
+Domyślnie weryfikuje czystość Git, zgodność wersji i bezpośrednich zależności z lockfile'ami, higienę plików `.env`, wymagane `WTT_*`, brak starego sekretu JWT oraz buildy i testy obu aplikacji. Kontrola Prisma sprawdza deklarację produkcyjnego targetu `linux-musl-openssl-3.0.x`, kolejność instalacji OpenSSL i generowania klienta w Dockerfile, kopiowanie wygenerowanych engine'ów do runtime oraz obecność właściwego pliku engine'u w lokalnym `node_modules` po `npm ci` i `prisma generate`. Aby dodatkowo sprawdzić Compose na syntetycznych, nieprodukcyjnych wartościach (bez wypisywania konfiguracji), użyj opcji:
 ```bash
 ./scripts/verify-release.sh --with-docker
 ```
-Zwraca kod wyjścia `0` w przypadku powodzenia (PASS) lub `1` w przypadku wykrycia jakichkolwiek problemów (FAIL), przerywając proces wydania.
+
+Bez dodatkowych parametrów skrypt akceptuje wyłącznie gałęzie `main`, `development` oraz `feature/0.3.0-deployment-stability`. Aby wykonać walidację na innej, jawnie wybranej gałęzi, użyj:
+
+```bash
+./scripts/verify-release.sh --branch nazwa-galezi
+```
+
+`--branch` zastępuje domyślną allowlistę dokładnie jedną podaną nazwą; nie dopuszcza gałęzi na podstawie samego prefiksu. Opcje można łączyć, np. `./scripts/verify-release.sh --branch release/0.3.0 --with-docker`.
+
+Skrypt sprawdza czystość repozytorium przed buildami i testami, a następnie ponawia `git status --porcelain` po wszystkich wykonanych kontrolach. Jeżeli build, test lub walidacja utworzy albo zmodyfikuje nieignorowany plik — w tym `package-lock.json` — wynik końcowy będzie `FAIL` wraz z listą ścieżek. Kontrola Docker pozostaje opcjonalna; bez `--with-docker` podsumowanie pokazuje `Docker Compose: SKIPPED`, nie `PASS`.
+
+Skrypt zwraca kod wyjścia `0` w przypadku powodzenia (PASS), `1` przy błędzie walidacji oraz `2` przy nieprawidłowych argumentach wywołania.
 
 ## Procedura testu dymnego (Smoke Test)
 
@@ -196,7 +299,7 @@ Po wdrożeniu nowej wersji na serwer produkcyjny, należy przeprowadzić ręczny
    ```bash
    docker compose ps
    ```
-   Upewnij się, że wszystkie kontenery są w stanie `running` (a baza danych w stanie `healthy`).
+   Upewnij się, że wszystkie kontenery są w stanie `running`, a baza danych i backend są w stanie `healthy`.
 2. **Weryfikacja wersji API**:
    Wyślij zapytanie do endpointu wersji backendu:
    ```bash
@@ -244,7 +347,7 @@ Przed zakończeniem procesu publikacji nowej wersji i oznaczeniem jej jako ukoń
 ```bash
 docker logs worktime-api
 ```
-Upewnij się, że zmienna `DATABASE_URL` w `docker-compose.yml` wskazuje na poprawną nazwę hosta kontenera bazy (`postgres`).
+Upewnij się, że rootowy `.env` zawiera komplet wymaganych `WTT_*`, a `WTT_POSTGRES_VOLUME` wskazuje istniejący wolumen. Sprawdź `docker compose config >/dev/null`; Compose buduje `DATABASE_URL` z tych wartości i wewnętrznej nazwy usługi `postgres`.
 
 ### 2. Problem z uprawnieniami do wykonywania skryptów shellowych
 *Rozwiązanie*: Nadaj skryptom uprawnienia wykonywania:
@@ -253,7 +356,7 @@ chmod +x backup-db.sh rollback.sh restore-db.sh status.sh backend/docker-entrypo
 ```
 
 ### 3. Kontener bazy danych nie startuje (port zajęty)
-*Rozwiązanie*: Upewnij się, że port `5432` na hoście nie jest zajęty przez lokalną instalację PostgreSQL. W razie potrzeby zmień mapowanie portów w `docker-compose.yml`.
+*Rozwiązanie*: Upewnij się, że port ustawiony w `WTT_POSTGRES_HOST_PORT` nie jest zajęty. Zmień wyłącznie tę wartość w rootowym `.env`; nie modyfikuj `docker-compose.yml`.
 
 ---
 
@@ -304,7 +407,8 @@ docker logs -f worktime-api --tail=50
 * **Production (`NODE_ENV=production`)**: Logi są generowane w ustrukturyzowanym formacie **JSON**. Ułatwia to automatyczne zbieranie, parsowanie oraz agregację logów w chmurze przez oprogramowanie takie jak ELK Stack, Logstash, Datadog czy AWS CloudWatch.
 * **Development (lokalnie)**: Logi są formatowane przez bibliotekę **`pino-pretty`** do postaci czytelnych linii tekstowych z kolorowaniem składni na konsoli (np. poziomy `INFO`, `ERROR` w kolorach, czytelne znaczniki czasu).
 
+Rutynowe, poprawne wywołania `/api/health` nie są zapisywane na poziomie `info`. Niedostępność bazy jest rejestrowana jednorazowo jako `warn` przy zmianie stanu, a odzyskanie połączenia jako pojedynczy wpis `info`, dzięki czemu cykliczny healthcheck nie zalewa logów.
+
 ### Rola Pino i `pino-pretty`:
 * **Pino**: Odpowiada za zunifikowane zbieranie logów z poziomami ważności (`info`, `warn`, `error`, `debug`). Dzięki architekturze asynchronicznej minimalizuje narzut procesora podczas operacji wejścia/wyjścia.
 * **pino-pretty**: Narzędzie deweloperskie ułatwiające debugowanie lokalne, wyłączone automatycznie w trybie produkcyjnym w celu zachowania optymalnej wydajności i czystości danych JSON.
-
