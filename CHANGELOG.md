@@ -5,6 +5,8 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-22
+
 ### Fixed
 - Produkcyjny obraz backendu Alpine zawiera Prisma Query Engine dla `linux-musl-openssl-3.0.x`; walidacja wydania sprawdza target, sposób generowania i kopiowania klienta oraz obecność właściwego artefaktu przed wdrożeniem.
 
@@ -14,6 +16,7 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Dodano rootowy `.env.example` dla konfiguracji Docker Compose oraz testy wymuszające jawny `JWT_SECRET` i potwierdzające podpisywanie tokenów skonfigurowanym sekretem.
 
 ### Changed
+- Zsynchronizowano numer wydania `0.3.0` w metadanych backendu, frontendu, plikach lock, Docker Compose i dokumentacji.
 - Dodano backendowy healthcheck kontenera oparty na Node i endpointcie `/api/health`, a uruchomienie Nginx uzależniono od stanu `service_healthy` backendu; PostgreSQL nadal jest warunkiem gotowości backendu.
 - Healthcheck PostgreSQL korzysta z `POSTGRES_USER` i `POSTGRES_DB` kontenera, a rutynowe probe'y backendu nie generują wpisów `info` ani powtarzanych wpisów `error` podczas niedostępności bazy.
 - Testy `/api/health` deterministycznie weryfikują odpowiedzi HTTP 200 i 503 wraz z ich formatem.

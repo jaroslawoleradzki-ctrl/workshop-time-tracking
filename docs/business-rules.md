@@ -1,6 +1,6 @@
 # Reguły biznesowe
 
-Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.2.9.
+Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.3.0.
 
 ## Role i dostęp
 
@@ -38,7 +38,7 @@ Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.2.9.
 - Maksymalny rozmiar źródła wynosi 100 aktywnych wpisów. Przekroczenie limitu kończy operację bez utworzenia danych.
 - Blokada transakcyjna PostgreSQL dla pary `(employeeId, targetDate)` oraz ponowne sprawdzenie dnia po jej uzyskaniu chronią również przed równoległymi żądaniami z wielu kart, użytkowników i instancji API.
 - Ustalenie źródła, utworzenie całego kompletu i jeden audyt operacji są objęte tą samą transakcją. Błąd dowolnego etapu wycofuje wszystkie nowe wpisy.
-- Wersja 0.2.9 zachowuje dotychczasowe dopuszczenie prawidłowych przyszłych dat. Docelowa polityka raportowania przyszłości pozostaje **do potwierdzenia**.
+- Wersja 0.3.0 zachowuje dotychczasowe dopuszczenie prawidłowych przyszłych dat. Docelowa polityka raportowania przyszłości pozostaje **do potwierdzenia**.
 
 ### Kontrakt `POST /api/reports/copy-last-day`
 
