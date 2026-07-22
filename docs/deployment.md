@@ -276,7 +276,18 @@ Domyślnie weryfikuje czystość Git, zgodność wersji i bezpośrednich zależn
 ```bash
 ./scripts/verify-release.sh --with-docker
 ```
-Zwraca kod wyjścia `0` w przypadku powodzenia (PASS) lub `1` w przypadku wykrycia jakichkolwiek problemów (FAIL), przerywając proces wydania.
+
+Bez dodatkowych parametrów skrypt akceptuje wyłącznie gałęzie `main`, `development` oraz `feature/0.3.0-deployment-stability`. Aby wykonać walidację na innej, jawnie wybranej gałęzi, użyj:
+
+```bash
+./scripts/verify-release.sh --branch nazwa-galezi
+```
+
+`--branch` zastępuje domyślną allowlistę dokładnie jedną podaną nazwą; nie dopuszcza gałęzi na podstawie samego prefiksu. Opcje można łączyć, np. `./scripts/verify-release.sh --branch release/0.3.0 --with-docker`.
+
+Skrypt sprawdza czystość repozytorium przed buildami i testami, a następnie ponawia `git status --porcelain` po wszystkich wykonanych kontrolach. Jeżeli build, test lub walidacja utworzy albo zmodyfikuje nieignorowany plik — w tym `package-lock.json` — wynik końcowy będzie `FAIL` wraz z listą ścieżek. Kontrola Docker pozostaje opcjonalna; bez `--with-docker` podsumowanie pokazuje `Docker Compose: SKIPPED`, nie `PASS`.
+
+Skrypt zwraca kod wyjścia `0` w przypadku powodzenia (PASS), `1` przy błędzie walidacji oraz `2` przy nieprawidłowych argumentach wywołania.
 
 ## Procedura testu dymnego (Smoke Test)
 

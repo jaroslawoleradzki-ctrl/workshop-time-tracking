@@ -8,11 +8,57 @@ set -o pipefail
 
 # Parse command line arguments
 WITH_DOCKER=false
-for arg in "$@"; do
-  if [ "$arg" = "--with-docker" ]; then
-    WITH_DOCKER=true
-  fi
+EXPECTED_BRANCH=""
+
+usage() {
+  echo "Usage: $0 [--with-docker] [--branch <name>]"
+  echo ""
+  echo "By default, allowed branches are:"
+  echo "  main"
+  echo "  development"
+  echo "  feature/0.3.0-deployment-stability"
+  echo ""
+  echo "--branch <name> replaces the default allowlist with exactly <name>."
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --with-docker)
+      WITH_DOCKER=true
+      shift
+      ;;
+    --branch)
+      if [ "$#" -lt 2 ] || [ -z "$2" ]; then
+        echo "ERROR: --branch requires a non-empty branch name." >&2
+        usage >&2
+        exit 2
+      fi
+      EXPECTED_BRANCH="$2"
+      shift 2
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "ERROR: Unknown argument '$1'." >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
 done
+
+DEFAULT_ALLOWED_BRANCHES=(
+  "main"
+  "development"
+  "feature/0.3.0-deployment-stability"
+)
+
+if [ -n "$EXPECTED_BRANCH" ]; then
+  ALLOWED_BRANCHES=("$EXPECTED_BRANCH")
+else
+  ALLOWED_BRANCHES=("${DEFAULT_ALLOWED_BRANCHES[@]}")
+fi
 
 # Script directory resolution
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -21,6 +67,7 @@ cd "$PROJECT_ROOT"
 
 # Global indicators
 GIT_STATUS="PENDING"
+REQUIRED_FILES_STATUS="PENDING"
 RUNTIME_CONFIG_STATUS="PENDING"
 VERSIONS_STATUS="PENDING"
 LOCKFILES_STATUS="PENDING"
@@ -30,28 +77,72 @@ BACKEND_TESTS_STATUS="PENDING"
 FRONTEND_TESTS_STATUS="PENDING"
 DOCKER_STATUS="SKIPPED"
 DOCS_STATUS="PENDING"
+FINAL_GIT_STATUS="PENDING"
 
 FAIL_REASON=""
 
 # Helper log functions
 log_fail() {
-  FAIL_REASON="$1"
+  if [ -n "$FAIL_REASON" ]; then
+    FAIL_REASON="${FAIL_REASON}\n$1"
+  else
+    FAIL_REASON="$1"
+  fi
 }
 
-# 1. GIT VALIDATION
+# 1. REQUIRED FILES
+validate_required_files() {
+  local required_file
+  local missing_files=""
+
+  for required_file in \
+    .gitignore \
+    .env.example \
+    docker-compose.yml \
+    backend/.env.example \
+    backend/Dockerfile \
+    backend/docker-entrypoint.sh \
+    backend/package.json \
+    backend/package-lock.json \
+    frontend/Dockerfile \
+    frontend/package.json \
+    frontend/package-lock.json \
+    nginx/nginx.conf \
+    README.md \
+    CHANGELOG.md; do
+    if [ ! -f "$required_file" ]; then
+      missing_files="${missing_files}- ${required_file}\n"
+    fi
+  done
+
+  if [ -n "$missing_files" ]; then
+    log_fail "Missing required file(s):\n${missing_files}"
+    REQUIRED_FILES_STATUS="FAIL"
+    return 1
+  fi
+
+  REQUIRED_FILES_STATUS="PASS"
+  return 0
+}
+
+# 2. GIT VALIDATION
 validate_git() {
-  # Release checks can be prepared on the release feature branch and repeated
-  # on the integration/production branches.
-  local branch
+  local branch allowed_branch branch_allowed
   branch=$(git branch --show-current 2>/dev/null || echo "")
-  case "$branch" in
-    main|development|feature/*) ;;
-    *)
-      log_fail "Current branch is '$branch' (expected 'main', 'development', or 'feature/*')"
-      GIT_STATUS="FAIL"
-      return 1
-      ;;
-  esac
+  branch_allowed=false
+
+  for allowed_branch in "${ALLOWED_BRANCHES[@]}"; do
+    if [ "$branch" = "$allowed_branch" ]; then
+      branch_allowed=true
+      break
+    fi
+  done
+
+  if [ "$branch_allowed" != true ]; then
+    log_fail "Current branch is '$branch'. Allowed branch(es): ${ALLOWED_BRANCHES[*]}"
+    GIT_STATUS="FAIL"
+    return 1
+  fi
 
   # Check if there is a merge in progress
   local git_dir
@@ -64,7 +155,11 @@ validate_git() {
 
   # Check if repository has uncommitted changes
   local status_porcelain
-  status_porcelain=$(git status --porcelain 2>/dev/null || echo "")
+  if ! status_porcelain=$(git status --porcelain 2>/dev/null); then
+    log_fail "Unable to read Git working tree status."
+    GIT_STATUS="FAIL"
+    return 1
+  fi
   if [ -n "$status_porcelain" ]; then
     log_fail "Repository is dirty (has uncommitted or untracked changes):\n$status_porcelain"
     GIT_STATUS="FAIL"
@@ -75,7 +170,7 @@ validate_git() {
   return 0
 }
 
-# 2. RUNTIME CONFIGURATION HYGIENE
+# 3. RUNTIME CONFIGURATION HYGIENE
 validate_runtime_config() {
   local required_variable
 
@@ -135,13 +230,6 @@ validate_runtime_config() {
     fi
   done
 
-  if ! grep -Eq 'APP_VERSION:[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+"' docker-compose.yml || \
-     grep -Eq 'APP_VERSION:.*\$\{' docker-compose.yml; then
-    log_fail "APP_VERSION must remain a literal semantic version in docker-compose.yml."
-    RUNTIME_CONFIG_STATUS="FAIL"
-    return 1
-  fi
-
   if grep -REqs 'process\.env\.JWT_SECRET[[:space:]]*(\|\||\?\?)' backend/src; then
     log_fail "Backend source contains a JWT_SECRET fallback."
     RUNTIME_CONFIG_STATUS="FAIL"
@@ -158,105 +246,124 @@ validate_runtime_config() {
   return 0
 }
 
-# 3. VERSION CONSISTENCY
+# 4. VERSION CONSISTENCY
 validate_versions() {
-  local backend_json backend_lock frontend_json frontend_lock docker_compose readme_ver changelog_ver
+  local package_version readme_ver changelog_ver
 
-  # Extract backend versions
-  if [ ! -f "backend/package.json" ]; then
-    log_fail "Missing backend/package.json"
+  if ! node <<'NODE'
+const fs = require('fs');
+
+const versionFiles = [
+  'backend/package.json',
+  'backend/package-lock.json',
+  'frontend/package.json',
+  'frontend/package-lock.json',
+];
+const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
+const errors = [];
+const versions = new Map();
+
+function isValidSemver(version) {
+  const match = semverPattern.exec(version);
+  if (!match) return false;
+
+  const prerelease = match[4];
+  if (!prerelease) return true;
+
+  return prerelease.split('.').every((identifier) => {
+    return !(/^\d+$/.test(identifier) && identifier.length > 1 && identifier.startsWith('0'));
+  });
+}
+
+for (const file of versionFiles) {
+  let parsed;
+  try {
+    parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (error) {
+    errors.push(`${file}: cannot read valid JSON (${error.message})`);
+    continue;
+  }
+
+  if (typeof parsed.version !== 'string' || parsed.version.trim() === '') {
+    errors.push(`${file}: missing or empty version field`);
+    continue;
+  }
+
+  const version = parsed.version;
+  if (!isValidSemver(version)) {
+    errors.push(`${file}: invalid semantic version '${version}'`);
+    continue;
+  }
+
+  versions.set(file, version);
+}
+
+if (versions.size === versionFiles.length) {
+  const distinctVersions = new Set(versions.values());
+  if (distinctVersions.size !== 1) {
+    errors.push('Package version mismatch:');
+    for (const [file, version] of versions) errors.push(`- ${file}: ${version}`);
+  }
+}
+
+let appVersion = '';
+try {
+  const composeLines = fs.readFileSync('docker-compose.yml', 'utf8').split(/\r?\n/);
+  const appVersionLines = composeLines.filter((line) => /^\s*APP_VERSION\s*:/.test(line));
+
+  if (appVersionLines.length !== 1) {
+    errors.push(`docker-compose.yml: expected exactly one APP_VERSION entry, found ${appVersionLines.length}`);
+  } else {
+    const rawValue = appVersionLines[0].replace(/^\s*APP_VERSION\s*:/, '').trim();
+    const quotedValue = rawValue.match(/^(['"])(.*?)\1(?:\s+#.*)?$/);
+    const plainValue = rawValue.match(/^([^\s#]+)(?:\s+#.*)?$/);
+    appVersion = quotedValue ? quotedValue[2] : plainValue ? plainValue[1] : '';
+
+    if (appVersion === '') {
+      errors.push('docker-compose.yml: APP_VERSION is empty or malformed');
+    } else if (!isValidSemver(appVersion)) {
+      errors.push(`docker-compose.yml: APP_VERSION '${appVersion}' is not valid semver`);
+    }
+  }
+} catch (error) {
+  errors.push(`docker-compose.yml: cannot read APP_VERSION (${error.message})`);
+}
+
+const packageVersion = versions.get('backend/package.json') || '';
+if (packageVersion && appVersion && packageVersion !== appVersion) {
+  errors.push(`Version mismatch: packages use ${packageVersion}, docker-compose.yml uses ${appVersion}`);
+}
+
+if (errors.length > 0) {
+  for (const error of errors) console.error(error);
+  process.exit(1);
+}
+
+NODE
+  then
+    log_fail "Package and Docker Compose version validation failed; see details above."
     VERSIONS_STATUS="FAIL"
     DOCS_STATUS="FAIL"
     return 1
   fi
-  backend_json=$(grep '"version"' backend/package.json | head -n 1 | awk -F '"' '{print $4}')
 
-  if [ ! -f "backend/package-lock.json" ]; then
-    log_fail "Missing backend/package-lock.json"
-    VERSIONS_STATUS="FAIL"
-    DOCS_STATUS="FAIL"
-    return 1
-  fi
-  backend_lock=$(grep '"version"' backend/package-lock.json | head -n 1 | awk -F '"' '{print $4}')
-
-  # Extract frontend versions
-  if [ ! -f "frontend/package.json" ]; then
-    log_fail "Missing frontend/package.json"
-    VERSIONS_STATUS="FAIL"
-    DOCS_STATUS="FAIL"
-    return 1
-  fi
-  frontend_json=$(grep '"version"' frontend/package.json | head -n 1 | awk -F '"' '{print $4}')
-
-  if [ ! -f "frontend/package-lock.json" ]; then
-    log_fail "Missing frontend/package-lock.json"
-    VERSIONS_STATUS="FAIL"
-    DOCS_STATUS="FAIL"
-    return 1
-  fi
-  frontend_lock=$(grep '"version"' frontend/package-lock.json | head -n 1 | awk -F '"' '{print $4}')
-
-  # Extract docker-compose version
-  if [ ! -f "docker-compose.yml" ]; then
-    log_fail "Missing docker-compose.yml"
-    VERSIONS_STATUS="FAIL"
-    return 1
-  fi
-  docker_compose=$(grep 'APP_VERSION:' docker-compose.yml | head -n 1 | sed -E 's/.*APP_VERSION:[[:space:]]*["'\'']?([^"'\''[:space:]]+)["'\'']?.*/\1/')
+  package_version=$(node -p "require('./backend/package.json').version")
 
   # Extract documentation versions
-  if [ ! -f "README.md" ]; then
-    log_fail "Missing README.md"
-    DOCS_STATUS="FAIL"
-    return 1
-  fi
   readme_ver=$(grep 'Aktualna wersja' README.md | head -n 1 | sed -E 's/.*`([0-9]+\.[0-9]+\.[0-9]+)`.*/\1/')
-
-  if [ ! -f "CHANGELOG.md" ]; then
-    log_fail "Missing CHANGELOG.md"
-    DOCS_STATUS="FAIL"
-    return 1
-  fi
   changelog_ver=$(grep -E '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md | head -n 1 | sed -E 's/## \[([0-9]+\.[0-9]+\.[0-9]+)\].*/\1/')
-
-  # Verification output list for debug
-  local version_mismatch=0
-  local reason=""
-
-  if [ "$backend_json" != "$backend_lock" ]; then
-    reason="${reason}- backend/package.json ($backend_json) != backend/package-lock.json ($backend_lock)\n"
-    version_mismatch=1
-  fi
-  if [ "$backend_json" != "$frontend_json" ]; then
-    reason="${reason}- backend/package.json ($backend_json) != frontend/package.json ($frontend_json)\n"
-    version_mismatch=1
-  fi
-  if [ "$frontend_json" != "$frontend_lock" ]; then
-    reason="${reason}- frontend/package.json ($frontend_json) != frontend/package-lock.json ($frontend_lock)\n"
-    version_mismatch=1
-  fi
-  if [ "$backend_json" != "$docker_compose" ]; then
-    reason="${reason}- backend/package.json ($backend_json) != docker-compose.yml ($docker_compose)\n"
-    version_mismatch=1
-  fi
-
-  if [ $version_mismatch -eq 1 ]; then
-    log_fail "Version mismatch detected in config files:\n$reason"
-    VERSIONS_STATUS="FAIL"
-    return 1
-  fi
 
   VERSIONS_STATUS="PASS"
 
   # Verify docs versions
   local docs_mismatch=0
   local docs_reason=""
-  if [ "$backend_json" != "$readme_ver" ]; then
-    docs_reason="${docs_reason}- packages ($backend_json) != README.md ($readme_ver)\n"
+  if [ "$package_version" != "$readme_ver" ]; then
+    docs_reason="${docs_reason}- packages ($package_version) != README.md ($readme_ver)\n"
     docs_mismatch=1
   fi
-  if [ "$backend_json" != "$changelog_ver" ]; then
-    docs_reason="${docs_reason}- packages ($backend_json) != CHANGELOG.md ($changelog_ver)\n"
+  if [ "$package_version" != "$changelog_ver" ]; then
+    docs_reason="${docs_reason}- packages ($package_version) != CHANGELOG.md ($changelog_ver)\n"
     docs_mismatch=1
   fi
 
@@ -270,7 +377,7 @@ validate_versions() {
   return 0
 }
 
-# 4. PACKAGE-LOCK DIRECT DEPENDENCY CONSISTENCY
+# 5. PACKAGE-LOCK DIRECT DEPENDENCY CONSISTENCY
 validate_lockfiles() {
   local project
 
@@ -321,7 +428,7 @@ NODE
   return 0
 }
 
-# 5. BUILD VALIDATION
+# 6. BUILD VALIDATION
 validate_builds() {
   # Backend build
   if ! (cd backend && npm run build >/dev/null 2>&1); then
@@ -342,7 +449,7 @@ validate_builds() {
   return 0
 }
 
-# 6. BACKEND TESTS VALIDATION
+# 7. BACKEND TESTS VALIDATION
 validate_backend_tests() {
   if ! (cd backend && npm test >/dev/null 2>&1); then
     log_fail "Backend automated tests failed. Run 'npm test' inside backend/ to diagnose."
@@ -353,7 +460,7 @@ validate_backend_tests() {
   return 0
 }
 
-# 7. FRONTEND TESTS VALIDATION
+# 8. FRONTEND TESTS VALIDATION
 validate_frontend_tests() {
   if ! (cd frontend && npm test >/dev/null 2>&1); then
     log_fail "Frontend automated tests failed. Run 'npm test' inside frontend/ to diagnose."
@@ -364,7 +471,7 @@ validate_frontend_tests() {
   return 0
 }
 
-# 8. DOCKER VALIDATION
+# 9. DOCKER VALIDATION
 validate_docker() {
   DOCKER_STATUS="PENDING"
   if ! command -v docker >/dev/null 2>&1; then
@@ -400,21 +507,44 @@ validate_docker() {
   return 0
 }
 
+# 10. FINAL GIT CLEANLINESS
+validate_final_git() {
+  local status_porcelain
+
+  if ! status_porcelain=$(git status --porcelain 2>/dev/null); then
+    log_fail "Unable to read final Git working tree status."
+    FINAL_GIT_STATUS="FAIL"
+    return 1
+  fi
+
+  if [ -n "$status_porcelain" ]; then
+    log_fail "Verification commands changed the repository or created untracked files:\n$status_porcelain"
+    FINAL_GIT_STATUS="FAIL"
+    return 1
+  fi
+
+  FINAL_GIT_STATUS="PASS"
+  return 0
+}
+
 # Main Execution Flow
 echo "========================================="
 echo "Release Validation"
 echo "========================================="
 
 # Run validations one by one. If one fails, we print status and stop.
-if validate_git; then
-  if validate_runtime_config; then
-    if validate_versions; then
-      if validate_lockfiles; then
-        if validate_builds; then
-          if validate_backend_tests; then
-            if validate_frontend_tests; then
-              if [ "$WITH_DOCKER" = true ]; then
-                validate_docker || true
+if validate_required_files; then
+  if validate_git; then
+    if validate_runtime_config; then
+      if validate_versions; then
+        if validate_lockfiles; then
+          if validate_builds; then
+            if validate_backend_tests; then
+              if validate_frontend_tests; then
+                if [ "$WITH_DOCKER" = true ]; then
+                  validate_docker || true
+                fi
+                validate_final_git || true
               fi
             fi
           fi
@@ -425,6 +555,7 @@ if validate_git; then
 fi
 
 # Format results
+echo "Required Files............ $REQUIRED_FILES_STATUS"
 echo "Git....................... $GIT_STATUS"
 echo "Runtime Configuration..... $RUNTIME_CONFIG_STATUS"
 echo "Versions.................. $VERSIONS_STATUS"
@@ -435,9 +566,11 @@ echo "Backend Tests............ $BACKEND_TESTS_STATUS"
 echo "Frontend Tests........... $FRONTEND_TESTS_STATUS"
 echo "Docker Compose............ $DOCKER_STATUS"
 echo "Documentation............. $DOCS_STATUS"
+echo "Final Git Cleanliness..... $FINAL_GIT_STATUS"
 echo "========================================="
 
-if [ "$GIT_STATUS" = "PASS" ] && \
+if [ "$REQUIRED_FILES_STATUS" = "PASS" ] && \
+   [ "$GIT_STATUS" = "PASS" ] && \
    [ "$RUNTIME_CONFIG_STATUS" = "PASS" ] && \
    [ "$VERSIONS_STATUS" = "PASS" ] && \
    [ "$LOCKFILES_STATUS" = "PASS" ] && \
@@ -446,7 +579,8 @@ if [ "$GIT_STATUS" = "PASS" ] && \
    [ "$BACKEND_TESTS_STATUS" = "PASS" ] && \
    [ "$FRONTEND_TESTS_STATUS" = "PASS" ] && \
    ( [ "$WITH_DOCKER" = false ] || [ "$DOCKER_STATUS" = "PASS" ] ) && \
-   [ "$DOCS_STATUS" = "PASS" ]; then
+   [ "$DOCS_STATUS" = "PASS" ] && \
+   [ "$FINAL_GIT_STATUS" = "PASS" ]; then
   echo "RESULT: RELEASE VALIDATION PASSED"
   echo "========================================="
   exit 0
