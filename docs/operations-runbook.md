@@ -11,14 +11,23 @@ Szczegółowe wdrożenie, backup i rollback opisuje [deployment.md](deployment.m
 ## Backend restartuje się
 
 1. Sprawdź liczbę restartów i `docker logs --tail=200 worktime-api`.
-2. Zweryfikuj `DATABASE_URL`, dostępność bazy i wynik migracji startowej.
+2. Zweryfikuj obecność rootowego `.env`, nazwy wymaganych `WTT_*`, dostępność bazy i wynik migracji startowej. Nie wypisuj zawartości `.env` ani wyrenderowanego `DATABASE_URL`.
 3. Sprawdź pamięć oraz miejsce na dysku; nie uruchamiaj resetu Prisma.
 
 ## Baza danych nie działa
 
 1. Sprawdź `docker compose ps postgres` oraz `docker logs --tail=200 worktime-db`.
-2. Uruchom `docker exec worktime-db pg_isready -U time_user -d time_reporting` z wartościami właściwymi dla środowiska.
-3. Sprawdź wolumen, miejsce na dysku i zgodność danych dostępowych. Nie usuwaj wolumenu i nie wykonuj `prisma migrate reset`.
+2. Uruchom kontrolę z wartościami już dostępnymi wewnątrz kontenera: `docker compose exec postgres sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"'`.
+3. Sprawdź dokładną nazwę podłączonego wolumenu poleceniem `docker inspect worktime-db --format '{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Name}}{{end}}{{end}}'`, miejsce na dysku i zgodność danych dostępowych. Nie usuwaj ani nie zastępuj wolumenu i nie wykonuj `prisma migrate reset`.
+
+## Błąd konfiguracji po `git pull`
+
+1. Potwierdź, że istnieje rootowy `.env`, ma prawa `600` i jest ignorowany przez Git: `test -f .env`, `stat -c '%a %n' .env`, `git check-ignore .env`.
+2. Uruchom `docker compose config >/dev/null`. Komunikat `${WTT_... is required}` oznacza brak wskazanej wartości; uzupełnij ją bez publikowania zawartości pliku.
+3. Jeżeli problem dotyczy bazy, porównaj `WTT_POSTGRES_VOLUME` z faktycznie podłączonym wolumenem według procedury w [deployment.md](deployment.md). Nie uruchamiaj stosu z inną nazwą.
+4. Odtwórz `.env` z szyfrowanej kopii, jeżeli plik został utracony. Nie kopiuj produkcyjnych sekretów do śledzonych plików.
+
+Zmiana `WTT_JWT_SECRET` powoduje wylogowanie wszystkich użytkowników. Zmiana `WTT_POSTGRES_PASSWORD` w samym `.env` nie zmienia hasła roli w istniejącej bazie.
 
 ## Problemy po aktualizacji lub migracji
 

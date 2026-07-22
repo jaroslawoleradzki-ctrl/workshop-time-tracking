@@ -21,7 +21,9 @@ cd "$PROJECT_ROOT"
 
 # Global indicators
 GIT_STATUS="PENDING"
+RUNTIME_CONFIG_STATUS="PENDING"
 VERSIONS_STATUS="PENDING"
+LOCKFILES_STATUS="PENDING"
 BACKEND_BUILD_STATUS="PENDING"
 FRONTEND_BUILD_STATUS="PENDING"
 BACKEND_TESTS_STATUS="PENDING"
@@ -38,14 +40,18 @@ log_fail() {
 
 # 1. GIT VALIDATION
 validate_git() {
-  # Check if branch is main or development
+  # Release checks can be prepared on the release feature branch and repeated
+  # on the integration/production branches.
   local branch
   branch=$(git branch --show-current 2>/dev/null || echo "")
-  if [ "$branch" != "development" ] && [ "$branch" != "main" ]; then
-    log_fail "Current branch is '$branch' (must be 'development' or 'main')"
-    GIT_STATUS="FAIL"
-    return 1
-  fi
+  case "$branch" in
+    main|development|feature/*) ;;
+    *)
+      log_fail "Current branch is '$branch' (expected 'main', 'development', or 'feature/*')"
+      GIT_STATUS="FAIL"
+      return 1
+      ;;
+  esac
 
   # Check if there is a merge in progress
   local git_dir
@@ -69,7 +75,90 @@ validate_git() {
   return 0
 }
 
-# 2. VERSION CONSISTENCY
+# 2. RUNTIME CONFIGURATION HYGIENE
+validate_runtime_config() {
+  local required_variable
+
+  if git ls-files | grep -Eq '(^|/)\.env$'; then
+    log_fail "A local .env file is tracked by Git. Remove it from the index before release."
+    RUNTIME_CONFIG_STATUS="FAIL"
+    return 1
+  fi
+
+  if [ ! -f ".env.example" ]; then
+    log_fail "Missing root .env.example."
+    RUNTIME_CONFIG_STATUS="FAIL"
+    return 1
+  fi
+
+  for required_variable in \
+    WTT_POSTGRES_USER \
+    WTT_POSTGRES_PASSWORD \
+    WTT_POSTGRES_DB \
+    WTT_JWT_SECRET \
+    WTT_POSTGRES_VOLUME \
+    WTT_HTTP_PORT \
+    WTT_BACKEND_HOST_PORT \
+    WTT_POSTGRES_HOST_PORT \
+    WTT_LOG_LEVEL; do
+    if ! grep -q "^${required_variable}=" .env.example; then
+      log_fail "Root .env.example is missing ${required_variable}."
+      RUNTIME_CONFIG_STATUS="FAIL"
+      return 1
+    fi
+  done
+
+  if ! git check-ignore -q .env || \
+     ! git check-ignore -q backend/.env || \
+     ! git check-ignore -q frontend/.env; then
+    log_fail "Local root/backend/frontend .env files are not all ignored by Git."
+    RUNTIME_CONFIG_STATUS="FAIL"
+    return 1
+  fi
+
+  if git check-ignore -q .env.example || git check-ignore -q backend/.env.example; then
+    log_fail "An example environment file is unexpectedly ignored by Git."
+    RUNTIME_CONFIG_STATUS="FAIL"
+    return 1
+  fi
+
+  for required_variable in \
+    WTT_POSTGRES_USER \
+    WTT_POSTGRES_PASSWORD \
+    WTT_POSTGRES_DB \
+    WTT_JWT_SECRET \
+    WTT_POSTGRES_VOLUME; do
+    if ! grep -Fq "\${${required_variable}:?" docker-compose.yml; then
+      log_fail "docker-compose.yml does not require ${required_variable}."
+      RUNTIME_CONFIG_STATUS="FAIL"
+      return 1
+    fi
+  done
+
+  if ! grep -Eq 'APP_VERSION:[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+"' docker-compose.yml || \
+     grep -Eq 'APP_VERSION:.*\$\{' docker-compose.yml; then
+    log_fail "APP_VERSION must remain a literal semantic version in docker-compose.yml."
+    RUNTIME_CONFIG_STATUS="FAIL"
+    return 1
+  fi
+
+  if grep -REqs 'process\.env\.JWT_SECRET[[:space:]]*(\|\||\?\?)' backend/src; then
+    log_fail "Backend source contains a JWT_SECRET fallback."
+    RUNTIME_CONFIG_STATUS="FAIL"
+    return 1
+  fi
+
+  if grep -Eq '^WTT_(POSTGRES_PASSWORD|JWT_SECRET)=.+' .env.example; then
+    log_fail "Secret values in root .env.example must remain empty."
+    RUNTIME_CONFIG_STATUS="FAIL"
+    return 1
+  fi
+
+  RUNTIME_CONFIG_STATUS="PASS"
+  return 0
+}
+
+# 3. VERSION CONSISTENCY
 validate_versions() {
   local backend_json backend_lock frontend_json frontend_lock docker_compose readme_ver changelog_ver
 
@@ -181,7 +270,58 @@ validate_versions() {
   return 0
 }
 
-# 3. BUILD VALIDATION
+# 4. PACKAGE-LOCK DIRECT DEPENDENCY CONSISTENCY
+validate_lockfiles() {
+  local project
+
+  for project in backend frontend; do
+    if ! node - "$project/package.json" "$project/package-lock.json" <<'NODE'
+const fs = require('fs');
+
+const manifestPath = process.argv[2];
+const lockfilePath = process.argv[3];
+const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+const lockfile = JSON.parse(fs.readFileSync(lockfilePath, 'utf8'));
+const lockRoot = lockfile.packages && lockfile.packages[''];
+
+if (!lockRoot) {
+  console.error(`${lockfilePath}: missing packages[\"\"] metadata`);
+  process.exit(1);
+}
+
+const sections = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
+const mismatches = [];
+
+for (const section of sections) {
+  const expected = manifest[section] || {};
+  const actual = lockRoot[section] || {};
+  const names = new Set([...Object.keys(expected), ...Object.keys(actual)]);
+
+  for (const name of names) {
+    if (expected[name] !== actual[name]) {
+      mismatches.push(`${section}.${name}: package.json=${expected[name] ?? '<missing>'}, package-lock.json=${actual[name] ?? '<missing>'}`);
+    }
+  }
+}
+
+if (mismatches.length > 0) {
+  console.error(`${manifestPath} and ${lockfilePath} have inconsistent direct dependencies:`);
+  for (const mismatch of mismatches) console.error(`- ${mismatch}`);
+  process.exit(1);
+}
+NODE
+    then
+      log_fail "Direct dependency metadata differs between ${project}/package.json and package-lock.json."
+      LOCKFILES_STATUS="FAIL"
+      return 1
+    fi
+  done
+
+  LOCKFILES_STATUS="PASS"
+  return 0
+}
+
+# 5. BUILD VALIDATION
 validate_builds() {
   # Backend build
   if ! (cd backend && npm run build >/dev/null 2>&1); then
@@ -202,7 +342,7 @@ validate_builds() {
   return 0
 }
 
-# 4. BACKEND TESTS VALIDATION
+# 6. BACKEND TESTS VALIDATION
 validate_backend_tests() {
   if ! (cd backend && npm test >/dev/null 2>&1); then
     log_fail "Backend automated tests failed. Run 'npm test' inside backend/ to diagnose."
@@ -213,7 +353,7 @@ validate_backend_tests() {
   return 0
 }
 
-# 5. FRONTEND TESTS VALIDATION
+# 7. FRONTEND TESTS VALIDATION
 validate_frontend_tests() {
   if ! (cd frontend && npm test >/dev/null 2>&1); then
     log_fail "Frontend automated tests failed. Run 'npm test' inside frontend/ to diagnose."
@@ -224,7 +364,7 @@ validate_frontend_tests() {
   return 0
 }
 
-# 6. DOCKER VALIDATION
+# 8. DOCKER VALIDATION
 validate_docker() {
   DOCKER_STATUS="PENDING"
   if ! command -v docker >/dev/null 2>&1; then
@@ -239,8 +379,19 @@ validate_docker() {
     return 1
   fi
 
-  if ! docker compose config >/dev/null 2>&1; then
-    log_fail "Docker Compose configuration is invalid. Run 'docker compose config' to diagnose."
+  # Use synthetic non-production values and suppress rendered configuration so
+  # credentials can never be printed by this verification step.
+  if ! WTT_POSTGRES_USER=verify_user \
+       WTT_POSTGRES_PASSWORD=verify_database_password \
+       WTT_POSTGRES_DB=verify_database \
+       WTT_JWT_SECRET=verify_jwt_secret_for_release_validation \
+       WTT_POSTGRES_VOLUME=verify-pgdata \
+       WTT_HTTP_PORT=18080 \
+       WTT_BACKEND_HOST_PORT=15000 \
+       WTT_POSTGRES_HOST_PORT=15432 \
+       WTT_LOG_LEVEL=info \
+       docker compose --env-file .env.example config >/dev/null 2>&1; then
+    log_fail "Docker Compose configuration is invalid with safe verification values."
     DOCKER_STATUS="FAIL"
     return 1
   fi
@@ -256,12 +407,16 @@ echo "========================================="
 
 # Run validations one by one. If one fails, we print status and stop.
 if validate_git; then
-  if validate_versions; then
-    if validate_builds; then
-      if validate_backend_tests; then
-        if validate_frontend_tests; then
-          if [ "$WITH_DOCKER" = true ]; then
-            validate_docker || true
+  if validate_runtime_config; then
+    if validate_versions; then
+      if validate_lockfiles; then
+        if validate_builds; then
+          if validate_backend_tests; then
+            if validate_frontend_tests; then
+              if [ "$WITH_DOCKER" = true ]; then
+                validate_docker || true
+              fi
+            fi
           fi
         fi
       fi
@@ -271,7 +426,9 @@ fi
 
 # Format results
 echo "Git....................... $GIT_STATUS"
+echo "Runtime Configuration..... $RUNTIME_CONFIG_STATUS"
 echo "Versions.................. $VERSIONS_STATUS"
+echo "Package Lockfiles......... $LOCKFILES_STATUS"
 echo "Backend Build............. $BACKEND_BUILD_STATUS"
 echo "Frontend Build............ $FRONTEND_BUILD_STATUS"
 echo "Backend Tests............ $BACKEND_TESTS_STATUS"
@@ -281,7 +438,9 @@ echo "Documentation............. $DOCS_STATUS"
 echo "========================================="
 
 if [ "$GIT_STATUS" = "PASS" ] && \
+   [ "$RUNTIME_CONFIG_STATUS" = "PASS" ] && \
    [ "$VERSIONS_STATUS" = "PASS" ] && \
+   [ "$LOCKFILES_STATUS" = "PASS" ] && \
    [ "$BACKEND_BUILD_STATUS" = "PASS" ] && \
    [ "$FRONTEND_BUILD_STATUS" = "PASS" ] && \
    [ "$BACKEND_TESTS_STATUS" = "PASS" ] && \

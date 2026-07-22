@@ -1,8 +1,11 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
+import * as bcrypt from 'bcryptjs';
+import * as jwt from 'jsonwebtoken';
 import request from 'supertest';
 import app from '../src/app';
 import prisma from '../src/utils/prisma';
 import logger from '../src/utils/logger';
+import { TEST_JWT_SECRET } from './setup-env';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -63,6 +66,8 @@ describe('API Integration Tests', () => {
   // 2. POST /api/auth/login with invalid credentials
   describe('POST /api/auth/login (Invalid Credentials)', () => {
     it('should return 401 Unauthorized for invalid credentials', async () => {
+      vi.spyOn(prisma.user, 'findUnique').mockResolvedValueOnce(null);
+
       const res = await request(app)
         .post('/api/auth/login')
         .send({ username: 'nonexistent_user_998', password: 'wrongpassword' })
@@ -71,6 +76,50 @@ describe('API Integration Tests', () => {
 
       expect(res.body).toHaveProperty('message');
       expect(typeof res.body.message).toBe('string');
+    });
+  });
+
+  describe('JWT configuration', () => {
+    it('uses the configured secret for login and token verification', async () => {
+      const password = 'correct-test-password';
+      const user = {
+        id: '10000000-0000-4000-8000-000000000001',
+        username: 'test-admin',
+        passwordHash: await bcrypt.hash(password, 4),
+        fullName: 'Test Administrator',
+        role: 'admin',
+        isActive: true,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      };
+      vi.spyOn(prisma.user, 'findUnique')
+        .mockResolvedValueOnce(user)
+        .mockResolvedValueOnce(user);
+
+      const loginResponse = await request(app)
+        .post('/api/auth/login')
+        .send({ username: user.username, password })
+        .expect(200)
+        .expect('Content-Type', /json/);
+
+      expect(jwt.verify(loginResponse.body.token, TEST_JWT_SECRET)).toMatchObject({
+        id: user.id,
+        username: user.username,
+        role: user.role,
+      });
+
+      const meResponse = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${loginResponse.body.token}`)
+        .expect(200)
+        .expect('Content-Type', /json/);
+
+      expect(meResponse.body.user).toEqual({
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        fullName: user.fullName,
+      });
     });
   });
 
