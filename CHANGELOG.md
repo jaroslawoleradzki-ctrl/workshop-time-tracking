@@ -5,6 +5,9 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- Produkcyjny obraz backendu Alpine zawiera Prisma Query Engine dla `linux-musl-openssl-3.0.x`; walidacja wydania sprawdza target, sposób generowania i kopiowania klienta oraz obecność właściwego artefaktu przed wdrożeniem.
+
 ### Added
 - Rozbudowano strukturę dokumentacji o reguły biznesowe, specyfikację importów i eksportów, konfigurację, testowanie, runbook operacyjny oraz instrukcję użytkownika; uzupełniono także architekturę i indeks dokumentacji.
 - Dodano `PROJECT_STATUS.md` oraz obowiązkową procedurę rozpoczęcia sesji i przekazania pracy między ChatGPT i Codexem w `docs/session-start.md`; powiązano procedurę z zasadami w `AGENTS.md`.

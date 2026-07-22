@@ -50,6 +50,8 @@ Od wersji `v0.2.8` cały proces konfiguracji bazy danych po pierwszej instalacji
 1. **Automatyczne migracje Prisma**: Uruchamiane jest polecenie `./node_modules/.bin/prisma migrate deploy`, które korzysta wyłącznie z Prisma CLI zainstalowanej w obrazie i tworzy lub aktualizuje schemat tabel w bazie PostgreSQL do najnowszej wersji.
 2. **Automatyczne zasilanie systemowe (System Seeding)**: Po pomyślnym nałożeniu migracji automatycznie uruchamiany jest skrypt produkcyjnego zasilania bazy (`node dist/prisma/seed.js`). Skrypt ten instaluje wyłącznie niezbędne dane systemowe (domyślnych użytkowników oraz słowniki typów czasu pracy). **Dane demo/przykładowe są z tego procesu wyłączone i nigdy nie uruchamiają się automatycznie.**
 
+Prisma Client jest generowany po zainstalowaniu OpenSSL w etapie buildera. Konfiguracja `binaryTargets` obejmuje `linux-musl-openssl-3.0.x`, a katalog `node_modules/.prisma` z wygenerowanym Query Engine jest kopiowany z buildera do finalnego obrazu Alpine. Zapewnia to zgodność procesu migracji, produkcyjnego seeda i API z bibliotekami runtime.
+
 ### Kolejność uruchamiania usług i healthchecki
 
 Docker Compose uruchamia usługi w następującej kolejności:
@@ -272,7 +274,7 @@ Przed publikacją wersji produkcyjnej, deweloper lub agent powinien uruchomić s
 ```bash
 ./scripts/verify-release.sh
 ```
-Domyślnie weryfikuje czystość Git, zgodność wersji i bezpośrednich zależności z lockfile'ami, higienę plików `.env`, wymagane `WTT_*`, brak starego sekretu JWT oraz buildy i testy obu aplikacji. Aby dodatkowo sprawdzić Compose na syntetycznych, nieprodukcyjnych wartościach (bez wypisywania konfiguracji), użyj opcji:
+Domyślnie weryfikuje czystość Git, zgodność wersji i bezpośrednich zależności z lockfile'ami, higienę plików `.env`, wymagane `WTT_*`, brak starego sekretu JWT oraz buildy i testy obu aplikacji. Kontrola Prisma sprawdza deklarację produkcyjnego targetu `linux-musl-openssl-3.0.x`, kolejność instalacji OpenSSL i generowania klienta w Dockerfile, kopiowanie wygenerowanych engine'ów do runtime oraz obecność właściwego pliku engine'u w lokalnym `node_modules` po `npm ci` i `prisma generate`. Aby dodatkowo sprawdzić Compose na syntetycznych, nieprodukcyjnych wartościach (bez wypisywania konfiguracji), użyj opcji:
 ```bash
 ./scripts/verify-release.sh --with-docker
 ```

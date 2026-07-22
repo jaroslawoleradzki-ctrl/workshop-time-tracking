@@ -244,6 +244,7 @@ W środowisku produkcyjnym cała aplikacja jest uruchamiana i koordynowana za po
    ```
     * Dane PostgreSQL są mapowane na zewnętrzny wolumen wskazany przez `WTT_POSTGRES_VOLUME`.
     * Kontener backendowy (`worktime-api`) ma skonfigurowany plik `docker-entrypoint.sh`, który przy każdym uruchomieniu kontenera wykonuje zaległe migracje lokalną Prisma CLI (`./node_modules/.bin/prisma migrate deploy`) i uruchamia produkcyjny seed przed startem API.
+    * Prisma Client jest generowany w obrazie z Query Engine dla środowiska Alpine z OpenSSL 3 (`linux-musl-openssl-3.0.x`), a wygenerowane pliki engine'u są kopiowane do finalnego etapu runtime.
     * PostgreSQL musi uzyskać stan `healthy`, zanim uruchomi się backend. Backend uzyskuje stan `healthy` dopiero po odpowiedzi HTTP 200 z `/api/health`, która potwierdza również połączenie z bazą. Nginx startuje po osiągnięciu tego stanu przez backend.
     * Kontener frontendu (`worktime-web`) jest budowany automatycznie w oparciu o wieloetapowy plik `Dockerfile` (multi-stage build), co eliminuje potrzebę instalowania pakietów i budowania plików produkcyjnych na maszynie hosta.
 

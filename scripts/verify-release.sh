@@ -69,6 +69,7 @@ cd "$PROJECT_ROOT"
 GIT_STATUS="PENDING"
 REQUIRED_FILES_STATUS="PENDING"
 RUNTIME_CONFIG_STATUS="PENDING"
+PRISMA_RUNTIME_STATUS="PENDING"
 VERSIONS_STATUS="PENDING"
 LOCKFILES_STATUS="PENDING"
 BACKEND_BUILD_STATUS="PENDING"
@@ -104,6 +105,7 @@ validate_required_files() {
     backend/docker-entrypoint.sh \
     backend/package.json \
     backend/package-lock.json \
+    backend/prisma/schema.prisma \
     frontend/Dockerfile \
     frontend/package.json \
     frontend/package-lock.json \
@@ -246,7 +248,91 @@ validate_runtime_config() {
   return 0
 }
 
-# 4. VERSION CONSISTENCY
+# 4. PRISMA RUNTIME COMPATIBILITY
+validate_prisma_runtime() {
+  if ! node <<'NODE'
+const fs = require('fs');
+
+const schemaPath = 'backend/prisma/schema.prisma';
+const dockerfilePath = 'backend/Dockerfile';
+const engineDirectory = 'backend/node_modules/.prisma/client';
+const requiredTarget = 'linux-musl-openssl-3.0.x';
+const errors = [];
+
+const schema = fs.readFileSync(schemaPath, 'utf8');
+const clientGenerator = schema.match(/generator\s+client\s*\{([\s\S]*?)\}/);
+
+if (!clientGenerator) {
+  errors.push(`${schemaPath}: missing generator client block`);
+} else {
+  const targetsDeclaration = clientGenerator[1].match(/\bbinaryTargets\s*=\s*\[([^\]]*)\]/);
+  const targets = targetsDeclaration
+    ? [...targetsDeclaration[1].matchAll(/["']([^"']+)["']/g)].map((match) => match[1])
+    : [];
+
+  for (const target of ['native', requiredTarget]) {
+    if (!targets.includes(target)) {
+      errors.push(`${schemaPath}: generator client binaryTargets must include "${target}"`);
+    }
+  }
+}
+
+const dockerfile = fs.readFileSync(dockerfilePath, 'utf8');
+const dockerStages = dockerfile.split(/(?=^FROM\s)/mi);
+const builderStage = dockerStages.find((stage) => /^FROM\s+\S+\s+AS\s+builder\s*$/mi.test(stage));
+
+if (!builderStage) {
+  errors.push(`${dockerfilePath}: missing builder stage`);
+} else {
+  const opensslInstall = builderStage.search(/^RUN\s+apk\s+add\s+--no-cache\b[^\n]*\bopenssl\b/im);
+  const prismaGenerate = builderStage.indexOf('./node_modules/.bin/prisma generate');
+
+  if (opensslInstall === -1) {
+    errors.push(`${dockerfilePath}: builder stage must install OpenSSL before Prisma Client generation`);
+  }
+  if (prismaGenerate === -1) {
+    errors.push(`${dockerfilePath}: builder stage must run the local Prisma CLI to generate Prisma Client`);
+  }
+  if (opensslInstall !== -1 && prismaGenerate !== -1 && opensslInstall > prismaGenerate) {
+    errors.push(`${dockerfilePath}: builder stage installs OpenSSL after Prisma Client generation`);
+  }
+}
+
+if (!/^FROM\s+\S*alpine\S*\s+AS\s+runtime\s*$/mi.test(dockerfile)) {
+  errors.push(`${dockerfilePath}: runtime stage is expected to use an Alpine image`);
+}
+
+if (!/^COPY\s+--from=builder\s+\/usr\/src\/app\/node_modules\/\.prisma\s+\.\/node_modules\/\.prisma\s*$/m.test(dockerfile)) {
+  errors.push(`${dockerfilePath}: generated Prisma Client engines are not copied from builder to runtime`);
+}
+
+let engineFiles = [];
+try {
+  engineFiles = fs.readdirSync(engineDirectory);
+} catch (error) {
+  errors.push(`${engineDirectory}: generated Prisma Client is missing; run npm ci and prisma generate in backend/`);
+}
+
+if (engineFiles.length > 0 && !engineFiles.some((file) => file.includes(requiredTarget) && file.endsWith('.node'))) {
+  errors.push(`${engineDirectory}: missing Query Engine for ${requiredTarget}; run prisma generate with the production binary target`);
+}
+
+if (errors.length > 0) {
+  for (const error of errors) console.error(error);
+  process.exit(1);
+}
+NODE
+  then
+    log_fail "Prisma Client is not prepared for the production Alpine/OpenSSL 3 runtime; see details above."
+    PRISMA_RUNTIME_STATUS="FAIL"
+    return 1
+  fi
+
+  PRISMA_RUNTIME_STATUS="PASS"
+  return 0
+}
+
+# 5. VERSION CONSISTENCY
 validate_versions() {
   local package_version readme_ver changelog_ver
 
@@ -377,7 +463,7 @@ NODE
   return 0
 }
 
-# 5. PACKAGE-LOCK DIRECT DEPENDENCY CONSISTENCY
+# 6. PACKAGE-LOCK DIRECT DEPENDENCY CONSISTENCY
 validate_lockfiles() {
   local project
 
@@ -428,7 +514,7 @@ NODE
   return 0
 }
 
-# 6. BUILD VALIDATION
+# 7. BUILD VALIDATION
 validate_builds() {
   # Backend build
   if ! (cd backend && npm run build >/dev/null 2>&1); then
@@ -449,7 +535,7 @@ validate_builds() {
   return 0
 }
 
-# 7. BACKEND TESTS VALIDATION
+# 8. BACKEND TESTS VALIDATION
 validate_backend_tests() {
   if ! (cd backend && npm test >/dev/null 2>&1); then
     log_fail "Backend automated tests failed. Run 'npm test' inside backend/ to diagnose."
@@ -460,7 +546,7 @@ validate_backend_tests() {
   return 0
 }
 
-# 8. FRONTEND TESTS VALIDATION
+# 9. FRONTEND TESTS VALIDATION
 validate_frontend_tests() {
   if ! (cd frontend && npm test >/dev/null 2>&1); then
     log_fail "Frontend automated tests failed. Run 'npm test' inside frontend/ to diagnose."
@@ -471,7 +557,7 @@ validate_frontend_tests() {
   return 0
 }
 
-# 9. DOCKER VALIDATION
+# 10. DOCKER VALIDATION
 validate_docker() {
   DOCKER_STATUS="PENDING"
   if ! command -v docker >/dev/null 2>&1; then
@@ -507,7 +593,7 @@ validate_docker() {
   return 0
 }
 
-# 10. FINAL GIT CLEANLINESS
+# 11. FINAL GIT CLEANLINESS
 validate_final_git() {
   local status_porcelain
 
@@ -536,15 +622,17 @@ echo "========================================="
 if validate_required_files; then
   if validate_git; then
     if validate_runtime_config; then
-      if validate_versions; then
-        if validate_lockfiles; then
-          if validate_builds; then
-            if validate_backend_tests; then
-              if validate_frontend_tests; then
-                if [ "$WITH_DOCKER" = true ]; then
-                  validate_docker || true
+      if validate_prisma_runtime; then
+        if validate_versions; then
+          if validate_lockfiles; then
+            if validate_builds; then
+              if validate_backend_tests; then
+                if validate_frontend_tests; then
+                  if [ "$WITH_DOCKER" = true ]; then
+                    validate_docker || true
+                  fi
+                  validate_final_git || true
                 fi
-                validate_final_git || true
               fi
             fi
           fi
@@ -558,6 +646,7 @@ fi
 echo "Required Files............ $REQUIRED_FILES_STATUS"
 echo "Git....................... $GIT_STATUS"
 echo "Runtime Configuration..... $RUNTIME_CONFIG_STATUS"
+echo "Prisma Runtime............ $PRISMA_RUNTIME_STATUS"
 echo "Versions.................. $VERSIONS_STATUS"
 echo "Package Lockfiles......... $LOCKFILES_STATUS"
 echo "Backend Build............. $BACKEND_BUILD_STATUS"
@@ -572,6 +661,7 @@ echo "========================================="
 if [ "$REQUIRED_FILES_STATUS" = "PASS" ] && \
    [ "$GIT_STATUS" = "PASS" ] && \
    [ "$RUNTIME_CONFIG_STATUS" = "PASS" ] && \
+   [ "$PRISMA_RUNTIME_STATUS" = "PASS" ] && \
    [ "$VERSIONS_STATUS" = "PASS" ] && \
    [ "$LOCKFILES_STATUS" = "PASS" ] && \
    [ "$BACKEND_BUILD_STATUS" = "PASS" ] && \

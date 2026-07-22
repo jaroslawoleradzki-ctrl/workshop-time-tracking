@@ -5,11 +5,23 @@
 - Projekt: Workshop Time Tracking
 - Aktualna wersja produkcyjna: `0.2.9`; trwają prace nad `0.3.0`
 - Gałąź robocza: `feature/0.3.0-deployment-stability`
-- Bazowy commit Etapu 5: `a53489c` (`chore(docker): improve container startup healthchecks`)
-- Stan zmian: Etap 5 zakończony i zweryfikowany lokalnie na gałęzi roboczej. Zmiany nie zostały wysłane do origin.
-- Stan wdrożenia: Wersja `0.3.0` nie została jeszcze wdrożona na serwer klienta.
+- Bazowy commit poprawki runtime: `df4eae0` (`chore(release): complete release verification`)
+- Stan zmian: przygotowano poprawkę zgodności Prisma Client z produkcyjnym obrazem Alpine/OpenSSL 3 oraz kontrolę przedwydaniową tego artefaktu. Zmiany nie zostały wysłane do origin.
+- Stan wdrożenia: próba wdrożenia commita `df4eae0` nie uruchomiła backendu, ponieważ produkcyjny seed nie znalazł Query Engine dla `linux-musl-openssl-3.0.x`; dane i migracje nie zostały zmienione przez poprawkę.
 
-Etapy stabilizacji wdrożenia `0.3.0` ustabilizowały produkcyjny obraz backendu i dostępność Prisma CLI, dodały backendowy healthcheck kontenera oraz rozdzieliły konfigurację klienta od śledzonych plików. Nginx oczekuje na stan `service_healthy` backendu, a backend nadal oczekuje na zdrowy PostgreSQL. PostgreSQL, JWT, porty, poziom logowania i dokładna nazwa zewnętrznego wolumenu są ustawiane przez ignorowany rootowy `.env`; rutynowa aktualizacja nie wymaga już `git stash`. Polityka `restart: always` pozostała bez zmian.
+Etapy stabilizacji wdrożenia `0.3.0` ustabilizowały produkcyjny obraz backendu i dostępność Prisma CLI, dodały backendowy healthcheck kontenera oraz rozdzieliły konfigurację klienta od śledzonych plików. Poprawka runtime jawnie generuje i kopiuje Query Engine `linux-musl-openssl-3.0.x`, którego brak blokował produkcyjny seed. Nginx oczekuje na stan `service_healthy` backendu, a backend nadal oczekuje na zdrowy PostgreSQL. PostgreSQL, JWT, porty, poziom logowania i dokładna nazwa zewnętrznego wolumenu są ustawiane przez ignorowany rootowy `.env`; rutynowa aktualizacja nie wymaga już `git stash`. Polityka `restart: always` pozostała bez zmian.
+
+## Weryfikacja poprawki Prisma runtime
+
+- `npm ci` backendu zakończone powodzeniem; zgłoszono 5 istniejących podatności audytu zależności,
+- `./node_modules/.bin/prisma generate` zakończone powodzeniem i utworzyło `libquery_engine-linux-musl-openssl-3.0.x.so.node`,
+- backend: build oraz 28 testów zakończone powodzeniem,
+- frontend: build oraz 8 testów zakończone powodzeniem,
+- statyczna kontrola konfiguracji Prisma/Dockerfile i wygenerowanego engine'u zakończona powodzeniem,
+- `bash -n scripts/verify-release.sh` zakończone powodzeniem; `shellcheck` nie jest dostępny,
+- lint frontendu pozostaje niedostępny z powodu istniejącego braku pakietu `eslint` w zależnościach.
+
+Docker CLI ani alternatywny runtime kontenerowy nie są dostępne w środowisku roboczym. Z tego powodu build obrazu backendu oraz izolowany test startu z PostgreSQL wymagają wykonania na hoście z Dockerem przed ponownym wdrożeniem. Nie uruchamiano żadnych operacji na produkcyjnej bazie ani wolumenie.
 
 ## Dokumentacja projektu
 
