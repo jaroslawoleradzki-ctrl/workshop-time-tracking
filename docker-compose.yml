@@ -49,3 +49,5 @@ services:
 
 volumes:
   pgdata:
+    external: true
+    name: workshop-time-tracking-main_pgdata
