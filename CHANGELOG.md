@@ -5,6 +5,11 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Miesięczny raport według pracowników generuje kolumny rodzajów czasu pracy z aktualnego słownika, zachowując kolejność istniejących typów i automatycznie uwzględniając dodane lub usunięte pozycje.
+- Brak konta księgowego przy wpisach bez zlecenia jest prezentowany jako `brak`.
+
 ## [0.3.0] - 2026-07-22
 
 ### Fixed

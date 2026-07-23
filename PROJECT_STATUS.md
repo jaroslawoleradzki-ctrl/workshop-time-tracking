@@ -11,6 +11,8 @@
 
 Etapy stabilizacji wdrożenia `0.3.0` ustabilizowały produkcyjny obraz backendu i dostępność Prisma CLI, dodały backendowy healthcheck kontenera oraz rozdzieliły konfigurację klienta od śledzonych plików. Poprawka runtime jawnie generuje i kopiuje Query Engine `linux-musl-openssl-3.0.x`, którego brak blokował produkcyjny seed. Nginx oczekuje na stan `service_healthy` backendu, a backend nadal oczekuje na zdrowy PostgreSQL. PostgreSQL, JWT, porty, poziom logowania i dokładna nazwa zewnętrznego wolumenu są ustawiane przez ignorowany rootowy `.env`; rutynowa aktualizacja nie wymaga już `git stash`. Polityka `restart: always` pozostała bez zmian.
 
+Pierwsza zmiana funkcjonalna generuje kolumny miesięcznego raportu pracowników z aktualnego słownika rodzajów czasu oraz upraszcza tekst prezentowany przy braku konta księgowego.
+
 ## Weryfikacja poprawki Prisma runtime
 
 - `npm ci` backendu zakończone powodzeniem; zgłoszono 5 istniejących podatności audytu zależności,
@@ -22,6 +24,13 @@ Etapy stabilizacji wdrożenia `0.3.0` ustabilizowały produkcyjny obraz backendu
 - lint frontendu pozostaje niedostępny z powodu istniejącego braku pakietu `eslint` w zależnościach.
 
 Docker CLI ani alternatywny runtime kontenerowy nie są dostępne w środowisku roboczym. Z tego powodu build obrazu backendu oraz izolowany test startu z PostgreSQL wymagają wykonania na hoście z Dockerem przed ponownym wdrożeniem. Nie uruchamiano żadnych operacji na produkcyjnej bazie ani wolumenie.
+
+## Weryfikacja wersji 0.3.1
+
+- backend: 30 testów zakończonych powodzeniem,
+- backend: build zakończony powodzeniem,
+- frontend: 9 testów zakończonych powodzeniem,
+- frontend: build zakończony powodzeniem,
 
 ## Dokumentacja projektu
 
