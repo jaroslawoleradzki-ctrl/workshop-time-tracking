@@ -15,6 +15,8 @@ Pierwsza zmiana funkcjonalna generuje kolumny miesięcznego raportu pracowników
 
 Kolejna zmiana rozszerza wyszukiwarkę Bazy Zleceń Produkcyjnych o częściowe, nieczułe na wielkość liter dopasowanie po zamawiającym, numerze księgowym i numerze produktu.
 
+Ostatnia zmiana dodaje stabilne sortowanie alfabetyczne (nazwisko, imię) oraz kolumnę "Lp." w widoku Bazy Pracowników.
+
 ## Weryfikacja poprawki Prisma runtime
 
 - `npm ci` backendu zakończone powodzeniem; zgłoszono 5 istniejących podatności audytu zależności,
@@ -31,7 +33,7 @@ Docker CLI ani alternatywny runtime kontenerowy nie są dostępne w środowisku 
 
 - backend: 30 testów zakończonych powodzeniem,
 - backend: build zakończony powodzeniem,
-- frontend: 13 testów zakończonych powodzeniem,
+- frontend: 14 testów zakończonych powodzeniem,
 - frontend: build zakończony powodzeniem,
 
 ## Dokumentacja projektu

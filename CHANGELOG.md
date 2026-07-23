@@ -5,6 +5,11 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Kolumnę `Lp.` z kolejnymi stabilnymi numerami wierszy w widoku bazy pracowników.
+- Stabilne sortowanie alfabetyczne listy pracowników na poziomie frontendu według nazwiska (A–Z), a przy równych nazwiskach pomocniczo według imienia.
+
 ### Changed
 
 - Miesięczny raport według pracowników generuje kolumny rodzajów czasu pracy z aktualnego słownika, zachowując kolejność istniejących typów i automatycznie uwzględniając dodane lub usunięte pozycje.

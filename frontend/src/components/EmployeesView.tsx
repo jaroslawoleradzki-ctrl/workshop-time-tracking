@@ -24,6 +24,24 @@ interface EmployeesViewProps {
   token: string;
 }
 
+export function getEmployeeDisplayNames(emp: Employee) {
+  let displayFirstName = emp.firstName || '';
+  let displayLastName = emp.lastName || '';
+
+  if (!displayFirstName && !displayLastName && emp.fullName) {
+    const cleanFullName = emp.fullName.trim();
+    const lastSpaceIdx = cleanFullName.lastIndexOf(' ');
+    if (lastSpaceIdx > 0) {
+      displayFirstName = cleanFullName.substring(0, lastSpaceIdx).trim();
+      displayLastName = cleanFullName.substring(lastSpaceIdx + 1).trim();
+    } else {
+      displayFirstName = '-';
+      displayLastName = cleanFullName;
+    }
+  }
+  return { displayFirstName, displayLastName };
+}
+
 export default function EmployeesView({ token }: EmployeesViewProps) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -165,6 +183,16 @@ export default function EmployeesView({ token }: EmployeesViewProps) {
     return nameMatch || idMatch || firstMatch || lastMatch;
   });
 
+  const sortedEmployees = [...filteredEmployees].sort((a, b) => {
+    const nameA = getEmployeeDisplayNames(a);
+    const nameB = getEmployeeDisplayNames(b);
+    const lastNameCompare = nameA.displayLastName.localeCompare(nameB.displayLastName, 'pl');
+    if (lastNameCompare !== 0) {
+      return lastNameCompare;
+    }
+    return nameA.displayFirstName.localeCompare(nameB.displayFirstName, 'pl');
+  });
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Create/Edit Form Modal */}
@@ -285,7 +313,7 @@ export default function EmployeesView({ token }: EmployeesViewProps) {
         </div>
       ) : error ? (
         <div className="alert alert-danger">{error}</div>
-      ) : filteredEmployees.length === 0 ? (
+      ) : sortedEmployees.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
           Brak pracowników spełniających kryteria.
         </div>
@@ -294,6 +322,7 @@ export default function EmployeesView({ token }: EmployeesViewProps) {
           <table className="table-fixed">
             <thead>
               <tr>
+                <th>Lp.</th>
                 <th>Status</th>
                 <th>ID</th>
                 <th>Imię</th>
@@ -303,24 +332,12 @@ export default function EmployeesView({ token }: EmployeesViewProps) {
               </tr>
             </thead>
             <tbody>
-              {filteredEmployees.map(emp => {
-                let displayFirstName = emp.firstName || '';
-                let displayLastName = emp.lastName || '';
-
-                if (!displayFirstName && !displayLastName && emp.fullName) {
-                  const cleanFullName = emp.fullName.trim();
-                  const lastSpaceIdx = cleanFullName.lastIndexOf(' ');
-                  if (lastSpaceIdx > 0) {
-                    displayFirstName = cleanFullName.substring(0, lastSpaceIdx).trim();
-                    displayLastName = cleanFullName.substring(lastSpaceIdx + 1).trim();
-                  } else {
-                    displayFirstName = '-';
-                    displayLastName = cleanFullName;
-                  }
-                }
+              {sortedEmployees.map((emp, index) => {
+                const { displayFirstName, displayLastName } = getEmployeeDisplayNames(emp);
 
                 return (
                   <tr key={emp.id}>
+                    <td>{index + 1}</td>
                     <td>
                       {emp.isActive ? (
                         <span className="badge badge-open" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
@@ -338,28 +355,28 @@ export default function EmployeesView({ token }: EmployeesViewProps) {
                     <td style={{ fontWeight: 'bold' }}>{displayFirstName || '-'}</td>
                     <td style={{ fontWeight: 'bold' }}>{displayLastName || '-'}</td>
                     <td>{new Date(emp.createdAt).toLocaleDateString('pl-PL', { year: 'numeric', month: '2-digit', day: '2-digit' })}</td>
-                  <td>
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
-                      <button 
-                        className="btn btn-secondary btn-sm"
-                        style={{ padding: '0.25rem 0.5rem' }}
-                        onClick={() => handleOpenEditModal(emp)}
-                      >
-                        <Edit2 size={12} />
-                        Edytuj
-                      </button>
-                      <button 
-                        className="btn btn-danger btn-sm"
-                        style={{ padding: '0.25rem 0.5rem', backgroundColor: 'transparent', color: 'var(--danger-color)', borderColor: 'var(--danger-border)' }}
-                        onClick={() => handleDeleteEmployee(emp.id, emp.fullName)}
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+                    <td>
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          style={{ padding: '0.25rem 0.5rem' }}
+                          onClick={() => handleOpenEditModal(emp)}
+                        >
+                          <Edit2 size={12} />
+                          Edytuj
+                        </button>
+                        <button
+                          className="btn btn-danger btn-sm"
+                          style={{ padding: '0.25rem 0.5rem', backgroundColor: 'transparent', color: 'var(--danger-color)', borderColor: 'var(--danger-border)' }}
+                          onClick={() => handleDeleteEmployee(emp.id, emp.fullName)}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

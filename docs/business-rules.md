@@ -13,6 +13,8 @@ Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.3.0.
 ## Pracownicy i zlecenia
 
 - Pracownik ma flagę `isActive` i opcjonalny `deletedAt`. Lista raportowania pobiera tylko aktywnych, nieusuniętych pracowników.
+- Lista pracowników w bazie pracowników jest sortowana alfabetycznie według nazwiska (A–Z), a przy identycznych nazwiskach pomocniczo według imienia. Zaimplementowano stabilne sortowanie na poziomie frontendu.
+- Tabela pracowników zawiera pierwszą kolumnę "Lp." z kolejnymi, stabilnymi numerami wierszy (1, 2, 3, ...), odpowiadającymi aktualnemu widocznemu stanowi tabeli. Numery te nie są zapisywane w bazie danych.
 - Usunięcie pracownika ustawia `deletedAt` oraz `isActive=false`; rekord i historyczne raporty pozostają w bazie.
 - Zlecenie ma status `OPEN`, `SUSPENDED` lub `CLOSED`, flagę `isActive` i opcjonalny `deletedAt`.
 - W panelu raportowania dostępne są wyłącznie zlecenia `OPEN`, aktywne i nieusunięte. Odczyt historyczny zachowuje relacje do pozostałych zleceń.
