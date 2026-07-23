@@ -9,6 +9,7 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Kolumnę `Lp.` z kolejnymi stabilnymi numerami wierszy w widoku bazy pracowników.
 - Stabilne sortowanie alfabetyczne listy pracowników na poziomie frontendu według nazwiska (A–Z), a przy równych nazwiskach pomocniczo według imienia.
+- Możliwość oznaczenia wpisu czasu pracy jako „Brak karty” za pomocą pola typu checkbox na ekranie raportowania czasu. Wartość ta jest zapisywana w bazie danych w polu `missingCard`.
 
 ### Changed
 

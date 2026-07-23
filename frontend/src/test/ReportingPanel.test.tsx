@@ -152,3 +152,134 @@ describe('ReportingPanel — kopiowanie ostatniego dnia', () => {
     expect(screen.getByRole('button', { name: 'Kopiuj ostatni dzień' })).toBeEnabled();
   });
 });
+
+describe('ReportingPanel — Brak karty (missingCard) form interaction', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+  let savedRequestBody: any = null;
+
+  beforeEach(() => {
+    savedRequestBody = null;
+    fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url === '/api/employees?activeOnly=true') {
+        return response([{
+          id: EMPLOYEE_ID,
+          fullName: 'Jan Kowalski',
+          firstName: 'Jan',
+          lastName: 'Kowalski',
+          isActive: true,
+        }]);
+      }
+      if (url === '/api/orders/active') return response([]);
+      if (url === '/api/work-time-types') {
+        return response([{ code: 'G', name: 'Godziny standardowe', requiresOrder: false }]);
+      }
+      if (url.startsWith('/api/reports/by-employee-date')) {
+        return response([
+          {
+            id: 'report-1',
+            date: '2026-07-20',
+            employeeId: EMPLOYEE_ID,
+            orderId: null,
+            hours: 8,
+            workTimeTypeCode: 'G',
+            missingCard: true,
+            workTimeType: { code: 'G', name: 'Godziny standardowe', requiresOrder: false },
+          }
+        ]);
+      }
+      if (url === '/api/reports/check-warnings') {
+        return response({
+          warnStandard: false,
+          warnTotal12: false,
+          warnTotal24: false,
+          totalStandard: 8,
+          totalHours: 8,
+        });
+      }
+      if (url === '/api/reports' || url.startsWith('/api/reports/')) {
+        savedRequestBody = JSON.parse(init?.body as string);
+        return response({
+          report: {
+            id: 'report-1',
+            date: '2026-07-20',
+            employeeId: EMPLOYEE_ID,
+            orderId: null,
+            hours: 8,
+            workTimeTypeCode: 'G',
+            missingCard: savedRequestBody.missingCard,
+          },
+          warnings: {},
+        }, url.includes('report-1') ? 200 : 201);
+      }
+
+      throw new Error(`Nieobsłużone żądanie testowe: ${url}`);
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('checkbox jest domyślnie odznaczony dla nowego wpisu i zaznaczenie wysyła true', async () => {
+    render(
+      <ReportingPanel
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    await screen.findByDisplayValue('Jan Kowalski');
+
+    const checkbox = screen.getByLabelText('Brak karty') as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+
+    // Zaznacz checkbox
+    fireEvent.click(checkbox);
+    expect(checkbox.checked).toBe(true);
+
+    // Wyślij formularz
+    const saveButton = screen.getByRole('button', { name: /Zapisz wpis/ });
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(savedRequestBody).not.toBeNull();
+      expect(savedRequestBody.missingCard).toBe(true);
+    });
+  });
+
+  it('edycja wpisu z missingCard: true pokazuje zaznaczony checkbox, a odznaczenie wysyła false', async () => {
+    render(
+      <ReportingPanel
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    await screen.findByDisplayValue('Jan Kowalski');
+
+    // Kliknij przycisk Edytuj w tabeli
+    const editButton = await screen.findByRole('button', { name: 'Edytuj' });
+    fireEvent.click(editButton);
+
+    const checkbox = screen.getByLabelText('Brak karty') as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+
+    // Odznacz checkbox
+    fireEvent.click(checkbox);
+    expect(checkbox.checked).toBe(false);
+
+    // Zapisz zmiany
+    const saveButton = screen.getByRole('button', { name: /Zapisz zmiany/ });
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(savedRequestBody).not.toBeNull();
+      expect(savedRequestBody.missingCard).toBe(false);
+    });
+  });
+});

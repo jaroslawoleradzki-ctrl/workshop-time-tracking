@@ -98,6 +98,7 @@ model WorkTimeReport {
   createdAt          DateTime     @default(now()) @map("created_at")
   updatedAt          DateTime     @updatedAt @map("updated_at")
   deletedAt          DateTime?    @map("deleted_at")
+  missingCard        Boolean      @default(false) @map("missing_card")
 
   employee           Employee     @relation(fields: [employeeId], references: [id])
   order              Order?       @relation(fields: [orderId], references: [id])

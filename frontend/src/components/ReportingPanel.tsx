@@ -43,6 +43,7 @@ interface ReportEntry {
   orderId: string | null;
   hours: number;
   workTimeTypeCode: string;
+  missingCard?: boolean;
   order?: {
     orderNumber: string;
     productCode: string;
@@ -95,6 +96,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [hoursInput, setHoursInput] = useState('8.00');
   const [selectedWorkType, setSelectedWorkType] = useState('G');
+  const [missingCard, setMissingCard] = useState(false);
   
   // Autocomplete UI states
   const [showOrderAutocomplete, setShowOrderAutocomplete] = useState(false);
@@ -261,6 +263,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
     setSelectedOrder(null);
     setHoursInput('8.00');
     setSelectedWorkType('G');
+    setMissingCard(false);
     setValidationError('');
     setEditingReportId(null);
     setAutocompleteHighlightIdx(-1);
@@ -469,7 +472,8 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
           employeeId: currentEmployee.id,
           orderId: selectedOrder?.id || null,
           hours,
-          workTimeTypeCode: selectedWorkType
+          workTimeTypeCode: selectedWorkType,
+          missingCard
         })
       });
 
@@ -522,6 +526,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
       setSearchOrderQuery('');
     }
 
+    setMissingCard(!!entry.missingCard);
     setValidationError('');
     // Focus hours
     setTimeout(() => {
@@ -880,6 +885,20 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
               </div>
             </div>
 
+            {/* Checkbox Brak karty */}
+            <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
+              <input
+                type="checkbox"
+                id="missingCard"
+                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                checked={missingCard}
+                onChange={e => setMissingCard(e.target.checked)}
+              />
+              <label htmlFor="missingCard" className="form-label" style={{ margin: 0, cursor: 'pointer' }}>
+                Brak karty
+              </label>
+            </div>
+
             <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
               <button 
                 type="submit" 
@@ -953,6 +972,11 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                         }}>
                           {entry.workTimeTypeCode}
                         </span>
+                        {entry.missingCard && (
+                          <div style={{ fontSize: '0.7rem', color: 'var(--danger-color)', marginTop: '0.15rem', fontWeight: 'bold' }}>
+                            Brak karty
+                          </div>
+                        )}
                       </td>
                       <td>
                         {entry.order ? (

@@ -17,6 +17,8 @@ Kolejna zmiana rozszerza wyszukiwarkę Bazy Zleceń Produkcyjnych o częściowe,
 
 Ostatnia zmiana dodaje stabilne sortowanie alfabetyczne (nazwisko, imię) oraz kolumnę "Lp." w widoku Bazy Pracowników.
 
+Wprowadzono także możliwość oznaczania wpisów czasu pracy jako „Brak karty” (missingCard) na formularzu i liście wpisów.
+
 ## Weryfikacja poprawki Prisma runtime
 
 - `npm ci` backendu zakończone powodzeniem; zgłoszono 5 istniejących podatności audytu zależności,
@@ -31,9 +33,9 @@ Docker CLI ani alternatywny runtime kontenerowy nie są dostępne w środowisku 
 
 ## Weryfikacja wersji 0.3.1
 
-- backend: 30 testów zakończonych powodzeniem,
+- backend: 35 testów zakończonych powodzeniem,
 - backend: build zakończony powodzeniem,
-- frontend: 14 testów zakończonych powodzeniem,
+- frontend: 16 testów zakończonych powodzeniem,
 - frontend: build zakończony powodzeniem,
 
 ## Dokumentacja projektu
