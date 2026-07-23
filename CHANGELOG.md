@@ -14,6 +14,7 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Miesięczny raport według pracowników generuje kolumny rodzajów czasu pracy z aktualnego słownika, zachowując kolejność istniejących typów i automatycznie uwzględniając dodane lub usunięte pozycje.
 - Brak konta księgowego przy wpisach bez zlecenia jest prezentowany jako `brak`.
+- Skrypt kopii zapasowych (`backup-db.sh`) automatycznie zachowuje wyłącznie 10 najnowszych kopii bazy danych, usuwając starsze pliki po pomyślnym wykonaniu nowego backupu.
 - Wyszukiwarka w Bazie Zleceń Produkcyjnych obejmuje również zamawiającego, numer księgowy i numer produktu, zachowując częściowe dopasowanie bez rozróżniania wielkości liter.
 
 ## [0.3.0] - 2026-07-22
