@@ -5,18 +5,19 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-07-23
+
 ### Added
 
-- Kolumnę `Lp.` z kolejnymi stabilnymi numerami wierszy w widoku bazy pracowników.
-- Stabilne sortowanie alfabetyczne listy pracowników na poziomie frontendu według nazwiska (A–Z), a przy równych nazwiskach pomocniczo według imienia.
-- Możliwość oznaczenia wpisu czasu pracy jako „Brak karty” za pomocą pola typu checkbox na ekranie raportowania czasu. Wartość ta jest zapisywana w bazie danych w polu `missingCard`.
+- Dynamiczne kolumny raportu miesięcznego.
+- Rozszerzone wyszukiwanie zleceń.
+- Numeracja i sortowanie pracowników.
+- Oznaczanie wpisów jako „Brak karty” (missingCard).
+- Nawigacja pomiędzy dniami raportowania (strzałki ◀ i ▶).
 
 ### Changed
 
-- Miesięczny raport według pracowników generuje kolumny rodzajów czasu pracy z aktualnego słownika, zachowując kolejność istniejących typów i automatycznie uwzględniając dodane lub usunięte pozycje.
-- Brak konta księgowego przy wpisach bez zlecenia jest prezentowany jako `brak`.
-- Skrypt kopii zapasowych (`backup-db.sh`) automatycznie zachowuje wyłącznie 10 najnowszych kopii bazy danych, usuwając starsze pliki po pomyślnym wykonaniu nowego backupu.
-- Wyszukiwarka w Bazie Zleceń Produkcyjnych obejmuje również zamawiającego, numer księgowy i numer produktu, zachowując częściowe dopasowanie bez rozróżniania wielkości liter.
+- Retencja kopii zapasowych ograniczona do 10 najnowszych w skrypcie `backup-db.sh`.
 
 ## [0.3.0] - 2026-07-22
 
