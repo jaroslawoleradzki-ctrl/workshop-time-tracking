@@ -309,6 +309,7 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 
 * [Wdrożenie](docs/deployment.md) – instalacja, backup i rollback.
 * [Runbook operacyjny](docs/operations-runbook.md) – diagnoza awarii i kryteria rollbacku.
+* [Baza i dane demonstracyjne](docs/DEMO_DATA.md) – instrukcja przygotowania bazy i seedowania danych demonstracyjnych.
 
 ### Historia projektu
 
