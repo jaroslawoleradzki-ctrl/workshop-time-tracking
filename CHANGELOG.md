@@ -5,6 +5,20 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-07-23
+
+### Added
+
+- Dynamiczne kolumny raportu miesięcznego.
+- Rozszerzone wyszukiwanie zleceń.
+- Numeracja i sortowanie pracowników.
+- Oznaczanie wpisów jako „Brak karty” (missingCard).
+- Nawigacja pomiędzy dniami raportowania (strzałki ◀ i ▶).
+
+### Changed
+
+- Retencja kopii zapasowych ograniczona do 10 najnowszych w skrypcie `backup-db.sh`.
+
 ## [0.3.0] - 2026-07-22
 
 ### Fixed

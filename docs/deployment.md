@@ -210,7 +210,7 @@ Skrypt ten wykonuje następujące operacje podczas każdego uruchomienia:
 3. **Kontrola kontenera bazy danych**: Weryfikuje, czy kontener bazy danych PostgreSQL (`worktime-db`) jest aktualnie uruchomiony. Jeśli nie, skrypt kończy działanie zwracając niezerowy kod błędu.
 4. **Tworzenie katalogu backupu**: Jeśli katalog `backups/` nie istnieje, skrypt tworzy go automatycznie.
 5. **Kompilacja i kompresja**: Wykonuje zrzut bazy `pg_dump` wewnątrz kontenera bez eksponowania hasła i kompresuje plik programem `gzip` na hoście.
-6. **Rotacja plików kopii**: Automatycznie skanuje katalog `backups/` i usuwa pliki kopii starsze niż **30 dni** (retencja 30 dni) w celu ochrony serwera przed wyczerpaniem wolnego miejsca.
+6. **Rotacja plików kopii**: Automatycznie skanuje katalog `backups/` i pozostawia wyłącznie **10 najnowszych kopii** bazy danych, usuwając wszystkie starsze w celu ochrony serwera przed wyczerpaniem wolnego miejsca.
 7. **Szczegółowe logowanie**: Każda operacja jest logowana do konsoli ze znacznikiem czasu oraz poziomem ważności (np. `[YYYY-MM-DD HH:MM:SS] INFO ...`).
 
 ### Ręczne wykonanie kopii (Manual backup)
@@ -225,7 +225,7 @@ Wszystkie kopie zapasowe bazy danych są zapisywane w katalogu:
 
 Pliki są zapisywane z unikalnymi nazwami opartymi na dacie i godzinie: `time_reporting_YYYY-MM-DD_HH-MM-SS.sql.gz`.
 
-Retencja wynosi **30 dni**. Starsze kopie są usuwane automatycznie przy kolejnych uruchomieniach skryptu.
+Retencja wynosi **10 najnowszych kopii**. Starsze kopie są usuwane automatycznie przy kolejnych uruchomieniach skryptu.
 
 ### Automatyzacja (Cron)
 Skrypt jest w pełni przystosowany do pracy w harmonogramie zadań `cron` (używa przełącznika `-T` w komendzie `docker compose exec`, który wyłącza emulację terminala TTY i zapobiega błędom w środowiskach nieinteraktywnych).

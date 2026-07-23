@@ -40,6 +40,7 @@ interface FakeReport {
   createdByUserId: string;
   createdAt: Date;
   deletedAt: Date | null;
+  missingCard?: boolean;
 }
 
 interface FakeAuditLog {
@@ -147,10 +148,12 @@ class FakeTransaction {
           return createdDifference || left.id.localeCompare(right.id);
         })
         .map((report) => ({
+          id: report.id,
           employeeId: report.employeeId,
           orderId: report.orderId,
           hours: report.hours,
           workTimeTypeCode: report.workTimeTypeCode,
+          missingCard: report.missingCard ?? false,
         }));
       return typeof take === 'number' ? reports.slice(0, take) : reports;
     };
@@ -253,9 +256,48 @@ class FakePrismaClient {
       this.reports
         .filter((report) => matchesReportWhere(report, where, this.orders))
         .map((report) => ({
+          id: report.id,
+          date: report.date,
+          employeeId: report.employeeId,
+          orderId: report.orderId,
           hours: report.hours,
           workTimeTypeCode: report.workTimeTypeCode,
+          missingCard: report.missingCard ?? false,
+          createdByUserId: report.createdByUserId,
+          createdAt: report.createdAt,
+          order: report.orderId
+            ? this.orders.find((order) => order.id === report.orderId) || null
+            : null,
+          workTimeType: { code: report.workTimeTypeCode, name: 'Godziny standardowe', requiresOrder: false },
         })),
+    findUnique: async ({ where }: any) => {
+      const r = this.reports.find(r => r.id === where.id && (where.deletedAt !== null || r.deletedAt === null));
+      if (!r) return null;
+      return {
+        ...r,
+        order: r.orderId
+          ? this.orders.find((order) => order.id === r.orderId) || null
+          : null,
+        workTimeType: { code: r.workTimeTypeCode, name: 'Godziny standardowe', requiresOrder: false },
+      };
+    },
+    update: async ({ where, data }: any) => {
+      const idx = this.reports.findIndex(r => r.id === where.id);
+      if (idx === -1) return null;
+      const updatedReport = {
+        ...this.reports[idx],
+        ...data,
+        updatedAt: new Date(),
+      };
+      this.reports[idx] = updatedReport;
+      return {
+        ...updatedReport,
+        order: updatedReport.orderId
+          ? this.orders.find((order) => order.id === updatedReport.orderId) || null
+          : null,
+        workTimeType: { code: updatedReport.workTimeTypeCode, name: 'Godziny standardowe', requiresOrder: false },
+      };
+    }
   };
 
   auditLog = {
@@ -601,5 +643,120 @@ describe('POST /api/reports/copy-last-day', () => {
 
     expect(response.body.targetDate).toBe('2030-01-02');
     expect(fakePrisma.activeReports(EMPLOYEE_A_ID, '2030-01-02')).toHaveLength(1);
+  });
+
+  describe('WorkTimeReport missingCard API Flow', () => {
+    it('should create a report with missingCard: true and return it in the response', async () => {
+      const res = await request(app)
+        .post('/api/reports')
+        .set('Authorization', `Bearer ${tokenFor(LEADER_ID)}`)
+        .send({
+          employeeId: EMPLOYEE_A_ID,
+          date: '2026-07-16',
+          hours: 6,
+          workTimeTypeCode: 'G',
+          missingCard: true,
+        })
+        .expect(201);
+
+      expect(res.body.report.missingCard).toBe(true);
+    });
+
+    it('should create a report without missingCard field and default it to false', async () => {
+      const res = await request(app)
+        .post('/api/reports')
+        .set('Authorization', `Bearer ${tokenFor(LEADER_ID)}`)
+        .send({
+          employeeId: EMPLOYEE_A_ID,
+          date: '2026-07-16',
+          hours: 6,
+          workTimeTypeCode: 'G',
+        })
+        .expect(201);
+
+      expect(res.body.report.missingCard).toBe(false);
+    });
+
+    it('should update missingCard from false to true', async () => {
+      const reportId = randomUUID();
+      fakePrisma.reports.push({
+        id: reportId,
+        date: new Date('2026-07-16T00:00:00.000Z'),
+        employeeId: EMPLOYEE_A_ID,
+        orderId: null,
+        hours: 8,
+        workTimeTypeCode: 'G',
+        createdByUserId: ADMIN_ID,
+        createdAt: new Date(),
+        deletedAt: null,
+        missingCard: false,
+      });
+
+      const res = await request(app)
+        .put(`/api/reports/${reportId}`)
+        .set('Authorization', `Bearer ${tokenFor(LEADER_ID)}`)
+        .send({
+          employeeId: EMPLOYEE_A_ID,
+          date: '2026-07-16',
+          hours: 8,
+          workTimeTypeCode: 'G',
+          missingCard: true,
+        })
+        .expect(200);
+
+      expect(res.body.report.missingCard).toBe(true);
+    });
+
+    it('should update missingCard from true to false', async () => {
+      const reportId = randomUUID();
+      fakePrisma.reports.push({
+        id: reportId,
+        date: new Date('2026-07-16T00:00:00.000Z'),
+        employeeId: EMPLOYEE_A_ID,
+        orderId: null,
+        hours: 8,
+        workTimeTypeCode: 'G',
+        createdByUserId: ADMIN_ID,
+        createdAt: new Date(),
+        deletedAt: null,
+        missingCard: true,
+      });
+
+      const res = await request(app)
+        .put(`/api/reports/${reportId}`)
+        .set('Authorization', `Bearer ${tokenFor(LEADER_ID)}`)
+        .send({
+          employeeId: EMPLOYEE_A_ID,
+          date: '2026-07-16',
+          hours: 8,
+          workTimeTypeCode: 'G',
+          missingCard: false,
+        })
+        .expect(200);
+
+      expect(res.body.report.missingCard).toBe(false);
+    });
+
+    it('should return missingCard property when fetching reports', async () => {
+      fakePrisma.reports.push({
+        id: randomUUID(),
+        date: new Date('2026-07-16T00:00:00.000Z'),
+        employeeId: EMPLOYEE_A_ID,
+        orderId: null,
+        hours: 4,
+        workTimeTypeCode: 'G',
+        createdByUserId: ADMIN_ID,
+        createdAt: new Date(),
+        deletedAt: null,
+        missingCard: true,
+      });
+
+      const res = await request(app)
+        .get(`/api/reports/by-employee-date?employeeId=${EMPLOYEE_A_ID}&date=2026-07-16`)
+        .set('Authorization', `Bearer ${tokenFor(LEADER_ID)}`)
+        .expect(200);
+
+      expect(res.body[0].missingCard).toBe(true);
+    });
   });
 });

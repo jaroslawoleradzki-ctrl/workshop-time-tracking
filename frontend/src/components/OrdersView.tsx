@@ -238,6 +238,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
 
   const filteredOrders = orders.filter(o => 
     (o.orderNumber?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+    (o.orderedBy?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
     (o.productCode?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
     (o.productName?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
     (o.accountingAccount?.toLowerCase() || '').includes(searchQuery.toLowerCase())

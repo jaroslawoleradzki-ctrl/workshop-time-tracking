@@ -272,13 +272,6 @@ router.get('/report-by-employee', async (req: AuthRequest, res: Response) => {
         pivot[empId] = {
           employeeId: empId,
           employeeName: r.employee.fullName,
-          G: 0,
-          NDR: 0,
-          NS: 0,
-          UW: 0,
-          UOK: 0,
-          UŻ: 0,
-          L4: 0,
           suma: 0,
         };
       }
@@ -286,9 +279,7 @@ router.get('/report-by-employee', async (req: AuthRequest, res: Response) => {
       const hrs = Number(r.hours);
       const code = r.workTimeTypeCode;
 
-      if (['G', 'NDR', 'NS', 'UW', 'UOK', 'UŻ', 'L4'].includes(code)) {
-        pivot[empId][code] += hrs;
-      }
+      pivot[empId][code] = (Number(pivot[empId][code]) || 0) + hrs;
       pivot[empId].suma += hrs;
     });
 
@@ -329,7 +320,7 @@ router.get('/report-by-account', async (req: AuthRequest, res: Response) => {
       id: r.id,
       date: r.date.toISOString().split('T')[0],
       employeeName: r.employee.fullName,
-      accountingAccount: r.order?.accountingAccount || 'Brak (urlop/l4)',
+      accountingAccount: r.order?.accountingAccount || 'brak',
       orderNumber: r.order?.orderNumber || '-',
       productName: r.order?.productName || '-',
       hours: Number(r.hours),

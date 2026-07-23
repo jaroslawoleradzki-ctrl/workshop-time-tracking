@@ -25,7 +25,7 @@ Jeśli kod `G` przekroczy 8 godzin lub suma przekroczy 12/24 godziny, pojawi si�
 
 ### Raporty i eksport
 
-Zakładka Raporty udostępnia zestawienia według zleceń, pracowników, kont księgowych i szczegółowe. Ustaw zakres dat i filtry właściwe dla zakładki, wygeneruj raport, a następnie pobierz XLSX lub CSV. Szczegółowy raport umożliwia również usunięcie wpisu.
+Zakładka Raporty udostępnia zestawienia według zleceń, pracowników, kont księgowych i szczegółowe. Ustaw zakres dat i filtry właściwe dla zakładki, wygeneruj raport, a następnie pobierz XLSX lub CSV. W miesięcznym raporcie według pracowników kolumny rodzajów czasu odpowiadają aktualnej zawartości słownika i zachowują kolejność jego pozycji. Szczegółowy raport umożliwia również usunięcie wpisu.
 
 > **Zrzut ekranu do wstawienia:** zakładka Raporty z wybranym raportem szczegółowym, zakresem dat, wynikami oraz przyciskami eksportu.
 
@@ -34,7 +34,7 @@ Zakładka Raporty udostępnia zestawienia według zleceń, pracowników, kont ks
 Administrator ma wszystkie funkcje lidera oraz poniższe ekrany.
 
 - **Dashboard**: liczniki otwartych/zamkniętych zleceń, godziny dziś i w miesiącu oraz zlecenia z wykorzystaniem planu od 80% i ponad 100%.
-- **Zlecenia**: dodawanie, edycja, zmiana statusu/aktywności i miękkie usuwanie; plan godzin wylicza się z ilości i godzin na jednostkę.
+- **Zlecenia**: dodawanie, edycja, zmiana statusu/aktywności i miękkie usuwanie; plan godzin wylicza się z ilości i godzin na jednostkę. Wyszukiwarka Bazy Zleceń obsługuje częściowe dopasowanie bez rozróżniania wielkości liter, między innymi po numerze zlecenia, zamawiającym, numerze produktu i koncie księgowym.
 - **Pracownicy**: dodawanie, edycja, aktywacja/dezaktywacja i miękkie usuwanie.
 - **Użytkownicy**: tworzenie kont `admin`/`leader`, edycja roli i aktywności oraz reset hasła. Nie można dezaktywować własnego konta ani odebrać sobie roli administratora.
 - **Rodzaje czasu pracy**: tworzenie i edycja kodów oraz flagi wymagania zlecenia. Typów systemowych nie można usunąć ani zmienić im tej flagi; używanego typu nie można usunąć.

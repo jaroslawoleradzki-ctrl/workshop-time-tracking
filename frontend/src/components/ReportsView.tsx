@@ -17,6 +17,12 @@ interface ReportsViewProps {
   user: UserSession;
 }
 
+interface WorkTimeType {
+  code: string;
+  name: string;
+  createdAt: string;
+}
+
 export default function ReportsView({ token, user }: ReportsViewProps) {
   const isAdmin = user.role === 'admin';
   const [activeReportTab, setActiveReportTab] = useState<'by-order' | 'by-employee' | 'by-account' | 'detailed'>('by-order');
@@ -24,6 +30,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
   // Dictionaries for filters
   const [employees, setEmployees] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
+  const [workTimeTypes, setWorkTimeTypes] = useState<WorkTimeType[]>([]);
 
   // Shared Filter States
   const [dateFrom, setDateFrom] = useState('');
@@ -53,6 +60,18 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
         const orderRes = await fetch('/api/orders', { headers });
         const orderData = await orderRes.json();
         setOrders(orderData);
+
+        // Preserve dictionary creation order so existing columns stay in place
+        // and newly added work time types appear at the end.
+        const typeRes = await fetch('/api/work-time-types', { headers });
+        const typeData = await typeRes.json();
+        setWorkTimeTypes(
+          Array.isArray(typeData)
+            ? [...typeData].sort(
+                (a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt),
+              )
+            : [],
+        );
       } catch (err) {
         console.error('Błąd ładowania słowników filtrów:', err);
       }
@@ -469,13 +488,11 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                 <thead>
                   <tr>
                     <th>Pracownik</th>
-                    <th style={{ textAlign: 'right' }}>G (Standard)</th>
-                    <th style={{ textAlign: 'right' }}>NDR (Nadgodz.)</th>
-                    <th style={{ textAlign: 'right' }}>NS (Weekend)</th>
-                    <th style={{ textAlign: 'right' }}>UW (Urlop wyp.)</th>
-                    <th style={{ textAlign: 'right' }}>UOK (Okoliczn.)</th>
-                    <th style={{ textAlign: 'right' }}>UŻ (Żądanie)</th>
-                    <th style={{ textAlign: 'right' }}>L4 (Choroba)</th>
+                    {workTimeTypes.map((type) => (
+                      <th key={type.code} style={{ textAlign: 'right' }}>
+                        {type.code} ({type.name})
+                      </th>
+                    ))}
                     <th style={{ textAlign: 'right', fontWeight: 'bold' }}>Suma godzin</th>
                   </tr>
                 </thead>
@@ -483,13 +500,11 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                   {Array.isArray(reportData) && reportData.map((row, idx) => (
                     <tr key={idx}>
                       <td style={{ fontWeight: 'bold' }}>{row.employeeName}</td>
-                      <td style={{ textAlign: 'right' }}>{(Number(row.G) || 0).toFixed(1)} h</td>
-                      <td style={{ textAlign: 'right' }}>{(Number(row.NDR) || 0).toFixed(1)} h</td>
-                      <td style={{ textAlign: 'right' }}>{(Number(row.NS) || 0).toFixed(1)} h</td>
-                      <td style={{ textAlign: 'right' }}>{(Number(row.UW) || 0).toFixed(1)} h</td>
-                      <td style={{ textAlign: 'right' }}>{(Number(row.UOK) || 0).toFixed(1)} h</td>
-                      <td style={{ textAlign: 'right' }}>{(Number(row.UŻ) || 0).toFixed(1)} h</td>
-                      <td style={{ textAlign: 'right' }}>{(Number(row.L4) || 0).toFixed(1)} h</td>
+                      {workTimeTypes.map((type) => (
+                        <td key={type.code} style={{ textAlign: 'right' }}>
+                          {(Number(row[type.code]) || 0).toFixed(1)} h
+                        </td>
+                      ))}
                       <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--primary-color)' }}>
                         {(Number(row.suma) || 0).toFixed(1)} h
                       </td>

@@ -59,6 +59,7 @@ router.get('/by-employee-date', async (req: AuthRequest, res: Response) => {
       orderId: r.orderId,
       hours: Number(r.hours),
       workTimeTypeCode: r.workTimeTypeCode,
+      missingCard: r.missingCard,
       createdByUserId: r.createdByUserId,
       createdAt: r.createdAt,
       order: r.order,
@@ -145,7 +146,7 @@ router.post('/check-warnings', async (req: AuthRequest, res: Response) => {
 
 // POST / - create a report
 router.post('/', async (req: AuthRequest, res: Response) => {
-  const { date, employeeId, orderId, hours, workTimeTypeCode } = req.body;
+  const { date, employeeId, orderId, hours, workTimeTypeCode, missingCard } = req.body;
 
   if (!date || !employeeId || hours === undefined || !workTimeTypeCode) {
     return res.status(400).json({ message: 'Wymagane pola: date, employeeId, hours, workTimeTypeCode' });
@@ -162,6 +163,8 @@ router.post('/', async (req: AuthRequest, res: Response) => {
   }
   const workDate = parsedDate.toISOString().slice(0, 10);
   const reportDate = new Date(`${workDate}T00:00:00.000Z`);
+
+  const missingCardBool = missingCard === true;
 
   try {
     // 1. Validate employee
@@ -215,6 +218,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
             orderId: type.requiresOrder ? orderId : null,
             hours: hoursNum,
             workTimeTypeCode,
+            missingCard: missingCardBool,
             createdByUserId: req.user!.id,
           },
           include: {
@@ -255,7 +259,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 // PUT /:id - update report
 router.put('/:id', async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  const { date, employeeId, orderId, hours, workTimeTypeCode } = req.body;
+  const { date, employeeId, orderId, hours, workTimeTypeCode, missingCard } = req.body;
 
   if (!date || !employeeId || hours === undefined || !workTimeTypeCode) {
     return res.status(400).json({ message: 'Wszystkie pola są wymagane' });
@@ -265,6 +269,8 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
   if (isNaN(hoursNum) || hoursNum <= 0) {
     return res.status(400).json({ message: 'Liczba godzin musi być większa od zera' });
   }
+
+  const missingCardBool = missingCard === true;
 
   try {
     const oldReport = await prisma.workTimeReport.findUnique({
@@ -303,6 +309,7 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
         orderId: type.requiresOrder ? orderId : null,
         hours: hoursNum,
         workTimeTypeCode,
+        missingCard: missingCardBool,
         modifiedByUserId: req.user!.id,
       },
       include: {

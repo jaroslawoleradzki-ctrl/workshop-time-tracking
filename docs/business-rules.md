@@ -1,6 +1,6 @@
 # Reguły biznesowe
 
-Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.3.0.
+Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.3.1.
 
 ## Role i dostęp
 
@@ -13,6 +13,8 @@ Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.3.0.
 ## Pracownicy i zlecenia
 
 - Pracownik ma flagę `isActive` i opcjonalny `deletedAt`. Lista raportowania pobiera tylko aktywnych, nieusuniętych pracowników.
+- Lista pracowników w bazie pracowników jest sortowana alfabetycznie według nazwiska (A–Z), a przy identycznych nazwiskach pomocniczo według imienia. Zaimplementowano stabilne sortowanie na poziomie frontendu.
+- Tabela pracowników zawiera pierwszą kolumnę "Lp." z kolejnymi, stabilnymi numerami wierszy (1, 2, 3, ...), odpowiadającymi aktualnemu widocznemu stanowi tabeli. Numery te nie są zapisywane w bazie danych.
 - Usunięcie pracownika ustawia `deletedAt` oraz `isActive=false`; rekord i historyczne raporty pozostają w bazie.
 - Zlecenie ma status `OPEN`, `SUSPENDED` lub `CLOSED`, flagę `isActive` i opcjonalny `deletedAt`.
 - W panelu raportowania dostępne są wyłącznie zlecenia `OPEN`, aktywne i nieusunięte. Odczyt historyczny zachowuje relacje do pozostałych zleceń.
@@ -22,6 +24,7 @@ Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.3.0.
 ## Rejestrowanie czasu
 
 - Wpis wymaga daty, pracownika, liczby godzin większej od zera i istniejącego kodu rodzaju czasu pracy.
+- Wpis raportu czasu może zostać oznaczony jako „Brak karty” (`missingCard`) w sytuacji, gdy pracownik nie posiadał lub nie użył karty podczas rejestracji czasu pracy. Wartość ta jest przechowywana w bazie danych jako pole logiczne (domyślnie `false`).
 - Zlecenie jest wymagane tylko wtedy, gdy `WorkTimeType.requiresOrder=true`. Dla pozostałych typów API zapisuje `orderId=null`.
 - Nowy wpis można utworzyć tylko dla aktywnego, nieusuniętego pracownika. Jeżeli typ wymaga zlecenia, API sprawdza istnienie nieusuniętego zlecenia; nie sprawdza jednak jego `status` ani `isActive` przy bezpośrednim wywołaniu API.
 - Schemat bazy ogranicza godziny do `Decimal(4,2)`. Kod sprawdza jedynie wartość `> 0`; maksymalna wartość i liczba miejsc po przecinku przychodząca z API są **do potwierdzenia** na poziomie zachowania PostgreSQL/Prisma.
@@ -38,7 +41,7 @@ Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.3.0.
 - Maksymalny rozmiar źródła wynosi 100 aktywnych wpisów. Przekroczenie limitu kończy operację bez utworzenia danych.
 - Blokada transakcyjna PostgreSQL dla pary `(employeeId, targetDate)` oraz ponowne sprawdzenie dnia po jej uzyskaniu chronią również przed równoległymi żądaniami z wielu kart, użytkowników i instancji API.
 - Ustalenie źródła, utworzenie całego kompletu i jeden audyt operacji są objęte tą samą transakcją. Błąd dowolnego etapu wycofuje wszystkie nowe wpisy.
-- Wersja 0.3.0 zachowuje dotychczasowe dopuszczenie prawidłowych przyszłych dat. Docelowa polityka raportowania przyszłości pozostaje **do potwierdzenia**.
+- Wersja 0.3.1 zachowuje dotychczasowe dopuszczenie prawidłowych przyszłych dat. Docelowa polityka raportowania przyszłości pozostaje **do potwierdzenia**.
 
 ### Kontrakt `POST /api/reports/copy-last-day`
 

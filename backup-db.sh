@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # Logging helper
 log() {
@@ -54,17 +54,28 @@ fi
 log "INFO" "Backup completed successfully!"
 log "INFO" "Saved to: $FILENAME"
 
-# 3. Backup Rotation (Remove files older than 30 days)
-log "INFO" "Running backup rotation (retention: 30 days)..."
+# 3. Backup Rotation (Retain only 10 newest backups)
+log "INFO" "Running backup rotation (retention: 10 newest backups)..."
 
-DELETED_COUNT=0
-# Loop through files that are older than 30 days and delete them
-while IFS= read -r file; do
-  if [ -n "$file" ]; then
-    log "INFO" "Deleting obsolete backup: $file"
-    rm -f "$file"
-    DELETED_COUNT=$((DELETED_COUNT + 1))
-  fi
-done < <(find "$BACKUP_DIR" -type f -name "time_reporting_*.sql.gz" -mtime +30 2>/dev/null || true)
+shopt -s nullglob
+files=( "$BACKUP_DIR"/time_reporting_[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]-[0-9][0-9].sql.gz )
+shopt -u nullglob
 
-log "INFO" "Backup rotation completed. Deleted $DELETED_COUNT obsolete backup file(s)."
+num_files=${#files[@]}
+
+if [ "$num_files" -le 10 ]; then
+  log "INFO" "No old backups to delete (total backups: $num_files)."
+else
+  limit=$((num_files - 10))
+  log "INFO" "Found $num_files backups. Retaining 10 newest, deleting $limit oldest..."
+  DELETED_COUNT=0
+  for ((i=0; i<limit; i++)); do
+    file="${files[i]}"
+    if [ -f "$file" ]; then
+      log "INFO" "Deleting obsolete backup: $file"
+      rm -f "$file"
+      DELETED_COUNT=$((DELETED_COUNT + 1))
+    fi
+  done
+  log "INFO" "Backup rotation completed. Deleted $DELETED_COUNT obsolete backup file(s)."
+fi
