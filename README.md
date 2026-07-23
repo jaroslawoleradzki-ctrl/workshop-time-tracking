@@ -61,7 +61,7 @@ Zapewnia administratorom syntetyczne spojrzenie na statusy produkcyjne:
 ### 2. Baza Zleceń (Zlecenia)
 * Rejestr zleceń zawierający: numer zlecenia, kod i nazwę wyrobu, przypisane konto księgowe, nazwę zamawiającego, ilość oraz jednostkę miary.
 * **Plan godzinowy**: Wyliczany automatycznie na podstawie ilości i pracochłonności wyrobu.
-* **Wygodne przeglądanie danych**: Tabela zleceń posiada dwukierunkowy suwak przewijania poziomego (u góry i na dole tabeli), ułatwiający przeglądanie szerokich danych na laptopach i tabletach.
+* **Wygodne przeglądanie danych**: Wyszukiwarka filtruje zlecenia między innymi po numerze zlecenia, zamawiającym, numerze produktu i koncie księgowym. Tabela posiada dwukierunkowy suwak przewijania poziomego (u góry i na dole tabeli), ułatwiający przeglądanie szerokich danych na laptopach i tabletach.
 * **Zlecenia usunięte i wstrzymane (Soft Delete)**: Usunięcie lub zamknięcie zlecenia nie usuwa go fizycznie z bazy. Zlecenia te pozostają w pełni dostępne w raportach historycznych w celu zachowania spójności i poprawności rozliczeń finansowych.
 * **Blokada nieaktywnych zleceń**: Zlecenia nieaktywne lub zamknięte są automatycznie odcinane z listy podpowiedzi w panelu rejestracji czasu pracy.
 
