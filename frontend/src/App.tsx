@@ -22,6 +22,7 @@ import DictionariesView from './components/DictionariesView';
 import UsersView from './components/UsersView';
 import ReportsView from './components/ReportsView';
 import ImportsView from './components/ImportsView';
+import { branding } from './config/branding';
 
 export interface UserSession {
   id: string;
@@ -81,6 +82,18 @@ function App() {
 
   // Fetch app version on mount
   useEffect(() => {
+    // Set document title
+    document.title = branding.appTitle;
+
+    // Set meta description
+    let metaDesc = document.querySelector('meta[name="description"]');
+    if (!metaDesc) {
+      metaDesc = document.createElement('meta');
+      metaDesc.setAttribute('name', 'description');
+      document.head.appendChild(metaDesc);
+    }
+    metaDesc.setAttribute('content', branding.appDescription);
+
     fetch('/api/version')
       .then(res => {
         if (!res.ok) throw new Error();
@@ -222,12 +235,12 @@ function App() {
       <div className="modal-overlay" style={{ background: 'var(--bg-primary)' }}>
         <div className="modal-content" style={{ maxWidth: '400px', padding: '2.5rem' }}>
           <div style={{ textAlign: 'center', marginBottom: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <img src="/pv-logo.png" alt="P.V. Logo" className="login-logo" />
-            <h1 style={{ marginTop: '0.5rem', fontFamily: 'var(--font-header)', fontWeight: 800 }}>
-              WARSZTAT
+            <img src={theme === 'dark' ? branding.logoLightPath : branding.logoDarkPath} alt={`${branding.appName} Logo`} className="login-logo" />
+            <h1 style={{ marginTop: '0.5rem', fontFamily: 'var(--font-header)', fontWeight: 800, fontSize: '1.75rem' }}>
+              {branding.appName}
             </h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-              System Raportowania Czasu Pracy
+              {branding.appDescription}
             </p>
           </div>
 
@@ -267,6 +280,23 @@ function App() {
               {isLoggingIn ? 'Logowanie...' : 'Zaloguj się'}
             </button>
           </form>
+
+          {branding.isDemo && (
+            <div style={{
+              marginTop: '1.25rem',
+              padding: '0.75rem',
+              borderRadius: 'var(--radius-md)',
+              backgroundColor: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              fontSize: '0.8rem',
+              color: 'var(--text-muted)',
+              textAlign: 'center',
+              lineHeight: '1.4'
+            }}>
+              Środowisko demonstracyjne.<br />
+              Wszystkie dane są fikcyjne i służą wyłącznie prezentacji.
+            </div>
+          )}
 
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', marginTop: '1.25rem' }}>
             <button className="theme-toggle" onClick={toggleTheme}>
@@ -311,8 +341,8 @@ function App() {
       {/* Top Navbar */}
       <header className="navbar">
         <div className="navbar-brand">
-          <img src="/pv-logo.png" alt="P.V. Logo" className="brand-logo" />
-          <span className="brand-title">WARSZTAT</span>
+          <img src={theme === 'dark' ? branding.logoLightPath : branding.logoDarkPath} alt={`${branding.appName} Logo`} className="brand-logo" />
+          <span className="brand-title">{branding.appName}</span>
         </div>
 
         <div className="navbar-actions">

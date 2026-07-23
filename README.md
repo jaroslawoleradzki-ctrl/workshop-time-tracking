@@ -303,6 +303,7 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 * [Konfiguracja](docs/configuration.md) – zmienne środowiskowe i różnice środowisk.
 * [Testowanie](docs/testing.md) – istniejące testy, polecenia i checklista regresji.
 * [Zasady współpracy](AGENTS.md) – standardy dla deweloperów i agentów AI.
+* [Branding i środowisko demo](docs/BRANDING.md) – konfiguracja brandingu LaserCAD i środowiska demo.
 
 ### Wdrożenie i utrzymanie
 

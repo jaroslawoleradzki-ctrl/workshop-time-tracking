@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import App from '../App';
+import { branding } from '../config/branding';
 
 // Mock global fetch
 const mockFetch = vi.fn();
@@ -23,8 +24,8 @@ describe('App Component - Login Screen', () => {
     render(<App />);
 
     // Verify title and description are present
-    expect(screen.getByText('WARSZTAT')).toBeInTheDocument();
-    expect(screen.getByText('System Raportowania Czasu Pracy')).toBeInTheDocument();
+    expect(screen.getByText(branding.appName)).toBeInTheDocument();
+    expect(screen.getByText(branding.appDescription)).toBeInTheDocument();
 
     // Verify input fields are present by their labels and placeholders
     expect(screen.getByText('Login')).toBeInTheDocument();
