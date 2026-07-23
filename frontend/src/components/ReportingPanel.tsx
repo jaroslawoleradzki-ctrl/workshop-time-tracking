@@ -87,6 +87,34 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
     const localToday = new Date(today.getTime() - (offset * 60 * 1000));
     setCurrentDate(localToday.toISOString().split('T')[0]);
   };
+
+  const handlePrevDay = () => {
+    const parts = currentDate.split('-');
+    if (parts.length !== 3) return;
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    const d = new Date(year, month, day);
+    d.setDate(d.getDate() - 1);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    setCurrentDate(`${yyyy}-${mm}-${dd}`);
+  };
+
+  const handleNextDay = () => {
+    const parts = currentDate.split('-');
+    if (parts.length !== 3) return;
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    const d = new Date(year, month, day);
+    d.setDate(d.getDate() + 1);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    setCurrentDate(`${yyyy}-${mm}-${dd}`);
+  };
   const [currentEmployeeIdx, setCurrentEmployeeIdx] = useState<number>(0);
 
   const currentEmployee = employees[currentEmployeeIdx];
@@ -690,16 +718,35 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
 
       {/* Główna akcja (Wybór daty) */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem', flexShrink: 0 }}>
-        <span className="form-label" style={{ margin: 0 }}>Data raportu:</span>
+        <label htmlFor="dateInput" className="form-label" style={{ margin: 0 }}>Data raportu:</label>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={handlePrevDay}
+          style={{ padding: '0.5rem 0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          title="Poprzedni dzień"
+        >
+          ◀
+        </button>
         <input 
+          id="dateInput"
           type="date" 
           className="form-control" 
-          style={{ width: '170px', padding: '0.5rem 0.75rem' }} 
+          style={{ width: '170px', padding: '0.5rem 0.75rem' }}
           value={currentDate}
           onChange={e => setCurrentDate(e.target.value)}
         />
-        <button 
-          className="btn btn-primary" 
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={handleNextDay}
+          style={{ padding: '0.5rem 0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          title="Następny dzień"
+        >
+          ▶
+        </button>
+        <button
+          className="btn btn-primary"
           onClick={handleSetToday}
           style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 0.75rem' }}
         >

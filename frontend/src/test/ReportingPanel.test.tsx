@@ -283,3 +283,155 @@ describe('ReportingPanel — Brak karty (missingCard) form interaction', () => {
     });
   });
 });
+
+describe('ReportingPanel — nawigacja dat strzałkami ◀ i ▶', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url === '/api/employees?activeOnly=true') {
+        return response([{
+          id: EMPLOYEE_ID,
+          fullName: 'Jan Kowalski',
+          firstName: 'Jan',
+          lastName: 'Kowalski',
+          isActive: true,
+        }]);
+      }
+      if (url === '/api/orders/active') return response([]);
+      if (url === '/api/work-time-types') {
+        return response([{ code: 'G', name: 'Godziny standardowe', requiresOrder: false }]);
+      }
+      if (url.startsWith('/api/reports/by-employee-date')) {
+        return response([]);
+      }
+
+      throw new Error(`Nieobsłużone żądanie testowe: ${url}`);
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('kliknięcie ◀ i ▶ zmienia datę o jeden dzień', async () => {
+    render(
+      <ReportingPanel
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    await screen.findByDisplayValue('Jan Kowalski');
+
+    const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
+    const initialDate = dateInput.value;
+
+    // Kliknij ◀ (poprzedni dzień)
+    const prevButton = screen.getByRole('button', { name: '◀' });
+    fireEvent.click(prevButton);
+
+    const expectedPrev = new Date(initialDate);
+    expectedPrev.setDate(expectedPrev.getDate() - 1);
+    const expectedPrevStr = expectedPrev.toISOString().split('T')[0];
+    expect(dateInput.value).toBe(expectedPrevStr);
+
+    // Kliknij ▶ (następny dzień, powrót do początkowej)
+    const nextButton = screen.getByRole('button', { name: '▶' });
+    fireEvent.click(nextButton);
+    expect(dateInput.value).toBe(initialDate);
+  });
+
+  it('zmiana działa na przejściu między miesiącami i latami', async () => {
+    render(
+      <ReportingPanel
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    await screen.findByDisplayValue('Jan Kowalski');
+
+    const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
+
+    // Ustaw datę na 2026-03-01
+    fireEvent.change(dateInput, { target: { value: '2026-03-01' } });
+    expect(dateInput.value).toBe('2026-03-01');
+
+    const prevButton = screen.getByRole('button', { name: '◀' });
+    const nextButton = screen.getByRole('button', { name: '▶' });
+
+    // 1. przejście do poprzedniego miesiąca (luty w roku zwykłym -> 28 dni)
+    fireEvent.click(prevButton);
+    expect(dateInput.value).toBe('2026-02-28');
+
+    // 2. ustaw rok przestępny (2024-03-01) i kliknij w tył -> 2024-02-29
+    fireEvent.change(dateInput, { target: { value: '2024-03-01' } });
+    fireEvent.click(prevButton);
+    expect(dateInput.value).toBe('2024-02-29');
+
+    // 3. przejście roku (2025-12-31 -> 2026-01-01)
+    fireEvent.change(dateInput, { target: { value: '2025-12-31' } });
+    fireEvent.click(nextButton);
+    expect(dateInput.value).toBe('2026-01-01');
+
+    // 4. przejście roku w tył (2026-01-01 -> 2025-12-31)
+    fireEvent.click(prevButton);
+    expect(dateInput.value).toBe('2025-12-31');
+  });
+
+  it('jeżeli trwa edycja wpisu, kliknięcie strzałki kończy edycję', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/employees?activeOnly=true') {
+        return response([{
+          id: EMPLOYEE_ID,
+          fullName: 'Jan Kowalski',
+          isActive: true,
+        }]);
+      }
+      if (url === '/api/orders/active') return response([]);
+      if (url === '/api/work-time-types') {
+        return response([{ code: 'G', name: 'Godziny standardowe', requiresOrder: false }]);
+      }
+      if (url.startsWith('/api/reports/by-employee-date')) {
+        return response([
+          {
+            id: 'report-1',
+            date: '2026-07-20',
+            employeeId: EMPLOYEE_ID,
+            orderId: null,
+            hours: 8,
+            workTimeTypeCode: 'G',
+            workTimeType: { code: 'G', name: 'Godziny standardowe', requiresOrder: false },
+          }
+        ]);
+      }
+      throw new Error(`Nieobsłużone: ${url}`);
+    }));
+
+    render(
+      <ReportingPanel
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    await screen.findByDisplayValue('Jan Kowalski');
+
+    const editButton = await screen.findByRole('button', { name: 'Edytuj' });
+    fireEvent.click(editButton);
+
+    expect(screen.queryByRole('button', { name: /Zapisz zmiany/ })).not.toBeNull();
+
+    const prevButton = screen.getByRole('button', { name: '◀' });
+    fireEvent.click(prevButton);
+
+    expect(screen.queryByRole('button', { name: /Zapisz zmiany/ })).toBeNull();
+  });
+});
