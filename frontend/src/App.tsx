@@ -32,7 +32,7 @@ export interface UserSession {
 }
 
 // Intercept all fetch requests globally to handle 401/403 errors
-const originalFetch = window.fetch;
+const originalFetch = window.fetch.bind(window);
 window.fetch = async (...args) => {
   const response = await originalFetch(...args);
   if (response.status === 401 || response.status === 403) {
