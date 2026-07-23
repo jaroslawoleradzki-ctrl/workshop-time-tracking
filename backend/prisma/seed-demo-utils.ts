@@ -1,30 +1,43 @@
 export function getDatabaseName(databaseUrl: string | undefined): string {
   if (!databaseUrl || databaseUrl.trim() === '') {
-    throw new Error('DATABASE_URL is not defined or empty');
+    throw new Error('Brak wymaganej zmiennej DATABASE_URL.');
   }
 
+  let url: URL;
   try {
-    // If it's a valid URL, parse it using URL API
-    if (databaseUrl.includes('://')) {
-      const url = new URL(databaseUrl);
-      const dbName = url.pathname.slice(1);
-      if (!dbName) {
-        throw new Error('Database name is empty in URL path');
-      }
-      return dbName;
-    }
-  } catch (e) {
-    // Fall through to regex
+    url = new URL(databaseUrl.trim());
+  } catch {
+    throw new Error('DATABASE_URL nie jest poprawnym adresem URL PostgreSQL.');
   }
 
-  // Fallback regex parsing (for connection strings that might fail URL parsing)
-  const matches = databaseUrl.match(/\/([^\/?]+)(\?|$)/);
-  if (matches && matches[1]) {
-    return matches[1];
+  if (url.protocol !== 'postgresql:' && url.protocol !== 'postgres:') {
+    throw new Error('DATABASE_URL musi używać protokołu postgresql:// lub postgres://.');
   }
-  throw new Error('Could not parse database name from DATABASE_URL');
+
+  let dbName: string;
+  try {
+    dbName = decodeURIComponent(url.pathname.slice(1));
+  } catch {
+    throw new Error('Nazwa bazy w DATABASE_URL zawiera niepoprawne kodowanie.');
+  }
+
+  if (!dbName || dbName.includes('/')) {
+    throw new Error('DATABASE_URL musi zawierać jedną, poprawną nazwę bazy danych.');
+  }
+
+  return dbName;
 }
 
 export function validateDatabaseName(dbName: string): boolean {
   return dbName.endsWith('_demo');
+}
+
+export function validateDemoDatabaseUrl(databaseUrl: string | undefined): string {
+  const dbName = getDatabaseName(databaseUrl);
+
+  if (!validateDatabaseName(dbName)) {
+    throw new Error('Seed demo może działać wyłącznie na bazie, której nazwa kończy się "_demo".');
+  }
+
+  return dbName;
 }

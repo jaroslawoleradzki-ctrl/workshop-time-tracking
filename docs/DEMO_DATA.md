@@ -1,79 +1,103 @@
-# Baza danych i seed środowiska demonstracyjnego
+# Baza i dane demonstracyjne LaserCAD
 
-Dokument opisuje przeznaczenie, strukturę oraz procedurę uruchamiania deterministycznego seeda danych demonstracyjnych dla aplikacji LaserCAD.
+Dokument opisuje bezpieczne przygotowanie osobnej bazy oraz uruchomienie deterministycznego seeda danych demonstracyjnych LaserCAD.
 
 > [!WARNING]
-> Skrypt seedowania demo (`seed-demo.ts`) jest operacją destrukcyjną. Przed wstawieniem nowych rekordów całkowicie czyści dane w bazie (użytkowników, pracowników, zlecenia, raporty czasu pracy, historię importów oraz logi audytu).
+> `backend/prisma/seed-demo.ts` jest skryptem destrukcyjnym. W jednej transakcji usuwa dotychczasowe raporty czasu pracy, zlecenia, pracowników, użytkowników, historię importów, logi audytu i słownik typów czasu, a następnie tworzy kompletny zestaw demo. Nie usuwa tabeli migracji Prisma.
 
-## Zabezpieczenie przed przypadkowym uruchomieniem
+## Zabezpieczenie bazy
 
-W celach bezpieczeństwa skrypt seedujący demo posiada wbudowane zabezpieczenie walidujące nazwę bazy danych podaną w zmiennej środowiskowej `DATABASE_URL`:
-* Skrypt uruchomi się **wyłącznie** wtedy, gdy nazwa bazy danych (wskazana w ścieżce URL) kończy się przyrostkiem `_demo` (np. `time_reporting_demo`).
-* W przypadku próby uruchomienia na głównej bazie produkcyjnej/roboczej (np. `time_reporting`), skrypt natychmiast przerwie działanie z błędem i nie dokona żadnych modyfikacji.
+Seed odczytuje `DATABASE_URL`, parsuje go jako URL PostgreSQL i uruchamia się wyłącznie wtedy, gdy nazwa bazy kończy się dokładnie `_demo`.
 
-## Krok po kroku: Przygotowanie i uruchomienie bazy demonstracyjnej
+Przykłady:
 
-### 1. Utworzenie osobnej bazy danych w PostgreSQL
-Zaloguj się do swojej instancji PostgreSQL i utwórz nową, pustą bazę danych o nazwie kończącej się na `_demo`:
+- `time_reporting_demo` – dozwolona,
+- `demo` – niedozwolona,
+- `time_reporting` – niedozwolona,
+- brak lub niepoprawny `DATABASE_URL` – niedozwolony.
+
+Walidacja odbywa się przed utworzeniem połączenia z Prisma i przed czyszczeniem danych. Skrypt nie wypisuje hasła ani pełnego `DATABASE_URL`; przed rozpoczęciem pokazuje wyłącznie nazwę zatwierdzonej bazy demo. Błąd w dowolnym kroku zapisu wycofuje całą transakcję.
+
+## Utworzenie bazy `time_reporting_demo`
+
+Zaloguj się do PostgreSQL kontem posiadającym prawo tworzenia baz i wykonaj:
+
 ```sql
 CREATE DATABASE time_reporting_demo;
 ```
 
-### 2. Skonfigurowanie pliku środowiskowego
-Zaleca się stworzenie osobnego pliku środowiskowego dla demo (np. `backend/.env.demo`), aby nie nadpisywać produkcyjnego `DATABASE_URL`. Przykładowa zawartość:
+Utworzenie osobnego użytkownika PostgreSQL o ograniczonych uprawnieniach jest zalecane. Nazwy użytkownika i hasła zależą od lokalnego środowiska i nie są przechowywane w repozytorium.
+
+## Konfiguracja środowiska
+
+Nie zmieniaj produkcyjnego `backend/.env`. Utwórz lokalnie ignorowany przez Git plik `backend/.env.demo`:
+
 ```env
-DATABASE_URL="postgresql://postgres:postgres123@localhost:5432/time_reporting_demo?schema=public"
-JWT_SECRET="demo-jwt-secret-key-32-chars-minimum"
+DATABASE_URL="postgresql://<DEMO_DB_USER>:<DEMO_DB_PASSWORD>@localhost:5432/time_reporting_demo?schema=public"
+JWT_SECRET="<LOKALNY_SEKRET_DEMO>"
 ```
 
-### 3. Wykonanie migracji struktury bazy danych
-Przed uruchomieniem seeda należy upewnić się, że struktura tabel w nowej bazie demonstracyjnej jest aktualna. Wykonaj migracje Prisma, wskazując plik konfiguracyjny demo:
+Zastąp wartości w nawiasach własnymi lokalnymi danymi. Jeżeli login lub hasło zawierają znaki specjalne, zakoduj je zgodnie z regułami URL. Nie commituj pliku ani prawdziwych poświadczeń.
+
+Z katalogu głównego repozytorium przejdź do `backend` i wczytaj konfigurację do bieżącej sesji terminala:
+
 ```bash
 cd backend
-ENV_FILE=.env.demo npx prisma migrate deploy
+set -a
+. ./.env.demo
+set +a
 ```
 
-### 4. Uruchomienie skryptu seedującego demo
-Uruchom dedykowaną komendę seedowania z podaniem zmiennych środowiskowych:
+## Migracje i uruchomienie
+
+Najpierw zastosuj istniejące migracje do pustej bazy demo:
+
 ```bash
-DATABASE_URL="postgresql://postgres:postgres123@localhost:5432/time_reporting_demo?schema=public" npm run seed:demo
+npx prisma migrate deploy
 ```
-*(Upewnij się, że przekazany `DATABASE_URL` kieruje do bazy z końcówką `_demo`)*.
 
-## Zawartość danych demonstracyjnych
+Następnie uruchom seed deweloperski:
 
-Po pomyślnym wykonaniu seeda, w bazie demonstracyjnej zostaną utworzone następujące dane:
+```bash
+npm run seed:demo
+```
 
-### Konta użytkowników
-Hasła do obu kont demonstracyjnych są zahaszowane przy użyciu algorytmu `bcrypt`:
-1. **Administrator:**
-   * Login: `demo`
-   * Hasło: `LaserCAD2026!`
-   * Rola: `admin`
-2. **Lider:**
-   * Login: `leader`
-   * Hasło: `LaserCAD2026!`
-   * Rola: `leader`
+Po wcześniejszym wykonaniu `npm run build` można użyć skompilowanej wersji:
 
-### Pracownicy
-Utworzonych zostaje 15 unikalnych, aktywnych pracowników z polskimi danymi personalnymi (np. *Adam Nowak*, *Bartosz Mazur*, *Cezary Wójcik* itd.) z przypisanymi kolejno numerami od `EMP-001` do `EMP-015`.
+```bash
+npm run seed:demo:prod
+```
 
-### Słowniki
-Wdrożone są standardowe typy czasu pracy:
-* `G` – Standardowe godziny (wymaga zlecenia)
-* `NDR` – Nadgodziny (wymaga zlecenia)
-* `NS` – Nadgodziny weekendowe (wymaga zlecenia)
-* `UW` / `UOK` / `UŻ` / `L4` – Nieobecności i urlopy (nie wymagają zlecenia)
+Nie używaj `npx prisma db seed`, ponieważ jest on przypisany do odrębnego seeda systemowego `prisma/seed.ts`.
 
-### Zlecenia
-Zostaje utworzonych 30 deterministycznych zleceń o numeracji `LC-2026-001` do `LC-2026-030` z branży LaserCAD (obróbka metalu, np. *Rama urządzenia transportowego*, *Obudowa sterownika CNC*).
-* 20 zleceń ma status aktywny (`OPEN` lub `SUSPENDED`).
-* 10 zleceń ma status zakończony (`CLOSED`) wraz z ustawioną datą zakończenia (`completionDate`).
+## Tworzone konta
 
-### Raporty czasu pracy (Wpisy)
-Wygenerowano kompletny, deterministyczny (stały seed generatora pseudolosowego) rejestr czasu pracy za okres **od 2026-05-01 do 2026-07-22** (około 3 miesiące):
-* W dni robocze pracownicy mają zaraportowane po 8 godzin pracy typu `G`, rozbitych na 1 do 3 zleceń aktywnych w danym dniu.
-* Dodano sporadyczne nadgodziny `NDR` (1-2 godziny).
-* Dodano losowe, kilkudniowe lub jednodniowe nieobecności (urlopy `UW`, zwolnienia chorobowe `L4`, urlopy okolicznościowe i na żądanie) – w dniach nieobecności nie są generowane godziny produkcyjne.
-* W wybrane soboty przypisano okazjonalną pracę w nadgodzinach weekendowych `NS` (4, 6 lub 8 godzin).
-* Wprowadzono naturalne występowanie flagi `missingCard` (brak karty) na poziomie około 3-5% wpisów.
+Hasła są zapisywane wyłącznie jako hashe bcrypt.
+
+| Rola | Login | Hasło demo | Nazwa |
+|---|---|---|---|
+| Administrator | `demo` | `LaserCAD2026!` | Administrator Demo |
+| Lider | `leader` | `LaserCAD2026!` | Tomasz Maj |
+
+Te dane są przeznaczone wyłącznie dla izolowanego środowiska demonstracyjnego.
+
+## Zakres danych
+
+Każde uruchomienie tworzy ten sam zestaw danych biznesowych, identyfikatorów, dat i hashy:
+
+- 2 aktywnych użytkowników,
+- 15 aktywnych, fikcyjnych pracowników z numerami `EMP-001`–`EMP-015`,
+- 7 systemowych typów czasu: `G`, `NDR`, `NS`, `UW`, `UOK`, `UŻ`, `L4`,
+- 30 zleceń `LC-2026-001`–`LC-2026-030`,
+- 20 aktywnych zleceń (`18 OPEN`, `2 SUSPENDED`) i 10 zakończonych (`CLOSED`),
+- 1886 raportów czasu pracy z okresu `2026-05-01`–`2026-07-22`.
+
+Raporty obejmują 1729 wpisów `G`, 111 wpisów `NDR`, 15 sobotnich wpisów `NS`, 20 dni `UW`, 3 krótkie okresy `L4` (8 wpisów dziennych), 2 pojedyncze dni `UŻ` i jeden dzień `UOK`. Standardowy dzień produkcyjny ma 8 godzin rozłożonych na 1–3 zlecenia. W dniach urlopu lub L4 nie ma produkcji ani nadgodzin.
+
+## Ponowne odtworzenie demo
+
+1. Sprawdź, czy `DATABASE_URL` wskazuje dokładnie właściwą bazę z końcówką `_demo`.
+2. Wykonaj `npx prisma migrate deploy`.
+3. Ponownie uruchom `npm run seed:demo` albo `npm run seed:demo:prod`.
+
+Nie trzeba ręcznie usuwać rekordów. Seed czyści wyłącznie wskazaną bazę demo i atomowo odtwarza pełny, deterministyczny zestaw.

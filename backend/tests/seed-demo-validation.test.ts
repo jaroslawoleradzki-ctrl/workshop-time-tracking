@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { getDatabaseName, validateDatabaseName } from '../prisma/seed-demo-utils';
+import { getDatabaseName, validateDatabaseName, validateDemoDatabaseUrl } from '../prisma/seed-demo-utils';
 
 describe('database name validation for demo seeding', () => {
   it('allows time_reporting_demo', () => {
     const dbUrl = 'postgresql://jarek:password@localhost:5432/time_reporting_demo?schema=public';
-    const dbName = getDatabaseName(dbUrl);
-    expect(dbName).toBe('time_reporting_demo');
-    expect(validateDatabaseName(dbName)).toBe(true);
+    expect(validateDemoDatabaseUrl(dbUrl)).toBe('time_reporting_demo');
   });
 
   it('allows other databases ending with _demo', () => {
@@ -18,24 +16,39 @@ describe('database name validation for demo seeding', () => {
 
   it('rejects demo since it does not end with _demo', () => {
     const dbUrl = 'postgresql://localhost:5432/demo';
-    const dbName = getDatabaseName(dbUrl);
-    expect(dbName).toBe('demo');
-    expect(validateDatabaseName(dbName)).toBe(false);
+    expect(() => validateDemoDatabaseUrl(dbUrl)).toThrow('kończy się "_demo"');
   });
 
   it('rejects time_reporting since it does not end with _demo', () => {
     const dbUrl = 'postgresql://user:pass@localhost:5432/time_reporting';
-    const dbName = getDatabaseName(dbUrl);
-    expect(dbName).toBe('time_reporting');
-    expect(validateDatabaseName(dbName)).toBe(false);
+    expect(() => validateDemoDatabaseUrl(dbUrl)).toThrow('kończy się "_demo"');
   });
 
-  it('throws on empty or missing DATABASE_URL', () => {
-    expect(() => getDatabaseName('')).toThrow('DATABASE_URL is not defined or empty');
-    expect(() => getDatabaseName(undefined)).toThrow('DATABASE_URL is not defined or empty');
+  it('rejects a missing DATABASE_URL', () => {
+    expect(() => validateDemoDatabaseUrl(undefined)).toThrow('Brak wymaganej zmiennej DATABASE_URL');
   });
 
-  it('throws on invalid DATABASE_URL that cannot be parsed', () => {
-    expect(() => getDatabaseName('invalid-url-connection-string')).toThrow('Could not parse database name from DATABASE_URL');
+  it('rejects an empty DATABASE_URL', () => {
+    expect(() => validateDemoDatabaseUrl('')).toThrow('Brak wymaganej zmiennej DATABASE_URL');
+  });
+
+  it('rejects an invalid DATABASE_URL without echoing its value', () => {
+    const invalidUrl = 'not-a-url/secret-password/time_reporting_demo';
+
+    expect(() => validateDemoDatabaseUrl(invalidUrl)).toThrow(
+      'DATABASE_URL nie jest poprawnym adresem URL PostgreSQL',
+    );
+
+    try {
+      validateDemoDatabaseUrl(invalidUrl);
+    } catch (error) {
+      expect((error as Error).message).not.toContain('secret-password');
+    }
+  });
+
+  it('rejects a non-PostgreSQL URL', () => {
+    expect(() => validateDemoDatabaseUrl('https://localhost/time_reporting_demo')).toThrow(
+      'musi używać protokołu postgresql:// lub postgres://',
+    );
   });
 });

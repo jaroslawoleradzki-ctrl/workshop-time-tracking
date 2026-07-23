@@ -9,5 +9,10 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node"]
   },
-  "include": ["prisma/seed.ts", "prisma/seed-demo.ts"]
+  "include": [
+    "prisma/seed.ts",
+    "prisma/seed-demo.ts",
+    "prisma/seed-demo-data.ts",
+    "prisma/seed-demo-utils.ts"
+  ]
 }

@@ -27,6 +27,13 @@ Wersja `0.3.1` obejmuje zmiany funkcjonalne podnoszące użyteczność oraz stab
 - frontend: build zakończony powodzeniem,
 - lint frontendu nie uruchamia się z powodu istniejącego braku pakietu `eslint` w zależnościach; zależności nie zmieniano w ramach rozpoczęcia wersji.
 
+## Stan gałęzi `demo`
+
+- Dokończono Etap 3 danych demonstracyjnych LaserCAD: bezpieczny seed wyłącznie dla baz `_demo`, 2 konta, 15 pracowników, 30 zleceń i 1886 raportów za okres 2026-05-01–2026-07-22.
+- Backend: 49 testów zakończonych powodzeniem.
+- Backend: build, wraz z kompilacją `seed-demo.ts`, zakończony powodzeniem.
+- Seed demo nie był uruchamiany podczas weryfikacji; testy generatora nie łączą się z bazą.
+
 ## Dokumentacja projektu
 
 Aktualny pakiet dokumentacyjny obejmuje:

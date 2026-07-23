@@ -5,6 +5,10 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Dokończono deterministyczny seed danych demonstracyjnych LaserCAD: izolacja baz `_demo`, fikcyjne konta, pracownicy, zlecenia i raporty czasu za okres od 2026-05-01 do 2026-07-22 wraz z testami i instrukcją odtworzenia środowiska.
+
 ## [0.3.1] - 2026-07-23
 
 ### Added
