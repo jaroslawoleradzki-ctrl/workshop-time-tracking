@@ -8,6 +8,7 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 
 - Ujednolicono dane miesięcznego raportu według pracowników w tabeli oraz eksportach XLSX i CSV; wszystkie formaty używają tych samych filtrów, rekordów i dynamicznych kolumn aktualnego słownika rodzajów czasu.
+- Ujednolicono poziome przewijanie wszystkich tabel Centrum raportów z ekranem Zlecenia: szerokie tabele pozostają w obszarze ekranu i mają zsynchronizowane paski przewijania u góry i u dołu.
 
 ### Changed
 

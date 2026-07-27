@@ -11,6 +11,7 @@ import {
   DollarSign
 } from 'lucide-react';
 import { UserSession } from '../App';
+import ScrollableTable from './ScrollableTable';
 
 interface ReportsViewProps {
   token: string;
@@ -437,10 +438,9 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
           Brak danych dla wybranych filtrów.
         </div>
       ) : (
-        <div className="card" style={{ padding: 0, overflow: 'hidden', flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <div className="card" style={{ padding: 0, overflow: 'hidden', flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, maxWidth: '100%' }}>
           {activeReportTab === 'by-order' && (
-            <div className="table-container-fixed" style={{ margin: 0, border: 'none', flex: 1 }}>
-              <table className="table-fixed">
+            <ScrollableTable ariaLabel="Raport według zleceń" containerStyle={{ margin: 0, border: 'none' }}>
                 <thead>
                   <tr>
                     <th>Numer zlecenia</th>
@@ -482,13 +482,11 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                     );
                   })}
                 </tbody>
-              </table>
-            </div>
+            </ScrollableTable>
           )}
 
           {activeReportTab === 'by-employee' && (
-            <div className="table-container-fixed" style={{ margin: 0, border: 'none', flex: 1 }}>
-              <table className="table-fixed">
+            <ScrollableTable ariaLabel="Raport według pracowników" containerStyle={{ margin: 0, border: 'none' }}>
                 <thead>
                   <tr>
                     <th>Pracownik</th>
@@ -515,13 +513,11 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                     </tr>
                   ))}
                 </tbody>
-              </table>
-            </div>
+            </ScrollableTable>
           )}
 
           {activeReportTab === 'by-account' && (
-            <div className="table-container-fixed" style={{ margin: 0, border: 'none', flex: 1 }}>
-              <table className="table-fixed">
+            <ScrollableTable ariaLabel="Raport kont księgowych" containerStyle={{ margin: 0, border: 'none' }}>
                 <thead>
                   <tr>
                     <th>Data</th>
@@ -548,13 +544,11 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                     </tr>
                   ))}
                 </tbody>
-              </table>
-            </div>
+            </ScrollableTable>
           )}
 
           {activeReportTab === 'detailed' && (
-            <div className="table-container-fixed" style={{ margin: 0, border: 'none', flex: 1 }}>
-              <table className="table-fixed">
+            <ScrollableTable ariaLabel="Raport szczegółowy" containerStyle={{ margin: 0, border: 'none' }}>
                 <thead>
                   <tr>
                     <th>Data pracy</th>
@@ -609,8 +603,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                     </tr>
                   ))}
                 </tbody>
-              </table>
-            </div>
+            </ScrollableTable>
           )}
         </div>
       )}

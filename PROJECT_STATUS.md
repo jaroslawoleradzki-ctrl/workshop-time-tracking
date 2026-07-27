@@ -7,11 +7,21 @@
 - Aktualna wersja development: `0.3.2`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: aktywny rozwój wersji `0.3.2`; usunięto rozbieżność miesięcznego raportu pracowników między tabelą a eksportami
+- Stan prac: aktywny rozwój wersji `0.3.2`; ujednolicono dane eksportów oraz responsywne przewijanie tabel Centrum raportów
 
 Wersja `0.3.1` została zweryfikowana, ustabilizowana i wdrożona produkcyjnie u klienta.
 
 W wersji `0.3.2` tabela miesięcznego raportu według pracowników oraz eksporty XLSX i CSV korzystają z tego samego zestawu przefiltrowanych rekordów i dynamicznych kolumn aktualnego słownika rodzajów czasu. Usunięto stałe listy kodów w eksportach, które pomijały nowo dodane rodzaje czasu.
+
+Wszystkie cztery tabele Centrum raportów korzystają ze wspólnego mechanizmu poziomego przewijania zastosowanego również na ekranie Zlecenia. Szerokie tabele nie rozszerzają strony poza dostępną szerokość, a zsynchronizowane paski u góry i u dołu ułatwiają obsługę na laptopach i tabletach.
+
+## Weryfikacja przewijania tabel Centrum raportów w wersji 0.3.2
+
+- frontend: 24 testy zakończone powodzeniem, w tym kontrola wspólnej struktury przewijania wszystkich czterech zakładek raportowych,
+- frontend: build zakończony powodzeniem,
+- backend: build zakończony powodzeniem mimo braku zmian backendu,
+- viewport 768 px: szerokość dokumentu odpowiada szerokości widoku, bez rozszerzenia strony w poziomie,
+- lint frontendu nie uruchamia się z powodu istniejącego braku pakietu `eslint` w zależnościach; zależności nie zmieniano w ramach poprawki interfejsu.
 
 ## Weryfikacja poprawki raportu pracowników w wersji 0.3.2
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   FolderGit2, 
   Plus, 
@@ -9,6 +9,7 @@ import {
   Lock
 } from 'lucide-react';
 import { UserSession } from '../App';
+import ScrollableTable from './ScrollableTable';
 
 interface Order {
   id: string;
@@ -38,30 +39,6 @@ interface OrdersViewProps {
 
 export default function OrdersView({ token, user }: OrdersViewProps) {
   const isAdmin = user.role === 'admin';
-  const topScrollRef = useRef<HTMLDivElement>(null);
-  const tableScrollRef = useRef<HTMLDivElement>(null);
-  const isSyncingScroll = useRef(false);
-  const [tableWidth, setTableWidth] = useState(0);
-
-  const handleTopScroll = () => {
-    if (!topScrollRef.current || !tableScrollRef.current) return;
-    if (isSyncingScroll.current) {
-      isSyncingScroll.current = false;
-      return;
-    }
-    isSyncingScroll.current = true;
-    tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
-  };
-
-  const handleTableScroll = () => {
-    if (!topScrollRef.current || !tableScrollRef.current) return;
-    if (isSyncingScroll.current) {
-      isSyncingScroll.current = false;
-      return;
-    }
-    isSyncingScroll.current = true;
-    topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
-  };
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,25 +72,6 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
   useEffect(() => {
     fetchOrders();
   }, [token]);
-
-  useEffect(() => {
-    if (tableScrollRef.current) {
-      const updateWidth = () => {
-        const innerTable = tableScrollRef.current?.querySelector('table');
-        if (innerTable) {
-          setTableWidth(innerTable.offsetWidth);
-        }
-      };
-
-      updateWidth();
-
-      const observer = new ResizeObserver(() => {
-        updateWidth();
-      });
-      observer.observe(tableScrollRef.current);
-      return () => observer.disconnect();
-    }
-  }, [orders, searchQuery, loading]);
 
   const fetchOrders = async () => {
     try {
@@ -503,30 +461,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
           Brak zleceń spełniających kryteria wyszukiwania.
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, minWidth: 0, maxWidth: '100%' }}>
-          {/* Top scrollbar rail */}
-          <div 
-            ref={topScrollRef} 
-            onScroll={handleTopScroll} 
-            className="top-scrollbar-custom"
-            style={{ 
-              overflowX: 'scroll', 
-              overflowY: 'hidden', 
-              width: '100%', 
-              height: '14px', 
-              marginBottom: '0.25rem',
-              flexShrink: 0
-            }}
-          >
-            <div style={{ width: `${tableWidth}px`, height: '1px' }}></div>
-          </div>
-
-          <div 
-            ref={tableScrollRef}
-            onScroll={handleTableScroll}
-            className="table-container-fixed top-scrollbar-custom"
-          >
-            <table className="table-fixed table-orders">
+        <ScrollableTable ariaLabel="Tabela zleceń" tableClassName="table-orders">
             <thead>
               <tr>
                 {isAdmin && <th style={{ textAlign: 'center' }}>Akcje</th>}
@@ -625,9 +560,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                 );
               })}
             </tbody>
-          </table>
-        </div>
-      </div>
+        </ScrollableTable>
       )}
 
       {!isAdmin && (
