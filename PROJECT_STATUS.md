@@ -3,13 +3,12 @@
 ## Stan bieżący
 
 - Projekt: Workshop Time Tracking
-- Aktualna wersja produkcyjna: `0.3.0`
-- Wersja przygotowana do wdrożenia: `0.3.1`
+- Aktualna wersja produkcyjna: `0.3.1`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: wersja `0.3.1` przygotowana do wdrożenia
+- Stan prac: wersja `0.3.1` wdrożona produkcyjnie u klienta
 
-Wersja `0.3.0` została stabilizowana i wdrożona produkcyjnie u klienta.
+Wersja `0.3.1` została zweryfikowana, ustabilizowana i wdrożona produkcyjnie u klienta.
 
 Wersja `0.3.1` obejmuje zmiany funkcjonalne podnoszące użyteczność oraz stabilność aplikacji:
 - Generowanie kolumn raportu miesięcznego bezpośrednio ze słownika rodzajów czasu.
