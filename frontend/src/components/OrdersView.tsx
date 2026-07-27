@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   FolderGit2, 
   Plus, 
@@ -9,6 +9,7 @@ import {
   Lock
 } from 'lucide-react';
 import { UserSession } from '../App';
+import ScrollableTable from './ScrollableTable';
 
 interface Order {
   id: string;
@@ -19,6 +20,7 @@ interface Order {
   productName: string;
   accountingAccount: string | null;
   orderedBy: string | null;
+  notes: string | null;
   plannedHours: number;
   quantity: number | null;
   quantityUnit: string;
@@ -38,30 +40,6 @@ interface OrdersViewProps {
 
 export default function OrdersView({ token, user }: OrdersViewProps) {
   const isAdmin = user.role === 'admin';
-  const topScrollRef = useRef<HTMLDivElement>(null);
-  const tableScrollRef = useRef<HTMLDivElement>(null);
-  const isSyncingScroll = useRef(false);
-  const [tableWidth, setTableWidth] = useState(0);
-
-  const handleTopScroll = () => {
-    if (!topScrollRef.current || !tableScrollRef.current) return;
-    if (isSyncingScroll.current) {
-      isSyncingScroll.current = false;
-      return;
-    }
-    isSyncingScroll.current = true;
-    tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
-  };
-
-  const handleTableScroll = () => {
-    if (!topScrollRef.current || !tableScrollRef.current) return;
-    if (isSyncingScroll.current) {
-      isSyncingScroll.current = false;
-      return;
-    }
-    isSyncingScroll.current = true;
-    topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
-  };
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,6 +56,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
   const [productName, setProductName] = useState('');
   const [accountingAccount, setAccountingAccount] = useState('');
   const [orderedBy, setOrderedBy] = useState('');
+  const [notes, setNotes] = useState('');
   const [quantity, setQuantity] = useState('1.00');
   const [quantityUnit, setQuantityUnit] = useState('szt.');
   const [hoursPerUnit, setHoursPerUnit] = useState('0.00');
@@ -95,25 +74,6 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
   useEffect(() => {
     fetchOrders();
   }, [token]);
-
-  useEffect(() => {
-    if (tableScrollRef.current) {
-      const updateWidth = () => {
-        const innerTable = tableScrollRef.current?.querySelector('table');
-        if (innerTable) {
-          setTableWidth(innerTable.offsetWidth);
-        }
-      };
-
-      updateWidth();
-
-      const observer = new ResizeObserver(() => {
-        updateWidth();
-      });
-      observer.observe(tableScrollRef.current);
-      return () => observer.disconnect();
-    }
-  }, [orders, searchQuery, loading]);
 
   const fetchOrders = async () => {
     try {
@@ -139,6 +99,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
     setProductName('');
     setAccountingAccount('');
     setOrderedBy('');
+    setNotes('');
     setQuantity('1.00');
     setQuantityUnit('szt.');
     setHoursPerUnit('0.00');
@@ -157,6 +118,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
     setProductName(order.productName);
     setAccountingAccount(order.accountingAccount || '');
     setOrderedBy(order.orderedBy || '');
+    setNotes(order.notes || '');
     setQuantity(order.quantity !== null ? order.quantity.toString() : '1.00');
     setQuantityUnit(order.quantityUnit);
     setHoursPerUnit(order.hoursPerUnit !== null ? order.hoursPerUnit.toString() : '0.00');
@@ -200,6 +162,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
           productName: productName.trim(),
           accountingAccount: accountingAccount.trim(),
           orderedBy: orderedBy.trim() || null,
+          notes: notes.trim() || null,
           quantity: qty,
           quantityUnit: quantityUnit.trim() || 'szt.',
           hoursPerUnit: hrsPerUnit,
@@ -317,6 +280,17 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                     onChange={e => setOrderedBy(e.target.value)}
                   />
                 </div>
+              </div>
+
+              <div className="form-group" style={{ marginTop: '0.5rem' }}>
+                <label className="form-label" htmlFor="orderNotes">Uwagi (opcjonalnie)</label>
+                <textarea
+                  id="orderNotes"
+                  className="form-control"
+                  rows={3}
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                />
               </div>
 
               {/* === Produkt === */}
@@ -503,30 +477,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
           Brak zleceń spełniających kryteria wyszukiwania.
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, minWidth: 0, maxWidth: '100%' }}>
-          {/* Top scrollbar rail */}
-          <div 
-            ref={topScrollRef} 
-            onScroll={handleTopScroll} 
-            className="top-scrollbar-custom"
-            style={{ 
-              overflowX: 'scroll', 
-              overflowY: 'hidden', 
-              width: '100%', 
-              height: '14px', 
-              marginBottom: '0.25rem',
-              flexShrink: 0
-            }}
-          >
-            <div style={{ width: `${tableWidth}px`, height: '1px' }}></div>
-          </div>
-
-          <div 
-            ref={tableScrollRef}
-            onScroll={handleTableScroll}
-            className="table-container-fixed top-scrollbar-custom"
-          >
-            <table className="table-fixed table-orders">
+        <ScrollableTable ariaLabel="Tabela zleceń" tableClassName="table-orders">
             <thead>
               <tr>
                 {isAdmin && <th style={{ textAlign: 'center' }}>Akcje</th>}
@@ -534,6 +485,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                 <th>Numer zlecenia</th>
                 <th style={{ whiteSpace: 'normal', minWidth: '100px' }}>Planowana<br />wysyłka</th>
                 <th>Zamawiający</th>
+                <th>Uwagi</th>
                 <th>Nazwa produktu</th>
                 <th>Numer produktu</th>
                 <th style={{ textAlign: 'right' }}>Ilość</th>
@@ -591,6 +543,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                       {order.plannedShipmentDate ? new Date(order.plannedShipmentDate).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
                     </td>
                     <td>{order.orderedBy || '-'}</td>
+                    <td style={{ minWidth: '180px', whiteSpace: 'pre-wrap' }}>{order.notes || '-'}</td>
                     <td style={{ fontWeight: 600 }}>{order.productName}</td>
                     <td>{order.productCode ? <code>{order.productCode}</code> : '-'}</td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
@@ -625,9 +578,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                 );
               })}
             </tbody>
-          </table>
-        </div>
-      </div>
+        </ScrollableTable>
       )}
 
       {!isAdmin && (

@@ -3,7 +3,20 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [0.3.2] - 2026-07-27
+
+### Added
+
+- Dodano opcjonalne uwagi do zleceń, obsługiwane podczas tworzenia i edycji oraz prezentowane w nowej kolumnie Bazy Zleceń Produkcyjnych.
+
+### Fixed
+
+- Ujednolicono dane miesięcznego raportu według pracowników w tabeli oraz eksportach XLSX i CSV; wszystkie formaty używają tych samych filtrów, rekordów i dynamicznych kolumn aktualnego słownika rodzajów czasu.
+- Ujednolicono poziome przewijanie wszystkich tabel Centrum raportów z ekranem Zlecenia: szerokie tabele pozostają w obszarze ekranu i mają zsynchronizowane paski przewijania u góry i u dołu.
+
+### Changed
+
+- Rozpoczęto cykl rozwojowy `0.3.2` i zsynchronizowano numer wersji w metadanych projektu oraz dokumentacji.
 
 ## [0.3.1] - 2026-07-23
 

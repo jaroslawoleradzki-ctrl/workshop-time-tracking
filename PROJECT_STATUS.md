@@ -4,11 +4,43 @@
 
 - Projekt: Workshop Time Tracking
 - Aktualna wersja produkcyjna: `0.3.1`
+- Aktualna wersja development: `0.3.2`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: wersja `0.3.1` wdrożona produkcyjnie u klienta
+- Stan prac: wersja `0.3.2` ukończona, zweryfikowana i gotowa do wdrożenia produkcyjnego
 
 Wersja `0.3.1` została zweryfikowana, ustabilizowana i wdrożona produkcyjnie u klienta.
+
+Zakres wersji `0.3.2`:
+
+- ujednolicenie raportu według pracowników w tabeli oraz eksportach XLSX i CSV,
+- wspólne poziome przewijanie tabel,
+- opcjonalne uwagi do zleceń.
+
+## Weryfikacja uwag do zleceń w wersji 0.3.2
+
+- backend: 40 testów zakończonych powodzeniem, w tym odczyt, tworzenie, edycja i walidacja uwag do zlecenia,
+- backend: build zakończony powodzeniem,
+- frontend: 25 testów zakończonych powodzeniem, w tym prezentacja i edycja uwag,
+- frontend: build zakończony powodzeniem,
+- schemat Prisma: walidacja zakończona powodzeniem,
+- lint frontendu nie uruchamia się z powodu istniejącego braku pakietu `eslint` w zależnościach; zależności nie zmieniano w ramach dodawania uwag.
+
+## Weryfikacja przewijania tabel Centrum raportów w wersji 0.3.2
+
+- frontend: 24 testy zakończone powodzeniem, w tym kontrola wspólnej struktury przewijania wszystkich czterech zakładek raportowych,
+- frontend: build zakończony powodzeniem,
+- backend: build zakończony powodzeniem mimo braku zmian backendu,
+- viewport 768 px: szerokość dokumentu odpowiada szerokości widoku, bez rozszerzenia strony w poziomie,
+- lint frontendu nie uruchamia się z powodu istniejącego braku pakietu `eslint` w zależnościach; zależności nie zmieniano w ramach poprawki interfejsu.
+
+## Weryfikacja poprawki raportu pracowników w wersji 0.3.2
+
+- backend: 36 testów zakończonych powodzeniem, w tym porównanie filtrów i wartości raportu JSON z arkuszem XLSX,
+- backend: build zakończony powodzeniem,
+- frontend: 20 testów zakończonych powodzeniem, w tym porównanie tabeli z dynamicznym eksportem CSV,
+- frontend: build zakończony powodzeniem,
+- lint frontendu nie uruchamia się z powodu istniejącego braku pakietu `eslint` w zależnościach; zależności nie zmieniano w ramach poprawki raportu.
 
 Wersja `0.3.1` obejmuje zmiany funkcjonalne podnoszące użyteczność oraz stabilność aplikacji:
 - Generowanie kolumn raportu miesięcznego bezpośrednio ze słownika rodzajów czasu.
