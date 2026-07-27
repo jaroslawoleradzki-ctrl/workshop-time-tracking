@@ -7,15 +7,15 @@
 - Aktualna wersja development: `0.3.2`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: aktywny rozwój wersji `0.3.2`; dodano opcjonalne uwagi do zleceń
+- Stan prac: wersja `0.3.2` ukończona, zweryfikowana i gotowa do wdrożenia produkcyjnego
 
 Wersja `0.3.1` została zweryfikowana, ustabilizowana i wdrożona produkcyjnie u klienta.
 
-W wersji `0.3.2` tabela miesięcznego raportu według pracowników oraz eksporty XLSX i CSV korzystają z tego samego zestawu przefiltrowanych rekordów i dynamicznych kolumn aktualnego słownika rodzajów czasu. Usunięto stałe listy kodów w eksportach, które pomijały nowo dodane rodzaje czasu.
+Zakres wersji `0.3.2`:
 
-Wszystkie cztery tabele Centrum raportów korzystają ze wspólnego mechanizmu poziomego przewijania zastosowanego również na ekranie Zlecenia. Szerokie tabele nie rozszerzają strony poza dostępną szerokość, a zsynchronizowane paski u góry i u dołu ułatwiają obsługę na laptopach i tabletach.
-
-Zlecenia mają opcjonalne pole „Uwagi”, które administrator może uzupełnić podczas dodawania lub edycji zlecenia. Wartość jest przechowywana w bazie danych i prezentowana na liście zleceń.
+- ujednolicenie raportu według pracowników w tabeli oraz eksportach XLSX i CSV,
+- wspólne poziome przewijanie tabel,
+- opcjonalne uwagi do zleceń.
 
 ## Weryfikacja uwag do zleceń w wersji 0.3.2
 
