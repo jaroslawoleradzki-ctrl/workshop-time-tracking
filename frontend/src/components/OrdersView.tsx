@@ -20,6 +20,7 @@ interface Order {
   productName: string;
   accountingAccount: string | null;
   orderedBy: string | null;
+  notes: string | null;
   plannedHours: number;
   quantity: number | null;
   quantityUnit: string;
@@ -55,6 +56,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
   const [productName, setProductName] = useState('');
   const [accountingAccount, setAccountingAccount] = useState('');
   const [orderedBy, setOrderedBy] = useState('');
+  const [notes, setNotes] = useState('');
   const [quantity, setQuantity] = useState('1.00');
   const [quantityUnit, setQuantityUnit] = useState('szt.');
   const [hoursPerUnit, setHoursPerUnit] = useState('0.00');
@@ -97,6 +99,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
     setProductName('');
     setAccountingAccount('');
     setOrderedBy('');
+    setNotes('');
     setQuantity('1.00');
     setQuantityUnit('szt.');
     setHoursPerUnit('0.00');
@@ -115,6 +118,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
     setProductName(order.productName);
     setAccountingAccount(order.accountingAccount || '');
     setOrderedBy(order.orderedBy || '');
+    setNotes(order.notes || '');
     setQuantity(order.quantity !== null ? order.quantity.toString() : '1.00');
     setQuantityUnit(order.quantityUnit);
     setHoursPerUnit(order.hoursPerUnit !== null ? order.hoursPerUnit.toString() : '0.00');
@@ -158,6 +162,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
           productName: productName.trim(),
           accountingAccount: accountingAccount.trim(),
           orderedBy: orderedBy.trim() || null,
+          notes: notes.trim() || null,
           quantity: qty,
           quantityUnit: quantityUnit.trim() || 'szt.',
           hoursPerUnit: hrsPerUnit,
@@ -275,6 +280,17 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                     onChange={e => setOrderedBy(e.target.value)}
                   />
                 </div>
+              </div>
+
+              <div className="form-group" style={{ marginTop: '0.5rem' }}>
+                <label className="form-label" htmlFor="orderNotes">Uwagi (opcjonalnie)</label>
+                <textarea
+                  id="orderNotes"
+                  className="form-control"
+                  rows={3}
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                />
               </div>
 
               {/* === Produkt === */}
@@ -469,6 +485,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                 <th>Numer zlecenia</th>
                 <th style={{ whiteSpace: 'normal', minWidth: '100px' }}>Planowana<br />wysyłka</th>
                 <th>Zamawiający</th>
+                <th>Uwagi</th>
                 <th>Nazwa produktu</th>
                 <th>Numer produktu</th>
                 <th style={{ textAlign: 'right' }}>Ilość</th>
@@ -526,6 +543,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                       {order.plannedShipmentDate ? new Date(order.plannedShipmentDate).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
                     </td>
                     <td>{order.orderedBy || '-'}</td>
+                    <td style={{ minWidth: '180px', whiteSpace: 'pre-wrap' }}>{order.notes || '-'}</td>
                     <td style={{ fontWeight: 600 }}>{order.productName}</td>
                     <td>{order.productCode ? <code>{order.productCode}</code> : '-'}</td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>

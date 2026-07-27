@@ -7,13 +7,24 @@
 - Aktualna wersja development: `0.3.2`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: aktywny rozwój wersji `0.3.2`; ujednolicono dane eksportów oraz responsywne przewijanie tabel Centrum raportów
+- Stan prac: aktywny rozwój wersji `0.3.2`; dodano opcjonalne uwagi do zleceń
 
 Wersja `0.3.1` została zweryfikowana, ustabilizowana i wdrożona produkcyjnie u klienta.
 
 W wersji `0.3.2` tabela miesięcznego raportu według pracowników oraz eksporty XLSX i CSV korzystają z tego samego zestawu przefiltrowanych rekordów i dynamicznych kolumn aktualnego słownika rodzajów czasu. Usunięto stałe listy kodów w eksportach, które pomijały nowo dodane rodzaje czasu.
 
 Wszystkie cztery tabele Centrum raportów korzystają ze wspólnego mechanizmu poziomego przewijania zastosowanego również na ekranie Zlecenia. Szerokie tabele nie rozszerzają strony poza dostępną szerokość, a zsynchronizowane paski u góry i u dołu ułatwiają obsługę na laptopach i tabletach.
+
+Zlecenia mają opcjonalne pole „Uwagi”, które administrator może uzupełnić podczas dodawania lub edycji zlecenia. Wartość jest przechowywana w bazie danych i prezentowana na liście zleceń.
+
+## Weryfikacja uwag do zleceń w wersji 0.3.2
+
+- backend: 40 testów zakończonych powodzeniem, w tym odczyt, tworzenie, edycja i walidacja uwag do zlecenia,
+- backend: build zakończony powodzeniem,
+- frontend: 25 testów zakończonych powodzeniem, w tym prezentacja i edycja uwag,
+- frontend: build zakończony powodzeniem,
+- schemat Prisma: walidacja zakończona powodzeniem,
+- lint frontendu nie uruchamia się z powodu istniejącego braku pakietu `eslint` w zależnościach; zależności nie zmieniano w ramach dodawania uwag.
 
 ## Weryfikacja przewijania tabel Centrum raportów w wersji 0.3.2
 

@@ -5,6 +5,10 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.3.2] (Unreleased)
 
+### Added
+
+- Dodano opcjonalne uwagi do zleceń, obsługiwane podczas tworzenia i edycji oraz prezentowane w nowej kolumnie Bazy Zleceń Produkcyjnych.
+
 ### Fixed
 
 - Ujednolicono dane miesięcznego raportu według pracowników w tabeli oraz eksportach XLSX i CSV; wszystkie formaty używają tych samych filtrów, rekordów i dynamicznych kolumn aktualnego słownika rodzajów czasu.

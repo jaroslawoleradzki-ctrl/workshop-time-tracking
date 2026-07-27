@@ -22,6 +22,7 @@ const orders = [
     productName: 'Pompa próżniowa',
     accountingAccount: 'ACC-400',
     orderedBy: 'MetalWorks Sp. z o.o.',
+    notes: 'Pilna realizacja',
     plannedHours: 12,
     quantity: 2,
     quantityUnit: 'szt.',
@@ -42,6 +43,7 @@ const orders = [
     productName: 'Wentylator przemysłowy',
     accountingAccount: 'ACC-500',
     orderedBy: 'Pol-Stal S.A.',
+    notes: null,
     plannedHours: 20,
     quantity: 4,
     quantityUnit: 'szt.',
@@ -96,4 +98,36 @@ describe('OrdersView — wyszukiwarka zleceń', () => {
       expect(screen.queryByText(hiddenOrder)).not.toBeInTheDocument();
     },
   );
+
+  it('wyświetla uwagi na liście i przesyła je podczas edycji zlecenia', async () => {
+    const fetchMock = vi.mocked(fetch);
+
+    render(
+      <OrdersView
+        token="test-token"
+        user={{ id: '1', username: 'admin', role: 'admin', fullName: 'Administrator Testowy' }}
+      />,
+    );
+
+    expect(await screen.findByText('Pilna realizacja')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByTitle('Edytuj')[0]);
+
+    const notesInput = screen.getByLabelText('Uwagi (opcjonalnie)');
+    expect(notesInput).toHaveValue('Pilna realizacja');
+    fireEvent.change(notesInput, { target: { value: '  Uzgodnić termin wysyłki  ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Zapisz zlecenie' }));
+
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/orders/10000000-0000-4000-8000-000000000001',
+        expect.objectContaining({ method: 'PUT' }),
+      );
+    });
+
+    const updateCall = fetchMock.mock.calls.find(([url]) =>
+      url === '/api/orders/10000000-0000-4000-8000-000000000001'
+    );
+    const requestBody = JSON.parse(String(updateCall?.[1]?.body));
+    expect(requestBody.notes).toBe('Uzgodnić termin wysyłki');
+  });
 });
