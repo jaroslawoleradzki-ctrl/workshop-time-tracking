@@ -3,7 +3,11 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [0.3.2] (Unreleased)
+
+### Changed
+
+- Rozpoczęto cykl rozwojowy `0.3.2` i zsynchronizowano numer wersji w metadanych projektu oraz dokumentacji.
 
 ## [0.3.1] - 2026-07-23
 
