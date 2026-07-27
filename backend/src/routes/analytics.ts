@@ -10,6 +10,71 @@ const router = Router();
 // Auth required
 router.use(authenticateJWT);
 
+type EmployeeReportFilters = {
+  dateFrom?: string;
+  dateTo?: string;
+  employeeId?: string;
+};
+
+type EmployeeReportRow = {
+  employeeId: string;
+  employeeName: string;
+  suma: number;
+  [workTimeTypeCode: string]: string | number;
+};
+
+type EmployeeReportType = {
+  code: string;
+  name: string;
+};
+
+async function getEmployeeReportRows(filters: EmployeeReportFilters): Promise<EmployeeReportRow[]> {
+  const reports = await prisma.workTimeReport.findMany({
+    where: {
+      deletedAt: null,
+      employeeId: filters.employeeId || undefined,
+      date: {
+        gte: filters.dateFrom ? new Date(filters.dateFrom) : undefined,
+        lte: filters.dateTo ? new Date(filters.dateTo) : undefined,
+      },
+    },
+    include: {
+      employee: true,
+    },
+  });
+
+  const pivot: Record<string, EmployeeReportRow> = {};
+
+  reports.forEach((report) => {
+    const employeeId = report.employeeId;
+    if (!pivot[employeeId]) {
+      pivot[employeeId] = {
+        employeeId,
+        employeeName: report.employee.fullName,
+        suma: 0,
+      };
+    }
+
+    const hours = Number(report.hours);
+    const code = report.workTimeTypeCode;
+
+    pivot[employeeId][code] = (Number(pivot[employeeId][code]) || 0) + hours;
+    pivot[employeeId].suma += hours;
+  });
+
+  return Object.values(pivot).sort((a, b) => a.employeeName.localeCompare(b.employeeName));
+}
+
+async function getEmployeeReportTypes(): Promise<EmployeeReportType[]> {
+  return prisma.workTimeType.findMany({
+    select: {
+      code: true,
+      name: true,
+    },
+    orderBy: [{ createdAt: 'asc' }, { code: 'asc' }],
+  });
+}
+
 // Helper for ExcelJS exports
 async function generateExcelResponse(params: {
   res: Response;
@@ -248,42 +313,11 @@ router.get('/report-by-employee', async (req: AuthRequest, res: Response) => {
   const { dateFrom, dateTo, employeeId } = req.query;
 
   try {
-    // Fetch reports
-    const reports = await prisma.workTimeReport.findMany({
-      where: {
-        deletedAt: null,
-        employeeId: employeeId ? (employeeId as string) : undefined,
-        date: {
-          gte: dateFrom ? new Date(dateFrom as string) : undefined,
-          lte: dateTo ? new Date(dateTo as string) : undefined,
-        },
-      },
-      include: {
-        employee: true,
-      },
+    const result = await getEmployeeReportRows({
+      dateFrom: dateFrom as string | undefined,
+      dateTo: dateTo as string | undefined,
+      employeeId: employeeId as string | undefined,
     });
-
-    // Pivot in memory
-    const pivot: { [key: string]: any } = {};
-
-    reports.forEach((r) => {
-      const empId = r.employeeId;
-      if (!pivot[empId]) {
-        pivot[empId] = {
-          employeeId: empId,
-          employeeName: r.employee.fullName,
-          suma: 0,
-        };
-      }
-
-      const hrs = Number(r.hours);
-      const code = r.workTimeTypeCode;
-
-      pivot[empId][code] = (Number(pivot[empId][code]) || 0) + hrs;
-      pivot[empId].suma += hrs;
-    });
-
-    const result = Object.values(pivot).sort((a, b) => a.employeeName.localeCompare(b.employeeName));
     return res.json(result);
   } catch (error) {
     logger.error(error, 'Błąd podczas pobierania raportu wg pracowników');
@@ -457,62 +491,31 @@ router.get('/export/by-employee', async (req: AuthRequest, res: Response) => {
   const { dateFrom, dateTo, employeeId } = req.query;
 
   try {
-    const reports = await prisma.workTimeReport.findMany({
-      where: {
-        deletedAt: null,
-        employeeId: employeeId ? (employeeId as string) : undefined,
-        date: {
-          gte: dateFrom ? new Date(dateFrom as string) : undefined,
-          lte: dateTo ? new Date(dateTo as string) : undefined,
-        },
-      },
-      include: {
-        employee: true,
-      },
-    });
-
-    const pivot: { [key: string]: any } = {};
-
-    reports.forEach((r) => {
-      const empId = r.employeeId;
-      if (!pivot[empId]) {
-        pivot[empId] = {
-          employeeName: r.employee.fullName,
-          G: 0,
-          NDR: 0,
-          NS: 0,
-          UW: 0,
-          UOK: 0,
-          UŻ: 0,
-          L4: 0,
-          suma: 0,
-        };
-      }
-
-      const hrs = Number(r.hours);
-      const code = r.workTimeTypeCode;
-
-      if (['G', 'NDR', 'NS', 'UW', 'UOK', 'UŻ', 'L4'].includes(code)) {
-        pivot[empId][code] += hrs;
-      }
-      pivot[empId].suma += hrs;
-    });
-
-    const sortedRows = Object.values(pivot).sort((a, b) => a.employeeName.localeCompare(b.employeeName));
+    const filters = {
+      dateFrom: dateFrom as string | undefined,
+      dateTo: dateTo as string | undefined,
+      employeeId: employeeId as string | undefined,
+    };
+    const [rows, workTimeTypes] = await Promise.all([
+      getEmployeeReportRows(filters),
+      getEmployeeReportTypes(),
+    ]);
 
     const headers = [
       'Pracownik',
-      'G (Standard)',
-      'NDR (Nadgodziny)',
-      'NS (Nadgodziny weekend)',
-      'UW (Urlop wypoczynkowy)',
-      'UOK (Urlop okoliczn.)',
-      'UŻ (Urlop żądanie)',
-      'L4 (Chorobowe)',
+      ...workTimeTypes.map((type) => `${type.code} (${type.name})`),
       'Suma godzin',
     ];
 
-    const data = sortedRows.map((r) => [r.employeeName, r.G, r.NDR, r.NS, r.UW, r.UOK, r.UŻ, r.L4, r.suma]);
+    const data = rows.map((row) => [
+      row.employeeName,
+      ...workTimeTypes.map((type) => Number(row[type.code]) || 0),
+      row.suma,
+    ]);
+    const numberColumns = Array.from(
+      { length: workTimeTypes.length + 1 },
+      (_, index) => index + 2,
+    );
 
     await generateExcelResponse({
       res,
@@ -520,7 +523,7 @@ router.get('/export/by-employee', async (req: AuthRequest, res: Response) => {
       sheetName: 'Czas pracy',
       headers,
       data,
-      numberColumns: [2, 3, 4, 5, 6, 7, 8, 9],
+      numberColumns,
     });
   } catch (error) {
     logger.error(error, 'Błąd eksportu XLSX (by-employee)');

@@ -7,11 +7,19 @@
 - Aktualna wersja development: `0.3.2`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: rozpoczęto cykl rozwojowy wersji `0.3.2`
+- Stan prac: aktywny rozwój wersji `0.3.2`; usunięto rozbieżność miesięcznego raportu pracowników między tabelą a eksportami
 
 Wersja `0.3.1` została zweryfikowana, ustabilizowana i wdrożona produkcyjnie u klienta.
 
-Wersja `0.3.2` została rozpoczęta przez synchronizację numeracji projektu i dokumentacji. Nie wprowadzono jeszcze zmian funkcjonalnych.
+W wersji `0.3.2` tabela miesięcznego raportu według pracowników oraz eksporty XLSX i CSV korzystają z tego samego zestawu przefiltrowanych rekordów i dynamicznych kolumn aktualnego słownika rodzajów czasu. Usunięto stałe listy kodów w eksportach, które pomijały nowo dodane rodzaje czasu.
+
+## Weryfikacja poprawki raportu pracowników w wersji 0.3.2
+
+- backend: 36 testów zakończonych powodzeniem, w tym porównanie filtrów i wartości raportu JSON z arkuszem XLSX,
+- backend: build zakończony powodzeniem,
+- frontend: 20 testów zakończonych powodzeniem, w tym porównanie tabeli z dynamicznym eksportem CSV,
+- frontend: build zakończony powodzeniem,
+- lint frontendu nie uruchamia się z powodu istniejącego braku pakietu `eslint` w zależnościach; zależności nie zmieniano w ramach poprawki raportu.
 
 Wersja `0.3.1` obejmuje zmiany funkcjonalne podnoszące użyteczność oraz stabilność aplikacji:
 - Generowanie kolumn raportu miesięcznego bezpośrednio ze słownika rodzajów czasu.

@@ -5,6 +5,10 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.3.2] (Unreleased)
 
+### Fixed
+
+- Ujednolicono dane miesięcznego raportu według pracowników w tabeli oraz eksportach XLSX i CSV; wszystkie formaty używają tych samych filtrów, rekordów i dynamicznych kolumn aktualnego słownika rodzajów czasu.
+
 ### Changed
 
 - Rozpoczęto cykl rozwojowy `0.3.2` i zsynchronizowano numer wersji w metadanych projektu oraz dokumentacji.

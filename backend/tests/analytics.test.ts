@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as jwt from 'jsonwebtoken';
+import * as ExcelJS from 'exceljs';
 import request from 'supertest';
 import app from '../src/app';
 import prisma from '../src/utils/prisma';
@@ -19,6 +20,16 @@ const token = jwt.sign(
 
 const authenticatedGet = (path: string) =>
   request(app).get(path).set('Authorization', `Bearer ${token}`);
+
+const binaryParser = (
+  response: NodeJS.ReadableStream,
+  callback: (error: Error | null, body?: Buffer) => void,
+) => {
+  const chunks: Buffer[] = [];
+  response.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+  response.on('end', () => callback(null, Buffer.concat(chunks)));
+  response.on('error', callback);
+};
 
 describe('Analytics reports', () => {
   beforeEach(() => {
@@ -65,6 +76,59 @@ describe('Analytics reports', () => {
         NOC: 4,
         suma: 4,
       },
+    ]);
+  });
+
+  it('returns the same employee rows and dynamic work time types in JSON and XLSX', async () => {
+    const reports = [
+      {
+        employeeId: EMPLOYEE_ID,
+        employee: { fullName: 'Jan Kowalski' },
+        hours: 8,
+        workTimeTypeCode: 'G',
+      },
+      {
+        employeeId: EMPLOYEE_ID,
+        employee: { fullName: 'Jan Kowalski' },
+        hours: 2.5,
+        workTimeTypeCode: 'NOC',
+      },
+    ];
+    const reportSpy = vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue(reports as any);
+    vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
+      { code: 'G', name: 'Standardowe godziny pracy' },
+      { code: 'NOC', name: 'Zmiana nocna' },
+    ] as any);
+
+    const filters = `dateFrom=2026-07-01&dateTo=2026-07-31&employeeId=${EMPLOYEE_ID}`;
+    const jsonResponse = await authenticatedGet(`/api/analytics/report-by-employee?${filters}`)
+      .expect(200);
+    const xlsxResponse = await authenticatedGet(`/api/analytics/export/by-employee?${filters}`)
+      .buffer(true)
+      .parse(binaryParser)
+      .expect(200)
+      .expect('Content-Type', /spreadsheetml/);
+
+    expect(reportSpy).toHaveBeenCalledTimes(2);
+    expect(reportSpy.mock.calls[0][0]).toEqual(reportSpy.mock.calls[1][0]);
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(xlsxResponse.body);
+    const worksheet = workbook.getWorksheet('Czas pracy');
+
+    expect(worksheet?.getRow(1).values).toEqual([
+      undefined,
+      'Pracownik',
+      'G (Standardowe godziny pracy)',
+      'NOC (Zmiana nocna)',
+      'Suma godzin',
+    ]);
+    expect(worksheet?.getRow(2).values).toEqual([
+      undefined,
+      jsonResponse.body[0].employeeName,
+      jsonResponse.body[0].G,
+      jsonResponse.body[0].NOC,
+      jsonResponse.body[0].suma,
     ]);
   });
 

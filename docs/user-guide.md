@@ -25,7 +25,7 @@ Jeśli kod `G` przekroczy 8 godzin lub suma przekroczy 12/24 godziny, pojawi si�
 
 ### Raporty i eksport
 
-Zakładka Raporty udostępnia zestawienia według zleceń, pracowników, kont księgowych i szczegółowe. Ustaw zakres dat i filtry właściwe dla zakładki, wygeneruj raport, a następnie pobierz XLSX lub CSV. W miesięcznym raporcie według pracowników kolumny rodzajów czasu odpowiadają aktualnej zawartości słownika i zachowują kolejność jego pozycji. Szczegółowy raport umożliwia również usunięcie wpisu.
+Zakładka Raporty udostępnia zestawienia według zleceń, pracowników, kont księgowych i szczegółowe. Ustaw zakres dat i filtry właściwe dla zakładki, wygeneruj raport, a następnie pobierz XLSX lub CSV. W miesięcznym raporcie według pracowników tabela oraz oba eksporty zawierają ten sam zestaw rekordów, a kolumny rodzajów czasu odpowiadają aktualnej zawartości słownika i zachowują kolejność jego pozycji. Szczegółowy raport umożliwia również usunięcie wpisu.
 
 > **Zrzut ekranu do wstawienia:** zakładka Raporty z wybranym raportem szczegółowym, zakresem dat, wynikami oraz przyciskami eksportu.
 

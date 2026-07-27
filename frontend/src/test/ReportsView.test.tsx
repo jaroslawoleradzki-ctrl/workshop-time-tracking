@@ -79,4 +79,39 @@ describe('ReportsView — miesięczny raport pracowników', () => {
     expect(screen.queryByRole('columnheader', { name: /LEGACY/ })).not.toBeInTheDocument();
     expect(screen.getByText('2.5 h')).toBeInTheDocument();
   });
+
+  it('exports the same employee rows and dictionary columns to CSV as the table', async () => {
+    let exportedBlob: Blob | undefined;
+    vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
+      if (blob instanceof Blob) exportedBlob = blob;
+      return 'blob:test-report';
+    });
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+
+    render(
+      <ReportsView
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Wg Pracowników (Miesięczny)' }));
+    await screen.findByRole('columnheader', { name: 'NOC (Zmiana nocna)' });
+    fireEvent.click(screen.getByRole('button', { name: 'Pobierz plik CSV' }));
+
+    expect(exportedBlob).toBeDefined();
+    const csv = await exportedBlob!.text();
+    const lines = csv.replace(/^\uFEFF/, '').split('\n');
+
+    expect(lines[0]).toBe([
+      'Pracownik',
+      ...workTimeTypes
+        .slice()
+        .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
+        .map((type) => `${type.code} (${type.name})`),
+      'Suma godzin',
+    ].join(';'));
+    expect(lines[1]).toBe('Jan Kowalski;8;0;0;0;0;0;0;2.5;13.5');
+    expect(lines.join('\n')).not.toContain('LEGACY');
+  });
 });

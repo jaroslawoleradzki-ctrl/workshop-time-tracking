@@ -206,8 +206,12 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
         break;
       case 'by-employee':
         filename = 'Raport_miesieczny_pracownicy.csv';
-        headers = ['Pracownik', 'G', 'NDR', 'NS', 'UW', 'UOK', 'UŻ', 'L4', 'Suma'];
-        rows = safeReportData.map(r => [r.employeeName, r.G, r.NDR, r.NS, r.UW, r.UOK, r.UŻ, r.L4, r.suma]);
+        headers = ['Pracownik', ...workTimeTypes.map(type => `${type.code} (${type.name})`), 'Suma godzin'];
+        rows = safeReportData.map(r => [
+          r.employeeName,
+          ...workTimeTypes.map(type => Number(r[type.code]) || 0),
+          r.suma,
+        ]);
         break;
       case 'by-account':
         filename = 'Raport_kont_ksiegowych.csv';
