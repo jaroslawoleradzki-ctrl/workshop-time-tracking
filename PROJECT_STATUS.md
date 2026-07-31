@@ -3,31 +3,25 @@
 ## Stan bieżący
 
 - Projekt: Workshop Time Tracking
-- Aktualna wersja produkcyjna: `0.3.6`
-- Aktualna wersja development: `0.3.7`
+- Aktualna wersja produkcyjna: `0.3.7`
+- Aktualna wersja development: `0.3.8`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: wersja `0.3.7` zaimplementowana i zweryfikowana
+- Stan prac: wersja `0.3.8` zaimplementowana i zweryfikowana
 
-Zakres wersji `0.3.7`:
+Zakres wersji `0.3.8`:
 
-- Ujednolicono nagłówki metadanych dla wszystkich 4 eksportów raportowych ukierunkowanych na użytkownika (XLSX i CSV): Raport zleceń, Miesięczny raport pracowników, Raport kont księgowych oraz Szczegółowy raport czasu pracy.
-- Przed tabelą danych dodano wiersze: Nazwa raportu, Zakres dat, Zastosowane filtry oraz Data i godzina wygenerowania.
-- W plikach XLSX dostosowano scalanie tytułu, zamrożenie okien (`ySplit`) oraz zakreślenie `autoFilter` wyłącznie do tabeli danych.
-- W plikach CSV zapewniono kodowanie UTF-8 BOM, separator `;`, poprawną obsługę cudzysłowów oraz odstęp pustym wierszem przed tabelą.
-- Wyłączono ze zmiany techniczne szablony importowe (`szablon_pracownicy.xlsx`, `szablon_zlecen.xlsx`).
-- Daty wygenerowania używają obecnego mechanizmu czasu aplikacji (czas lokalny procesu backendu oraz przeglądarki).
+- Ujednolicono formatowanie nazwiska i imienia pracownika w miesięcznym raporcie czasu pracy według pracowników na format `Nazwisko Imię` (np. `Kowalski Jan`).
+- Formatowanie opiera się na dedykowanej funkcji `formatEmployeeName(emp)` w backendzie i jest 100% spójne w widoku aplikacji, eksploatacyjnym pliku XLSX oraz pliku CSV.
+- Zapewniono bezpieczne zasady fallbacku (samo nazwisko, samo imię, legacy fullName lub "Brak danych") bez wygenerowania `undefined`, `null` czy podwójnych spacji.
+- Zachowano sortowanie po nazwisku, a następnie imieniu.
 
-## Weryfikacja wersji 0.3.7
+## Weryfikacja wersji 0.3.8
 
-- backend: 48 testów zakończonych powodzeniem,
+- backend: 49 testów zakończonych powodzeniem,
 - backend: build (`npm run build`) zakończony powodzeniem,
-- frontend: 32 testy zakończone powodzeniem,
+- frontend: 33 testy zakończone powodzeniem,
 - frontend: build (`npm run build`) zakończony powodzeniem.
-
-## Następne kroki (Plan na v0.4.0)
-
-- Rozpoczęcie prac nad dużym modułem Raportowania v0.4.0 (prezentacja sztuk, procent roboczogodzin, rozbudowane centrum podsumowań).
 
 ## Weryfikacja uwag do zleceń w wersji 0.3.2
 

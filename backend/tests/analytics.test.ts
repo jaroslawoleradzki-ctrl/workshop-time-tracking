@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as jwt from 'jsonwebtoken';
 import * as ExcelJS from 'exceljs';
 import request from 'supertest';
+import { formatEmployeeName } from '../src/routes/analytics';
 import app from '../src/app';
 import prisma from '../src/utils/prisma';
 import { TEST_JWT_SECRET } from './setup-env';
@@ -84,13 +85,13 @@ describe('Analytics reports', () => {
     const reports = [
       {
         employeeId: EMPLOYEE_ID,
-        employee: { fullName: 'Jan Kowalski' },
+        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
         hours: 8,
         workTimeTypeCode: 'G',
       },
       {
         employeeId: EMPLOYEE_ID,
-        employee: { fullName: 'Jan Kowalski' },
+        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
         hours: 2.5,
         workTimeTypeCode: 'NOC',
       },
@@ -120,7 +121,7 @@ describe('Analytics reports', () => {
     // Metadane nagłówka raportu
     expect(worksheet?.getRow(1).getCell(1).value).toBe('Raport: Miesięczny raport czasu pracy pracowników');
     expect(worksheet?.getRow(2).getCell(1).value).toBe('Zakres dat: 01.07.2026–31.07.2026');
-    expect(worksheet?.getRow(3).getCell(1).value).toBe('Pracownik: Jan Kowalski');
+    expect(worksheet?.getRow(3).getCell(1).value).toBe('Pracownik: Kowalski Jan');
     expect(worksheet?.getRow(4).getCell(1).value).toMatch(/^Wygenerowano: \d{2}\.\d{2}\.\d{4}, \d{2}:\d{2}$/);
     expect(worksheet?.getRow(5).values).toEqual([]);
 
@@ -260,12 +261,26 @@ describe('Analytics reports', () => {
 
     const res = await authenticatedGet('/api/analytics/report-by-employee').expect(200);
     expect(res.body.length).toBe(2);
-    expect(res.body[0].employeeName).toBe('Adam Adamowski');
+    expect(res.body[0].employeeName).toBe('Adamowski Adam');
     expect(res.body[0].suma).toBe(10);
     expect(res.body[0].sumaBezNadgodzin).toBe(8);
 
-    expect(res.body[1].employeeName).toBe('Jan Kowalski');
+    expect(res.body[1].employeeName).toBe('Kowalski Jan');
     expect(res.body[1].suma).toBe(8);
     expect(res.body[1].sumaBezNadgodzin).toBe(8);
+  });
+
+  it('correctly formats employee name as Nazwisko Imię and handles fallbacks without null, undefined, or double spaces', () => {
+    expect(formatEmployeeName({ firstName: 'Jan', lastName: 'Kowalski' })).toBe('Kowalski Jan');
+    expect(formatEmployeeName({ firstName: 'Jan', lastName: null })).toBe('Jan');
+    expect(formatEmployeeName({ firstName: null, lastName: 'Kowalski' })).toBe('Kowalski');
+    expect(formatEmployeeName({ firstName: '  Jan  ', lastName: '  Kowalski  ' })).toBe('Kowalski Jan');
+    expect(formatEmployeeName({ firstName: null, lastName: null, fullName: 'Jan Kowalski' })).toBe('Jan Kowalski');
+    expect(formatEmployeeName({ firstName: null, lastName: null, fullName: null })).toBe('Brak danych');
+
+    const formatted = formatEmployeeName({ firstName: 'Jan', lastName: 'Kowalski' });
+    expect(formatted).not.toContain('undefined');
+    expect(formatted).not.toContain('null');
+    expect(formatted).not.toContain('  ');
   });
 });
