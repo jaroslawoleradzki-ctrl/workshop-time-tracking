@@ -50,7 +50,15 @@ Dokument przedstawia zrealizowane etapy rozwoju i kamienie milowe aplikacji Work
 ---
 
 ## Sprint 0.3.5
+*Status: Zakończony*
+- [x] ✔ Udostępnienie ekranu „Baza Zleceń” dla użytkownika z rolą `Leader` w trybie tylko do odczytu.
+- [x] ✔ Zablokowanie przycisków dodawania, edycji, usuwania i zapisu danych dla Lidera w interfejsie.
+- [x] ✔ Zabezpieczenie endpointów modyfikujących w backendzie (`403 Forbidden` dla roli Leader).
+
+---
+
+## Sprint 0.3.6
 *Status: Planowany*
-- [ ] Dostęp tylko do odczytu do Bazy Zleceń dla roli `Leader`.
 - [ ] Poprawki modułu urlopów i nieobecności.
-- [ ] Poprawki raportów wynikające z testów użytkowników.
+- [ ] Poprawki zgłoszone przez użytkowników.
+- [ ] Dalsze usprawnienia raportów.

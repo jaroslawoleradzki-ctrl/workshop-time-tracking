@@ -66,7 +66,7 @@ Kopiowanie ostatniego dnia: React wysyła `employeeId` i datę docelową. API wy
 
 `Employee`, `Order` i `WorkTimeReport` używają `deletedAt`; większość odczytów filtruje `null`. Usunięcie pracownika dodatkowo go dezaktywuje, a zlecenia ustawia na `CLOSED`. Import może przywrócić pracownika lub zlecenie.
 
-AuditLog jest tworzony pomocniczą funkcją dla zmian pracowników, zleceń i wpisów. Domyślnie dotychczasowe wywołania jedynie logują błąd audytu. Operacja kopiowania przekazuje klienta bieżącej transakcji i wymaga ponownego rzucenia błędu, dlatego brak audytu cofa cały kopiowany komplet. Routery zwracają polskie komunikaty i odpowiednie kody 4xx/5xx; końcowy middleware obsługuje błędy nieprzechwycone. React pokazuje błędy lokalnie, a globalne 401/403 czyszczą sesję. Middleware ról zwraca niestandardowy kod 430 przy braku roli.
+AuditLog jest tworzony pomocniczą funkcją dla zmian pracowników, zleceń i wpisów. Domyślnie dotychczasowe wywołania jedynie logują błąd audytu. Operacja kopiowania przekazuje klienta bieżącej transakcji i wymaga ponownego rzucenia błędu, dlatego brak audytu cofa cały kopiowany komplet. Routery zwracają polskie komunikaty i odpowiednie kody 4xx/5xx; końcowy middleware obsługuje błędy nieprzechwycone. React pokazuje błędy lokalnie, a globalne 401/403 czyszczą sesję. Middleware ról zwraca standardowy kod 403 (Forbidden) przy braku wymaganej roli.
 
 ## Daty i wdrożenie
 
