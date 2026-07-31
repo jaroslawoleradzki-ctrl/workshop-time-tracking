@@ -75,6 +75,7 @@ describe('Analytics reports', () => {
         employeeName: 'Jan Kowalski',
         NOC: 4,
         suma: 4,
+        sumaBezNadgodzin: 4,
       },
     ]);
   });
@@ -119,16 +120,18 @@ describe('Analytics reports', () => {
     expect(worksheet?.getRow(1).values).toEqual([
       undefined,
       'Pracownik',
+      'Suma godzin z nadgodzinami',
+      'Suma godzin bez nadgodzin',
       'G (Standardowe godziny pracy)',
       'NOC (Zmiana nocna)',
-      'Suma godzin',
     ]);
     expect(worksheet?.getRow(2).values).toEqual([
       undefined,
       jsonResponse.body[0].employeeName,
+      jsonResponse.body[0].suma,
+      jsonResponse.body[0].sumaBezNadgodzin,
       jsonResponse.body[0].G,
       jsonResponse.body[0].NOC,
-      jsonResponse.body[0].suma,
     ]);
   });
 
@@ -180,5 +183,75 @@ describe('Analytics reports', () => {
         }),
       }),
     );
+  });
+
+  it('includes quantity and filters orders by onlyWithHours=true', async () => {
+    vi.spyOn(prisma.order, 'findMany').mockResolvedValue([
+      {
+        orderNumber: 'ZL-001',
+        productName: 'Produkt 1',
+        productCode: 'P-001',
+        plannedHours: 10,
+        quantity: 50,
+        quantityUnit: 'szt.',
+        status: 'OPEN',
+        reports: [{ hours: 8 }],
+      },
+      {
+        orderNumber: 'ZL-002',
+        productName: 'Produkt 2',
+        productCode: 'P-002',
+        plannedHours: 10,
+        quantity: 100,
+        quantityUnit: 'szt.',
+        status: 'OPEN',
+        reports: [],
+      },
+    ] as any);
+
+    const allRes = await authenticatedGet('/api/analytics/report-by-order').expect(200);
+    expect(allRes.body.length).toBe(2);
+    expect(allRes.body[0].quantity).toBe(50);
+    expect(allRes.body[0].quantityUnit).toBe('szt.');
+
+    const filteredRes = await authenticatedGet('/api/analytics/report-by-order?onlyWithHours=true').expect(200);
+    expect(filteredRes.body.length).toBe(1);
+    expect(filteredRes.body[0].orderNumber).toBe('ZL-001');
+  });
+
+  it('calculates sumaBezNadgodzin and sorts employees by last name', async () => {
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([
+      {
+        employeeId: '1',
+        employee: { fullName: 'Adam Adamowski', firstName: 'Adam', lastName: 'Adamowski' },
+        hours: 8,
+        workTimeTypeCode: 'G',
+        workTimeType: { name: 'Standardowe' },
+      },
+      {
+        employeeId: '1',
+        employee: { fullName: 'Adam Adamowski', firstName: 'Adam', lastName: 'Adamowski' },
+        hours: 2,
+        workTimeTypeCode: 'NDR',
+        workTimeType: { name: 'Nadgodziny' },
+      },
+      {
+        employeeId: '2',
+        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+        hours: 8,
+        workTimeTypeCode: 'G',
+        workTimeType: { name: 'Standardowe' },
+      },
+    ] as any);
+
+    const res = await authenticatedGet('/api/analytics/report-by-employee').expect(200);
+    expect(res.body.length).toBe(2);
+    expect(res.body[0].employeeName).toBe('Adam Adamowski');
+    expect(res.body[0].suma).toBe(10);
+    expect(res.body[0].sumaBezNadgodzin).toBe(8);
+
+    expect(res.body[1].employeeName).toBe('Jan Kowalski');
+    expect(res.body[1].suma).toBe(8);
+    expect(res.body[1].sumaBezNadgodzin).toBe(8);
   });
 });

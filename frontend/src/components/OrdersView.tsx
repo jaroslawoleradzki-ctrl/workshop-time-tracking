@@ -75,6 +75,17 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
     fetchOrders();
   }, [token]);
 
+  useEffect(() => {
+    if (showFormModal) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [showFormModal]);
+
   const fetchOrders = async () => {
     try {
       const res = await fetch('/api/orders', {
@@ -199,6 +210,9 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
     }
   };
 
+  const [sortField, setSortField] = useState<'orderDate' | 'plannedShipmentDate' | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
   const filteredOrders = orders.filter(o => 
     (o.orderNumber?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
     (o.orderedBy?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
@@ -207,13 +221,60 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
     (o.accountingAccount?.toLowerCase() || '').includes(searchQuery.toLowerCase())
   );
 
+  const sortedOrders = useMemo(() => {
+    if (!sortField) return filteredOrders;
+    return [...filteredOrders].sort((a, b) => {
+      const valA = a[sortField] ? new Date(a[sortField]).getTime() : (sortOrder === 'asc' ? Infinity : -Infinity);
+      const valB = b[sortField] ? new Date(b[sortField]).getTime() : (sortOrder === 'asc' ? Infinity : -Infinity);
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [filteredOrders, sortField, sortOrder]);
+
+  const toggleSort = (field: 'orderDate' | 'plannedShipmentDate') => {
+    if (sortField === field) {
+      if (sortOrder === 'asc') setSortOrder('desc');
+      else {
+        setSortField(null);
+        setSortOrder('asc');
+      }
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
       {/* Create/Edit Form Modal (Admin only) */}
       {showFormModal && isAdmin && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '550px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
+        <div
+          className="modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowFormModal(false);
+          }}
+        >
+          <div
+            className="modal-content"
+            style={{
+              maxWidth: '550px',
+              maxHeight: 'calc(100vh - 2rem)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid var(--border-color)',
+                paddingBottom: '0.75rem',
+                flexShrink: 0,
+              }}
+            >
               <h3 className="modal-header" style={{ margin: 0 }}>
                 {editingOrderId ? 'Edycja Zlecenia Produkcyjnego' : 'Nowe Zlecenie Produkcyjne'}
               </h3>
@@ -222,204 +283,234 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
               </button>
             </div>
 
-            <form onSubmit={handleFormSubmit}>
-              {formValidationError && (
-                <div className="alert alert-danger" style={{ padding: '0.75rem', fontSize: '0.85rem' }}>
-                  {formValidationError}
-                </div>
-              )}
-
-              {/* === Informacje o zleceniu === */}
-              <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.25rem', marginBottom: '0.75rem', marginTop: '0.5rem' }}>
-                <h4 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Informacje o zleceniu
-                </h4>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Numer Zlecenia (unikalny)</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="np. ZL-2026-001"
-                    value={orderNumber}
-                    onChange={e => setOrderNumber(e.target.value)}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Data zlecenia</label>
-                  <input
-                    type="date"
-                    className="form-control"
-                    value={orderDate}
-                    onChange={e => setOrderDate(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="form-row" style={{ marginTop: '0.5rem' }}>
-                <div className="form-group">
-                  <label className="form-label">Planowana wysyłka (opcjonalnie)</label>
-                  <input
-                    type="date"
-                    className="form-control"
-                    value={plannedShipmentDate}
-                    onChange={e => setPlannedShipmentDate(e.target.value)}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Zamawiający (opcjonalnie)</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="np. MetalWorks Sp. z o.o."
-                    value={orderedBy}
-                    onChange={e => setOrderedBy(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="form-group" style={{ marginTop: '0.5rem' }}>
-                <label className="form-label" htmlFor="orderNotes">Uwagi (opcjonalnie)</label>
-                <textarea
-                  id="orderNotes"
-                  className="form-control"
-                  rows={3}
-                  value={notes}
-                  onChange={e => setNotes(e.target.value)}
-                />
-              </div>
-
-              {/* === Produkt === */}
-              <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.25rem', marginBottom: '0.75rem', marginTop: '1.25rem' }}>
-                <h4 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Produkt
-                </h4>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Numer produktu (opcjonalnie)</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="np. PR-99823"
-                    value={productCode}
-                    onChange={e => setProductCode(e.target.value)}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Konto księgowe (opcjonalnie)</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="np. KK-90210"
-                    value={accountingAccount}
-                    onChange={e => setAccountingAccount(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="form-group" style={{ marginTop: '0.5rem' }}>
-                <label className="form-label">Nazwa produktu</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="np. Silnik Elektryczny 15kW"
-                  value={productName}
-                  onChange={e => setProductName(e.target.value)}
-                />
-              </div>
-
-              {/* === Plan === */}
-              <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.25rem', marginBottom: '0.75rem', marginTop: '1.25rem' }}>
-                <h4 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Plan
-                </h4>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Ilość</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="np. 150.00"
-                    value={quantity}
-                    onChange={e => setQuantity(e.target.value)}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Jednostka</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="np. szt., kg, m"
-                    value={quantityUnit}
-                    onChange={e => setQuantityUnit(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="form-row" style={{ marginTop: '0.5rem' }}>
-                <div className="form-group">
-                  <label className="form-label">Godziny / szt.</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="np. 0.50"
-                    value={hoursPerUnit}
-                    onChange={e => setHoursPerUnit(e.target.value)}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Plan godzin (auto)</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={derivedPlannedHours}
-                    readOnly
-                    disabled
-                    style={{ backgroundColor: 'var(--border-color)', cursor: 'not-allowed' }}
-                  />
-                </div>
-              </div>
-
-              <div className="form-row" style={{ marginTop: '0.75rem', alignItems: 'center' }}>
-                <div className="form-group">
-                  <label className="form-label">Status zlecenia</label>
-                  <select
-                    className="form-control"
-                    value={orderStatus}
-                    onChange={e => setOrderStatus(e.target.value as any)}
+            <form
+              onSubmit={handleFormSubmit}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                flex: 1,
+                minHeight: 0,
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  flex: 1,
+                  overflowY: 'auto',
+                  minHeight: 0,
+                  paddingRight: '0.35rem',
+                  marginTop: '0.5rem',
+                }}
+              >
+                {formValidationError && (
+                  <div
+                    className="alert alert-danger"
+                    style={{ padding: '0.75rem', fontSize: '0.85rem', marginBottom: '0.75rem' }}
                   >
-                    <option value="OPEN">Otwarte (aktywne do raportowania)</option>
-                    <option value="SUSPENDED">Wstrzymane</option>
-                    <option value="CLOSED">Zamknięte</option>
-                  </select>
+                    {formValidationError}
+                  </div>
+                )}
+
+                {/* === Informacje o zleceniu === */}
+                <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.25rem', marginBottom: '0.75rem', marginTop: '0.5rem' }}>
+                  <h4 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Informacje o zleceniu
+                  </h4>
                 </div>
 
-                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1.2rem' }}>
-                  <input
-                    type="checkbox"
-                    id="isActiveCheckbox"
-                    checked={isActive}
-                    onChange={e => setIsActive(e.target.checked)}
-                    style={{ cursor: 'pointer', width: '18px', height: '18px' }}
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Numer Zlecenia (unikalny)</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="np. ZL-2026-001"
+                      value={orderNumber}
+                      onChange={e => setOrderNumber(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Data zlecenia</label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={orderDate}
+                      onChange={e => setOrderDate(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row" style={{ marginTop: '0.5rem' }}>
+                  <div className="form-group">
+                    <label className="form-label">Planowana wysyłka (opcjonalnie)</label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={plannedShipmentDate}
+                      onChange={e => setPlannedShipmentDate(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Zamawiający (opcjonalnie)</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="np. MetalWorks Sp. z o.o."
+                      value={orderedBy}
+                      onChange={e => setOrderedBy(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group" style={{ marginTop: '0.5rem' }}>
+                  <label className="form-label" htmlFor="orderNotes">Uwagi (opcjonalnie)</label>
+                  <textarea
+                    id="orderNotes"
+                    className="form-control"
+                    rows={3}
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
                   />
-                  <label htmlFor="isActiveCheckbox" style={{ cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }}>
-                    Zlecenie aktywne
-                  </label>
+                </div>
+
+                {/* === Produkt === */}
+                <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.25rem', marginBottom: '0.75rem', marginTop: '1.25rem' }}>
+                  <h4 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Produkt
+                  </h4>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Numer produktu (opcjonalnie)</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="np. PR-99823"
+                      value={productCode}
+                      onChange={e => setProductCode(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Konto księgowe (opcjonalnie)</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="np. KK-90210"
+                      value={accountingAccount}
+                      onChange={e => setAccountingAccount(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group" style={{ marginTop: '0.5rem' }}>
+                  <label className="form-label">Nazwa produktu</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="np. Silnik Elektryczny 15kW"
+                    value={productName}
+                    onChange={e => setProductName(e.target.value)}
+                  />
+                </div>
+
+                {/* === Plan === */}
+                <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.25rem', marginBottom: '0.75rem', marginTop: '1.25rem' }}>
+                  <h4 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Plan
+                  </h4>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Ilość</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="np. 150.00"
+                      value={quantity}
+                      onChange={e => setQuantity(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Jednostka</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="np. szt., kg, m"
+                      value={quantityUnit}
+                      onChange={e => setQuantityUnit(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row" style={{ marginTop: '0.5rem' }}>
+                  <div className="form-group">
+                    <label className="form-label">Godziny / szt.</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="np. 0.50"
+                      value={hoursPerUnit}
+                      onChange={e => setHoursPerUnit(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Plan godzin (auto)</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={derivedPlannedHours}
+                      readOnly
+                      disabled
+                      style={{ backgroundColor: 'var(--border-color)', cursor: 'not-allowed' }}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row" style={{ marginTop: '0.75rem', alignItems: 'center' }}>
+                  <div className="form-group">
+                    <label className="form-label">Status zlecenia</label>
+                    <select
+                      className="form-control"
+                      value={orderStatus}
+                      onChange={e => setOrderStatus(e.target.value as any)}
+                    >
+                      <option value="OPEN">Otwarte (aktywne do raportowania)</option>
+                      <option value="SUSPENDED">Wstrzymane</option>
+                      <option value="CLOSED">Zamknięte</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1.2rem' }}>
+                    <input
+                      type="checkbox"
+                      id="isActiveCheckbox"
+                      checked={isActive}
+                      onChange={e => setIsActive(e.target.checked)}
+                      style={{ cursor: 'pointer', width: '18px', height: '18px' }}
+                    />
+                    <label htmlFor="isActiveCheckbox" style={{ cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }}>
+                      Zlecenie aktywne
+                    </label>
+                  </div>
                 </div>
               </div>
 
-              <div className="modal-actions" style={{ marginTop: '1.5rem' }}>
+              <div
+                className="modal-actions"
+                style={{
+                  marginTop: '1rem',
+                  paddingTop: '0.75rem',
+                  borderTop: '1px solid var(--border-color)',
+                  flexShrink: 0,
+                }}
+              >
                 <button type="button" className="btn btn-secondary" onClick={() => setShowFormModal(false)}>
                   Anuluj
                 </button>
@@ -450,18 +541,43 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
         </div>
       )}
 
-      {/* Wyszukiwanie */}
+      {/* Wyszukiwanie i Sortowanie */}
       <div className="card" style={{ padding: '1rem', marginBottom: '1rem', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', position: 'relative' }}>
-          <Search size={18} style={{ color: 'var(--text-muted)', position: 'absolute', left: '12px' }} />
-          <input
-            type="text"
-            className="form-control"
-            style={{ paddingLeft: '38px' }}
-            placeholder="Szukaj zlecenia po numerze, produkcie, koncie księgowym..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-          />
+        <div className="form-row" style={{ alignItems: 'center' }}>
+          <div className="form-group" style={{ flex: 1, position: 'relative', margin: 0 }}>
+            <Search size={18} style={{ color: 'var(--text-muted)', position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+            <input
+              type="text"
+              className="form-control"
+              style={{ paddingLeft: '38px' }}
+              placeholder="Szukaj zlecenia po numerze, produkcie, koncie księgowym..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <div className="form-group" style={{ width: '240px', margin: 0 }}>
+            <select
+              className="form-control"
+              value={sortField ? `${sortField}:${sortOrder}` : ''}
+              onChange={e => {
+                const val = e.target.value;
+                if (!val) {
+                  setSortField(null);
+                  setSortOrder('asc');
+                } else {
+                  const [field, order] = val.split(':') as ['orderDate' | 'plannedShipmentDate', 'asc' | 'desc'];
+                  setSortField(field);
+                  setSortOrder(order);
+                }
+              }}
+            >
+              <option value="">Sortowanie domyślne</option>
+              <option value="orderDate:asc">Data zlecenia (rosnąco)</option>
+              <option value="orderDate:desc">Data zlecenia (malejąco)</option>
+              <option value="plannedShipmentDate:asc">Data wysyłki (rosnąco)</option>
+              <option value="plannedShipmentDate:desc">Data wysyłki (malejąco)</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -472,7 +588,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
         </div>
       ) : error ? (
         <div className="alert alert-danger" style={{ flexShrink: 0 }}>{error}</div>
-      ) : filteredOrders.length === 0 ? (
+      ) : sortedOrders.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)', flex: 1 }}>
           Brak zleceń spełniających kryteria wyszukiwania.
         </div>
@@ -483,7 +599,13 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                 {isAdmin && <th style={{ textAlign: 'center' }}>Akcje</th>}
                 <th>Status</th>
                 <th>Numer zlecenia</th>
-                <th style={{ whiteSpace: 'normal', minWidth: '100px' }}>Planowana<br />wysyłka</th>
+                <th
+                  style={{ whiteSpace: 'normal', minWidth: '100px', cursor: 'pointer', userSelect: 'none' }}
+                  onClick={() => toggleSort('plannedShipmentDate')}
+                  title="Kliknij, aby posortować po dacie wysyłki"
+                >
+                  Planowana<br />wysyłka {sortField === 'plannedShipmentDate' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                </th>
                 <th>Zamawiający</th>
                 <th>Uwagi</th>
                 <th>Nazwa produktu</th>
@@ -492,12 +614,18 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                 <th style={{ textAlign: 'right' }}>Godziny/szt.</th>
                 <th style={{ textAlign: 'right' }}>Plan godzin</th>
                 <th>Wykorzystanie</th>
-                <th>Data zlecenia</th>
+                <th
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                  onClick={() => toggleSort('orderDate')}
+                  title="Kliknij, aby posortować po dacie zlecenia"
+                >
+                  Data zlecenia {sortField === 'orderDate' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                </th>
                 <th>Konto księgowe</th>
               </tr>
             </thead>
             <tbody>
-              {filteredOrders.map(order => {
+              {sortedOrders.map(order => {
                 const percent = order.utilizationPercent;
                 const colorClass = percent > 100 ? 'red' : percent >= 80 ? 'yellow' : 'green';
                 const statusBadge = 

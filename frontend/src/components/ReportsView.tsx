@@ -41,6 +41,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
   const [filterOrderNum, setFilterOrderNum] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterAccount, setFilterAccount] = useState('');
+  const [filterOnlyWithHours, setFilterOnlyWithHours] = useState(false);
 
   // Report Data
   const [reportData, setReportData] = useState<any[]>([]);
@@ -83,7 +84,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
   // Trigger data fetch when tab or filters change
   useEffect(() => {
     fetchReportData();
-  }, [activeReportTab, dateFrom, dateTo, filterEmployeeId, filterOrderId, filterOrderNum, filterStatus, filterAccount]);
+  }, [activeReportTab, dateFrom, dateTo, filterEmployeeId, filterOrderId, filterOrderNum, filterStatus, filterAccount, filterOnlyWithHours]);
 
   const fetchReportData = async () => {
     setReportData([]); // Clear previous data to prevent rendering crashes
@@ -101,6 +102,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
           url = '/api/analytics/report-by-order';
           if (filterStatus) params.append('status', filterStatus);
           if (filterOrderNum) params.append('orderNumber', filterOrderNum);
+          if (filterOnlyWithHours) params.append('onlyWithHours', 'true');
           break;
         case 'by-employee':
           url = '/api/analytics/report-by-employee';
@@ -141,6 +143,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
         path = '/api/analytics/export/by-order';
         if (filterStatus) params.append('status', filterStatus);
         if (filterOrderNum) params.append('orderNumber', filterOrderNum);
+        if (filterOnlyWithHours) params.append('onlyWithHours', 'true');
         break;
       case 'by-employee':
         path = '/api/analytics/export/by-employee';
@@ -158,25 +161,22 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
     }
 
     const downloadUrl = `${path}?${params.toString()}`;
-    const filename = 
-      activeReportTab === 'by-order' ? 'Raport_godzin_wg_zlecen.xlsx' :
-      activeReportTab === 'by-employee' ? 'Raport_miesieczny_pracownicy.xlsx' :
-      activeReportTab === 'by-account' ? 'Raport_kont_ksiegowych.xlsx' : 
-      'Raport_szczegolowy_czasu_pracy.xlsx';
-
     try {
       const res = await fetch(downloadUrl, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error('Pobieranie nie powiodło się');
+      
       const blob = await res.blob();
       const blobUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.setAttribute('download', filename);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = path.includes('by-order') ? 'Raport_zlecen.xlsx' :
+                 path.includes('by-employee') ? 'Raport_miesieczny_pracownicy.xlsx' :
+                 path.includes('by-account') ? 'Raport_kont_ksiegowych.xlsx' : 'Raport_szczegolowy.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
       window.URL.revokeObjectURL(blobUrl);
     } catch (err) {
       alert('Błąd pobierania pliku Excel.');
@@ -193,11 +193,12 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
     switch (activeReportTab) {
       case 'by-order':
         filename = 'Raport_godzin_wg_zlecen.csv';
-        headers = ['Numer zlecenia', 'Nazwa produktu', 'Kod produktu', 'Plan (h)', 'Rzeczywiste (h)', 'Odchylenie (h)', 'Wykorzystanie (%)', 'Status'];
+        headers = ['Numer zlecenia', 'Nazwa produktu', 'Kod produktu', 'Ilość', 'Plan (h)', 'Rzeczywiste (h)', 'Odchylenie (h)', 'Wykorzystanie (%)', 'Status'];
         rows = safeReportData.map(o => [
           o.orderNumber,
           o.productName,
           o.productCode,
+          o.quantity !== null && o.quantity !== undefined ? `${o.quantity} ${o.quantityUnit || 'szt.'}` : '-',
           o.plannedHours,
           o.actualHours,
           o.deviation,
@@ -207,11 +208,12 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
         break;
       case 'by-employee':
         filename = 'Raport_miesieczny_pracownicy.csv';
-        headers = ['Pracownik', ...workTimeTypes.map(type => `${type.code} (${type.name})`), 'Suma godzin'];
+        headers = ['Pracownik', 'Suma godzin z nadgodzinami', 'Suma godzin bez nadgodzin', ...workTimeTypes.map(type => `${type.code} (${type.name})`)];
         rows = safeReportData.map(r => [
           r.employeeName,
-          ...workTimeTypes.map(type => Number(r[type.code]) || 0),
           r.suma,
+          r.sumaBezNadgodzin,
+          ...workTimeTypes.map(type => Number(r[type.code]) || 0),
         ]);
         break;
       case 'by-account':
@@ -272,6 +274,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
     setFilterOrderNum('');
     setFilterStatus('');
     setFilterAccount('');
+    setFilterOnlyWithHours(false);
   };
 
   return (
@@ -367,6 +370,16 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                   <option value="CLOSED">Zamknięte</option>
                 </select>
               </div>
+              <div className="form-group" style={{ display: 'flex', alignItems: 'center', marginTop: '1.5rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={filterOnlyWithHours} 
+                    onChange={e => setFilterOnlyWithHours(e.target.checked)} 
+                  />
+                  Pokaż tylko zlecenia z zaraportowanymi godzinami
+                </label>
+              </div>
             </>
           )}
 
@@ -446,6 +459,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                     <th>Numer zlecenia</th>
                     <th>Produkt</th>
                     <th>Kod produktu</th>
+                    <th style={{ textAlign: 'right' }}>Ilość</th>
                     <th style={{ textAlign: 'right' }}>Godziny planowane</th>
                     <th style={{ textAlign: 'right' }}>Godziny rzeczywiste</th>
                     <th style={{ textAlign: 'right' }}>Odchylenie</th>
@@ -467,6 +481,9 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                         <td style={{ fontWeight: 'bold' }}>{row.orderNumber}</td>
                         <td>{row.productName}</td>
                         <td><code>{row.productCode}</code></td>
+                        <td style={{ textAlign: 'right' }}>
+                          {row.quantity !== null && row.quantity !== undefined ? `${row.quantity} ${row.quantityUnit || 'szt.'}` : '-'}
+                        </td>
                         <td style={{ textAlign: 'right' }}>{(Number(row.plannedHours) || 0).toFixed(1)} h</td>
                         <td style={{ textAlign: 'right', fontWeight: 600 }}>{(Number(row.actualHours) || 0).toFixed(1)} h</td>
                         <td style={{ textAlign: 'right', ...devStyle }}>{(Number(devVal) || 0).toFixed(1)} h</td>
@@ -490,26 +507,30 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                 <thead>
                   <tr>
                     <th>Pracownik</th>
+                    <th style={{ textAlign: 'right', fontWeight: 'bold' }}>Suma godzin z nadgodzinami</th>
+                    <th style={{ textAlign: 'right', fontWeight: 'bold' }}>Suma godzin bez nadgodzin</th>
                     {workTimeTypes.map((type) => (
                       <th key={type.code} style={{ textAlign: 'right' }}>
                         {type.code} ({type.name})
                       </th>
                     ))}
-                    <th style={{ textAlign: 'right', fontWeight: 'bold' }}>Suma godzin</th>
                   </tr>
                 </thead>
                 <tbody>
                   {Array.isArray(reportData) && reportData.map((row, idx) => (
                     <tr key={idx}>
                       <td style={{ fontWeight: 'bold' }}>{row.employeeName}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--primary-color)' }}>
+                        {(Number(row.suma) || 0).toFixed(1)} h
+                      </td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--success-color)' }}>
+                        {(Number(row.sumaBezNadgodzin) || 0).toFixed(1)} h
+                      </td>
                       {workTimeTypes.map((type) => (
                         <td key={type.code} style={{ textAlign: 'right' }}>
                           {(Number(row[type.code]) || 0).toFixed(1)} h
                         </td>
                       ))}
-                      <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--primary-color)' }}>
-                        {(Number(row.suma) || 0).toFixed(1)} h
-                      </td>
                     </tr>
                   ))}
                 </tbody>
