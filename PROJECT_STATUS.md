@@ -3,29 +3,31 @@
 ## Stan bieżący
 
 - Projekt: Workshop Time Tracking
-- Aktualna wersja produkcyjna: `0.3.3`
-- Aktualna wersja development: `0.3.6`
+- Aktualna wersja produkcyjna: `0.3.6`
+- Aktualna wersja development: `0.3.7`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: wersja `0.3.6` zaimplementowana i zweryfikowana
+- Stan prac: wersja `0.3.7` zaimplementowana i zweryfikowana
 
-Zakres wersji `0.3.6`:
+Zakres wersji `0.3.7`:
 
-- Dodano filtr statusów zleceń w Bazie Zleceń Produkcyjnych (*Wszystkie*, *Otwarte*, *Wstrzymane*, *Zamknięte*).
-- Zapewniono pełny dostęp dla użytkownika z rolą `Leader` do ekranu Baza Zleceń w trybie tylko do odczytu (wraz z nawigacją w Sidebarze).
-- Dodano kompleksowe testy regresyjne filtrowania statusów, nawigacji oraz braku dostępu/opcji modyfikujących dla Leadera i Employee.
+- Ujednolicono nagłówki metadanych dla wszystkich 4 eksportów raportowych ukierunkowanych na użytkownika (XLSX i CSV): Raport zleceń, Miesięczny raport pracowników, Raport kont księgowych oraz Szczegółowy raport czasu pracy.
+- Przed tabelą danych dodano wiersze: Nazwa raportu, Zakres dat, Zastosowane filtry oraz Data i godzina wygenerowania.
+- W plikach XLSX dostosowano scalanie tytułu, zamrożenie okien (`ySplit`) oraz zakreślenie `autoFilter` wyłącznie do tabeli danych.
+- W plikach CSV zapewniono kodowanie UTF-8 BOM, separator `;`, poprawną obsługę cudzysłowów oraz odstęp pustym wierszem przed tabelą.
+- Wyłączono ze zmiany techniczne szablony importowe (`szablon_pracownicy.xlsx`, `szablon_zlecen.xlsx`).
+- Daty wygenerowania używają obecnego mechanizmu czasu aplikacji (czas lokalny procesu backendu oraz przeglądarki).
 
-## Weryfikacja wersji 0.3.6
+## Weryfikacja wersji 0.3.7
 
 - backend: 48 testów zakończonych powodzeniem,
 - backend: build (`npm run build`) zakończony powodzeniem,
-- frontend: 30 testów zakończonych powodzeniem,
+- frontend: 32 testy zakończone powodzeniem,
 - frontend: build (`npm run build`) zakończony powodzeniem.
 
-## Następne kroki (Plan na v0.3.7 / v0.4.0)
+## Następne kroki (Plan na v0.4.0)
 
-- Poprawki modułu urlopów i nieobecności.
-- Dalsze usprawnienia i zgłoszenia użytkowników.
+- Rozpoczęcie prac nad dużym modułem Raportowania v0.4.0 (prezentacja sztuk, procent roboczogodzin, rozbudowane centrum podsumowań).
 
 ## Weryfikacja uwag do zleceń w wersji 0.3.2
 

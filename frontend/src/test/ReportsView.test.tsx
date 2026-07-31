@@ -143,10 +143,19 @@ describe('ReportsView — miesięczny raport pracowników', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Pobierz plik CSV' }));
 
     expect(exportedBlob).toBeDefined();
-    const csv = await exportedBlob!.text();
-    const lines = csv.replace(/^\uFEFF/, '').split('\n');
+    const csvWithBom = await exportedBlob!.text();
+    expect(csvWithBom.startsWith('\uFEFF')).toBe(true);
 
-    expect(lines[0]).toBe([
+    const csv = csvWithBom.replace(/^\uFEFF/, '');
+    const lines = csv.split('\n');
+
+    expect(lines[0]).toBe('Raport;Miesięczny raport czasu pracy pracowników');
+    expect(lines[1]).toBe('Zakres dat;Wszystkie');
+    expect(lines[2]).toBe('Pracownik;Wszyscy pracownicy');
+    expect(lines[3]).toMatch(/^Wygenerowano;\d{2}\.\d{2}\.\d{4}, \d{2}:\d{2}$/);
+    expect(lines[4]).toBe('');
+
+    expect(lines[5]).toBe([
       'Pracownik',
       'Suma godzin z nadgodzinami',
       'Suma godzin bez nadgodzin',
@@ -155,8 +164,56 @@ describe('ReportsView — miesięczny raport pracowników', () => {
         .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
         .map((type) => `${type.code} (${type.name})`),
     ].join(';'));
-    expect(lines[1]).toBe('Jan Kowalski;13.5;13.5;8;0;0;0;0;0;0;2.5');
+    expect(lines[6]).toBe('Jan Kowalski;13.5;13.5;8;0;0;0;0;0;0;2.5');
     expect(lines.join('\n')).not.toContain('LEGACY');
+  });
+
+  it('correctly escapes semicolons, quotes, newlines, and preserves Polish characters in CSV export', async () => {
+    let exportedBlob: Blob | undefined;
+    vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
+      if (blob instanceof Blob) exportedBlob = blob;
+      return 'blob:test-report-escaping';
+    });
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+
+    vi.spyOn(global, 'fetch').mockImplementation(async (url) => {
+      if (String(url).includes('/api/analytics/report-by-order')) {
+        return response([
+          {
+            orderNumber: 'ZL-PL-001',
+            productName: 'Obudowa "Zażółć"; typ B\nlinia 2',
+            productCode: 'PROD-PL',
+            quantity: 10,
+            quantityUnit: 'szt.',
+            plannedHours: 5,
+            actualHours: 4,
+            deviation: 1,
+            percent: 80,
+            status: 'OPEN',
+          },
+        ]) as any;
+      }
+      return response([]) as any;
+    });
+
+    render(
+      <ReportsView
+        token="test-token"
+        user={{ id: '1', username: 'admin', role: 'admin', fullName: 'Administrator Testowy' }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Godziny wg Zleceń' }));
+    await screen.findByText('ZL-PL-001');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pobierz plik CSV' }));
+
+    expect(exportedBlob).toBeDefined();
+    const csvContent = await exportedBlob!.text();
+    expect(csvContent.startsWith('\uFEFF')).toBe(true);
+
+    expect(csvContent).toContain('Raport;Raport godzin według zleceń');
+    expect(csvContent).toContain('ZL-PL-001;"Obudowa ""Zażółć""; typ B\nlinia 2";PROD-PL;10 szt.;5;4;1;80;Otwarte');
   });
 
   it.each([

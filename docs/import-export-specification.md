@@ -40,13 +40,25 @@ Duplikat po numerze zlecenia jest aktualizowany, reaktywowany, przywracany z sof
 
 Importy są częściowe, wykonywane wiersz po wierszu, bez jednej transakcji obejmującej cały plik. Błędny wiersz jest pomijany, a pozostałe są przetwarzane. Status historii to `success`, `partial` albo `failed`; zapis obejmuje nazwę pliku, typ, użytkownika, liczniki i listę błędów. Pusty/nieczytelny arkusz oraz błąd całego przetwarzania kończą żądanie przed utworzeniem historii.
 
-## Eksporty XLSX
+## Eksporty XLSX i CSV dla użytkownika
+
+Od wersji `0.3.7` wszystkie pliki raportowe dla użytkownika (Zlecenia, Miesięczny pracowników, Konta księgowe, Szczegółowy) w formatach XLSX oraz CSV posiadają zunifikowany nagłówek metadanych umieszczony przed tabelą danych:
+
+1. **Wiersz 1**: `Raport: <Nazwa raportu>` (W XLSX: czcionka 14pt, pogrubiona, scalona na szerokość tabeli).
+2. **Wiersz 2**: `Zakres dat: <Zakres>` (Wartość `DD.MM.YYYY–DD.MM.YYYY` lub `Wszystkie`).
+3. **Wiersze 3..N**: `Zastosowane filtry` (np. `Status zlecenia`, `Pracownik`, `Konto księgowe`, `Szukany numer zlecenia`).
+4. **Wiersz N+1**: `Wygenerowano: <Data i godzina>` (Czas lokalny w formacie `DD.MM.YYYY, HH:MM`).
+5. **Wiersz N+2**: Pusty wiersz odstępu.
+6. **Wiersz N+3**: Nagłówek kolumn tabeli.
 
 | Eksport | Filtry | Kolumny arkusza |
 |---|---|---|
-| Według zleceń | `dateFrom`, `dateTo` dla godzin; `status`, fragment `orderNumber` dla zleceń | Numer zlecenia; Numer produktu; Nazwa produktu; Konto księgowe; Godziny planowane (estymata); Godziny rzeczywiste; Odchylenie (plan - rzecz.); Procent realizacji (%); Status zlecenia |
-| Według pracowników | `dateFrom`, `dateTo`, `employeeId` | Pracownik; dynamiczne kolumny wszystkich pozycji aktualnego słownika rodzajów czasu w kolejności ich utworzenia; Suma godzin |
-| Według kont | `dateFrom`, `dateTo`, fragment `accountingAccount` | Data; Konto księgowe; Pracownik; Zlecenie; Produkt; Liczba godzin; Rodzaj czasu pracy |
+| Według zleceń | `dateFrom`, `dateTo`, `status`, `orderNumber`, `onlyWithHours` | Numer zlecenia; Numer produktu; Nazwa produktu; Konto księgowe; Ilość; Godziny planowane (estymata); Godziny rzeczywiste; Odchylenie (plan - rzecz.); Procent realizacji (%); Status zlecenia |
+| Według pracowników | `dateFrom`, `dateTo`, `employeeId` | Pracownik; Suma godzin z nadgodzinami; Suma godzin bez nadgodzin; dynamiczne kolumny rodzajów czasu |
+| Według kont | `dateFrom`, `dateTo`, `accountingAccount` | Data; Konto księgowe; Pracownik; Zlecenie; Produkt; Liczba godzin; Rodzaj czasu pracy |
 | Szczegółowy | `dateFrom`, `dateTo`, `employeeId`, `orderId` | Data; Pracownik; Numer zlecenia; Numer produktu; Nazwa produktu; Konto księgowe; Liczba godzin; Typ czasu pracy; Wprowadził użytkownik; Data wpisu w bazie |
 
-Każdy arkusz ma ciemny, pogrubiony nagłówek, obramowanie komórek, zamrożony pierwszy wiersz, autofiltr i automatycznie dobrane szerokości (minimum 12). Wskazane kolumny liczbowe mają format `#,##0.00`; daty są wyśrodkowane, lecz pozostają wartościami tekstowymi generowanymi w kodzie. Interfejs oferuje także lokalny eksport CSV bieżących wyników, rozdzielany średnikiem i kodowany UTF-8 z BOM; jego kolumny odpowiadają tabeli danego raportu. Dla raportu według pracowników tabela, XLSX i CSV stosują identyczne filtry, rekordy oraz dynamiczne kolumny słownika.
+W plikach XLSX zamrożenie okien (`ySplit`) oraz zakreślenie `autoFilter` odnoszą się wyłącznie do właściwego wiersza nagłówka tabeli danych. Pliki CSV raportowe posiadają kodowanie UTF-8 z BOM (`\uFEFF`), separator `;`, poprawnie escapowane znaki specjalne i cudzysłowy oraz wiersze metadanych przed tabelą.
+
+> [!NOTE]
+> Techniczne szablony importowe (`szablon_pracownicy.xlsx`, `szablon_zlecen.xlsx`) nie są raportami użytkownika i pozostały bez zmian.

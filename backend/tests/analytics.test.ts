@@ -117,7 +117,15 @@ describe('Analytics reports', () => {
     await workbook.xlsx.load(xlsxResponse.body);
     const worksheet = workbook.getWorksheet('Czas pracy');
 
-    expect(worksheet?.getRow(1).values).toEqual([
+    // Metadane nagłówka raportu
+    expect(worksheet?.getRow(1).getCell(1).value).toBe('Raport: Miesięczny raport czasu pracy pracowników');
+    expect(worksheet?.getRow(2).getCell(1).value).toBe('Zakres dat: 01.07.2026–31.07.2026');
+    expect(worksheet?.getRow(3).getCell(1).value).toBe('Pracownik: Jan Kowalski');
+    expect(worksheet?.getRow(4).getCell(1).value).toMatch(/^Wygenerowano: \d{2}\.\d{2}\.\d{4}, \d{2}:\d{2}$/);
+    expect(worksheet?.getRow(5).values).toEqual([]);
+
+    // Wiersz 6: Nagłówek tabeli
+    expect(worksheet?.getRow(6).values).toEqual([
       undefined,
       'Pracownik',
       'Suma godzin z nadgodzinami',
@@ -125,7 +133,9 @@ describe('Analytics reports', () => {
       'G (Standardowe godziny pracy)',
       'NOC (Zmiana nocna)',
     ]);
-    expect(worksheet?.getRow(2).values).toEqual([
+
+    // Wiersz 7: Dane
+    expect(worksheet?.getRow(7).values).toEqual([
       undefined,
       jsonResponse.body[0].employeeName,
       jsonResponse.body[0].suma,
@@ -133,6 +143,10 @@ describe('Analytics reports', () => {
       jsonResponse.body[0].G,
       jsonResponse.body[0].NOC,
     ]);
+
+    // Weryfikacja zamrożenia widoku (ySplit) i filtra tabeli
+    expect(worksheet?.views[0]).toEqual(expect.objectContaining({ state: 'frozen', ySplit: 6 }));
+    expect(worksheet?.autoFilter).toBe('A6:E7');
   });
 
   it('presents a missing accounting account as brak', async () => {
