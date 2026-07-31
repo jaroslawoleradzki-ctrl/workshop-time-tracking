@@ -3,6 +3,18 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.3.7] - 2026-07-31
+
+### Added
+
+- Added standardized report headers to all user-facing XLSX and CSV exports.
+- Exported reports now include report name, date range, generation timestamp and applied filters.
+
+### Changed
+
+- Unified metadata formatting across report exports.
+- Adjusted XLSX table position, filters and frozen rows to account for report metadata.
+
 ## [0.3.6] - 2026-07-31
 
 ### Added

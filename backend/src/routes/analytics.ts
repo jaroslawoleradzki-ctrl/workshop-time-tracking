@@ -112,6 +112,50 @@ async function getEmployeeReportTypes(): Promise<EmployeeReportType[]> {
   });
 }
 
+export interface ReportFilterItem {
+  label: string;
+  value: string;
+}
+
+export interface ExcelReportMetadata {
+  reportTitle: string;
+  dateFrom?: string;
+  dateTo?: string;
+  filters?: ReportFilterItem[];
+}
+
+export function formatDateISO(dateStr?: string): string {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}.${parts[1]}.${parts[0]}`;
+  }
+  return dateStr;
+}
+
+export function buildDateRangeText(dateFrom?: string, dateTo?: string): string {
+  if (dateFrom && dateTo) {
+    return `${formatDateISO(dateFrom)}–${formatDateISO(dateTo)}`;
+  }
+  if (dateFrom) {
+    return `od ${formatDateISO(dateFrom)}`;
+  }
+  if (dateTo) {
+    return `do ${formatDateISO(dateTo)}`;
+  }
+  return 'Wszystkie';
+}
+
+export function formatGeneratedAt(d = new Date()): string {
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const day = pad(d.getDate());
+  const month = pad(d.getMonth() + 1);
+  const year = d.getFullYear();
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+  return `${day}.${month}.${year}, ${hours}:${minutes}`;
+}
+
 // Helper for ExcelJS exports
 async function generateExcelResponse(params: {
   res: Response;
@@ -119,26 +163,59 @@ async function generateExcelResponse(params: {
   sheetName: string;
   headers: string[];
   data: any[][];
+  metadata: ExcelReportMetadata;
   numberColumns?: number[]; // indices of columns (1-based) to format as numbers
   dateColumns?: number[]; // indices of columns to format as dates
 }) {
-  const { res, filename, sheetName, headers, data, numberColumns = [], dateColumns = [] } = params;
+  const { res, filename, sheetName, headers, data, metadata, numberColumns = [], dateColumns = [] } = params;
 
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet(sheetName);
 
-  // Add header row
+  // 1. Tytuł raportu (Wiersz 1)
+  const titleRow = worksheet.addRow([`Raport: ${metadata.reportTitle}`]);
+  titleRow.font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FF1E293B' } };
+  titleRow.height = 28;
+  titleRow.alignment = { vertical: 'middle', horizontal: 'left' };
+
+  const totalCols = Math.max(headers.length, 2);
+  worksheet.mergeCells(1, 1, 1, totalCols);
+
+  // 2. Zakres dat (Wiersz 2)
+  const dateRangeVal = metadata.dateFrom || metadata.dateTo
+    ? buildDateRangeText(metadata.dateFrom, metadata.dateTo)
+    : 'Wszystkie';
+  const dateRow = worksheet.addRow([`Zakres dat: ${dateRangeVal}`]);
+  dateRow.font = { name: 'Arial', size: 10, color: { argb: 'FF475569' } };
+
+  // 3. Zastosowane filtry (Wiersze 3..N)
+  if (metadata.filters && metadata.filters.length > 0) {
+    metadata.filters.forEach(filter => {
+      const fRow = worksheet.addRow([`${filter.label}: ${filter.value}`]);
+      fRow.font = { name: 'Arial', size: 10, color: { argb: 'FF475569' } };
+    });
+  }
+
+  // 4. Data i godzina wygenerowania (Wiersz N+1)
+  const genRow = worksheet.addRow([`Wygenerowano: ${formatGeneratedAt()}`]);
+  genRow.font = { name: 'Arial', size: 10, color: { argb: 'FF64748B' } };
+
+  // 5. Pusty wiersz (Wiersz N+2)
+  worksheet.addRow([]);
+
+  // 6. Nagłówek tabeli (Wiersz N+3)
   const headerRow = worksheet.addRow(headers);
+  const headerRowIndex = headerRow.number;
+
   headerRow.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
   headerRow.fill = {
     type: 'pattern',
     pattern: 'solid',
-    fgColor: { argb: 'FF34495E' }, // Sleek dark slate blue
+    fgColor: { argb: 'FF34495E' },
   };
   headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
   headerRow.height = 26;
 
-  // Add borders to header
   headerRow.eachCell((cell) => {
     cell.border = {
       top: { style: 'thin', color: { argb: 'FF2C3E50' } },
@@ -148,13 +225,19 @@ async function generateExcelResponse(params: {
     };
   });
 
-  // Add data rows
+  // 7. Data rows
   data.forEach((rowData) => {
     worksheet.addRow(rowData);
   });
 
-  // Formatting
-  worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+  // AutoFilter & View split (Freeze pane right below table header row)
+  const dataEndRowIndex = headerRowIndex + data.length;
+  worksheet.autoFilter = {
+    from: { row: headerRowIndex, column: 1 },
+    to: { row: Math.max(dataEndRowIndex, headerRowIndex), column: headers.length },
+  };
+
+  worksheet.views = [{ state: 'frozen', ySplit: headerRowIndex }];
 
   // Auto-fit column widths
   worksheet.columns.forEach((column) => {
@@ -170,7 +253,7 @@ async function generateExcelResponse(params: {
     column.width = Math.min(maxLen + 4, 40);
   });
 
-  // Apply number formatting
+  // Apply number & date formatting
   numberColumns.forEach((colIdx) => {
     worksheet.getColumn(colIdx).numFmt = '#,##0.00';
   });
@@ -517,12 +600,26 @@ router.get('/export/by-order', async (req: AuthRequest, res: Response) => {
       o.statusPolish,
     ]);
 
+    const statusVal = status === 'OPEN' ? 'Otwarte' : status === 'SUSPENDED' ? 'Wstrzymane' : status === 'CLOSED' ? 'Zamknięte' : 'Wszystkie';
+    const orderNumVal = orderNumber && (orderNumber as string).trim() ? (orderNumber as string).trim() : 'Wszystkie';
+    const onlyHoursVal = onlyWithHours === 'true' || onlyWithHours === '1' ? 'Tak' : 'Nie';
+
     await generateExcelResponse({
       res,
       filename: 'Raport_zlecen.xlsx',
       sheetName: 'Zlecenia',
       headers,
       data,
+      metadata: {
+        reportTitle: 'Raport godzin według zleceń',
+        dateFrom: dateFrom as string | undefined,
+        dateTo: dateTo as string | undefined,
+        filters: [
+          { label: 'Status zlecenia', value: statusVal },
+          { label: 'Szukany numer zlecenia', value: orderNumVal },
+          { label: 'Tylko z wypracowanymi godzinami', value: onlyHoursVal },
+        ],
+      },
       numberColumns: [6, 7, 8, 9],
     });
   } catch (error) {
@@ -564,12 +661,31 @@ router.get('/export/by-employee', async (req: AuthRequest, res: Response) => {
       (_, index) => index + 2,
     );
 
+    let empNameVal = 'Wszyscy pracownicy';
+    if (employeeId) {
+      if (rows.length > 0 && rows[0].employeeName) {
+        empNameVal = rows[0].employeeName;
+      } else {
+        const emp = await prisma.employee.findUnique({ where: { id: employeeId as string } });
+        if (emp) empNameVal = emp.fullName;
+        else empNameVal = employeeId as string;
+      }
+    }
+
     await generateExcelResponse({
       res,
       filename: 'Raport_miesieczny_pracownicy.xlsx',
       sheetName: 'Czas pracy',
       headers,
       data,
+      metadata: {
+        reportTitle: 'Miesięczny raport czasu pracy pracowników',
+        dateFrom: dateFrom as string | undefined,
+        dateTo: dateTo as string | undefined,
+        filters: [
+          { label: 'Pracownik', value: empNameVal },
+        ],
+      },
       numberColumns,
     });
   } catch (error) {
@@ -623,12 +739,22 @@ router.get('/export/by-account', async (req: AuthRequest, res: Response) => {
       r.workTimeTypeCode,
     ]);
 
+    const accountVal = accountingAccount && (accountingAccount as string).trim() ? (accountingAccount as string).trim() : 'Wszystkie konta';
+
     await generateExcelResponse({
       res,
       filename: 'Raport_kont_ksiegowych.xlsx',
       sheetName: 'Konta księgowe',
       headers,
       data,
+      metadata: {
+        reportTitle: 'Raport kont księgowych',
+        dateFrom: dateFrom as string | undefined,
+        dateTo: dateTo as string | undefined,
+        filters: [
+          { label: 'Konto księgowe', value: accountVal },
+        ],
+      },
       numberColumns: [6],
       dateColumns: [1],
     });
@@ -687,12 +813,35 @@ router.get('/export/detailed', async (req: AuthRequest, res: Response) => {
       r.createdAt.toISOString().replace('T', ' ').substring(0, 19),
     ]);
 
+    let empNameVal = 'Wszyscy pracownicy';
+    if (employeeId) {
+      const emp = await prisma.employee.findUnique({ where: { id: employeeId as string } });
+      if (emp) empNameVal = emp.fullName;
+      else empNameVal = employeeId as string;
+    }
+
+    let orderNumVal = 'Wszystkie zlecenia';
+    if (orderId) {
+      const ord = await prisma.order.findUnique({ where: { id: orderId as string } });
+      if (ord) orderNumVal = ord.orderNumber;
+      else orderNumVal = orderId as string;
+    }
+
     await generateExcelResponse({
       res,
       filename: 'Raport_szczegolowy_czasu_pracy.xlsx',
       sheetName: 'Szczegóły',
       headers,
       data,
+      metadata: {
+        reportTitle: 'Szczegółowy raport czasu pracy',
+        dateFrom: dateFrom as string | undefined,
+        dateTo: dateTo as string | undefined,
+        filters: [
+          { label: 'Pracownik', value: empNameVal },
+          { label: 'Zlecenie', value: orderNumVal },
+        ],
+      },
       numberColumns: [7],
       dateColumns: [1, 10],
     });

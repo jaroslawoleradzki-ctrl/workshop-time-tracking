@@ -183,16 +183,52 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
     }
   };
 
-  // Client-side CSV generation with Polish character support
+  // Client-side CSV generation with Polish character support & report metadata
   const handleExportCSV = () => {
     let headers: string[] = [];
     let rows: any[][] = [];
     let filename = '';
+    let reportTitle = '';
+    let filterItems: { label: string; value: string }[] = [];
     const safeReportData = Array.isArray(reportData) ? reportData : [];
+
+    const escapeCsvValue = (val: any) => {
+      if (val === null || val === undefined) return '';
+      const strVal = val.toString();
+      if (strVal.includes(';') || strVal.includes('"') || strVal.includes('\n')) {
+        return `"${strVal.replace(/"/g, '""')}"`;
+      }
+      return strVal;
+    };
+
+    const formatDateISO = (dateStr?: string) => {
+      if (!dateStr) return '';
+      const parts = dateStr.split('-');
+      if (parts.length === 3) return `${parts[2]}.${parts[1]}.${parts[0]}`;
+      return dateStr;
+    };
+
+    const dateRangeText = dateFrom && dateTo
+      ? `${formatDateISO(dateFrom)}–${formatDateISO(dateTo)}`
+      : dateFrom
+      ? `od ${formatDateISO(dateFrom)}`
+      : dateTo
+      ? `do ${formatDateISO(dateTo)}`
+      : 'Wszystkie';
+
+    const now = new Date();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const generatedAtText = `${pad(now.getDate())}.${pad(now.getMonth() + 1)}.${now.getFullYear()}, ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
     switch (activeReportTab) {
       case 'by-order':
         filename = 'Raport_godzin_wg_zlecen.csv';
+        reportTitle = 'Raport godzin według zleceń';
+        filterItems = [
+          { label: 'Status zlecenia', value: filterStatus === 'OPEN' ? 'Otwarte' : filterStatus === 'SUSPENDED' ? 'Wstrzymane' : filterStatus === 'CLOSED' ? 'Zamknięte' : 'Wszystkie' },
+          { label: 'Szukany numer zlecenia', value: filterOrderNum.trim() ? filterOrderNum.trim() : 'Wszystkie' },
+          { label: 'Tylko z wypracowanymi godzinami', value: filterOnlyWithHours ? 'Tak' : 'Nie' },
+        ];
         headers = ['Numer zlecenia', 'Nazwa produktu', 'Kod produktu', 'Ilość', 'Plan (h)', 'Rzeczywiste (h)', 'Odchylenie (h)', 'Wykorzystanie (%)', 'Status'];
         rows = safeReportData.map(o => [
           o.orderNumber,
@@ -208,6 +244,13 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
         break;
       case 'by-employee':
         filename = 'Raport_miesieczny_pracownicy.csv';
+        reportTitle = 'Miesięczny raport czasu pracy pracowników';
+        const empName = filterEmployeeId
+          ? (employees.find(e => e.id === filterEmployeeId)?.fullName || filterEmployeeId)
+          : 'Wszyscy pracownicy';
+        filterItems = [
+          { label: 'Pracownik', value: empName },
+        ];
         headers = ['Pracownik', 'Suma godzin z nadgodzinami', 'Suma godzin bez nadgodzin', ...workTimeTypes.map(type => `${type.code} (${type.name})`)];
         rows = safeReportData.map(r => [
           r.employeeName,
@@ -218,27 +261,45 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
         break;
       case 'by-account':
         filename = 'Raport_kont_ksiegowych.csv';
+        reportTitle = 'Raport kont księgowych';
+        filterItems = [
+          { label: 'Konto księgowe', value: filterAccount.trim() ? filterAccount.trim() : 'Wszystkie konta' },
+        ];
         headers = ['Data', 'Konto księgowe', 'Pracownik', 'Zlecenie', 'Produkt', 'Godziny', 'Kod czasu'];
         rows = safeReportData.map(r => [r.date, r.accountingAccount, r.employeeName, r.orderNumber, r.productName, r.hours, r.workTimeTypeCode]);
         break;
       case 'detailed':
         filename = 'Raport_szczegolowy_czasu_pracy.csv';
+        reportTitle = 'Szczegółowy raport czasu pracy';
+        const empNameDetailed = filterEmployeeId
+          ? (employees.find(e => e.id === filterEmployeeId)?.fullName || filterEmployeeId)
+          : 'Wszyscy pracownicy';
+        const orderNumDetailed = filterOrderId
+          ? (orders.find((o: any) => o.id === filterOrderId)?.orderNumber || filterOrderId)
+          : 'Wszystkie zlecenia';
+        filterItems = [
+          { label: 'Pracownik', value: empNameDetailed },
+          { label: 'Zlecenie', value: orderNumDetailed },
+        ];
         headers = ['Data', 'Pracownik', 'Zlecenie', 'Kod produktu', 'Nazwa produktu', 'Konto księgowe', 'Godziny', 'Typ czasu', 'Wprowadził', 'Data wpisu'];
         rows = safeReportData.map(r => [r.date, r.employeeName, r.orderNumber, r.productCode, r.productName, r.accountingAccount, r.hours, r.workTimeTypeCode, r.creatorName, r.createdAt]);
         break;
     }
 
-    const csvContent = "\uFEFF" + [
-      headers.join(';'),
-      ...rows.map(row => row.map(val => {
-        if (val === null || val === undefined) return '';
-        const strVal = val.toString();
-        if (strVal.includes(';') || strVal.includes('"') || strVal.includes('\n')) {
-          return `"${strVal.replace(/"/g, '""')}"`;
-        }
-        return strVal;
-      }).join(';'))
-    ].join('\n');
+    const metadataLines = [
+      `Raport;${escapeCsvValue(reportTitle)}`,
+      `Zakres dat;${escapeCsvValue(dateRangeText)}`,
+      ...filterItems.map(f => `${escapeCsvValue(f.label)};${escapeCsvValue(f.value)}`),
+      `Wygenerowano;${escapeCsvValue(generatedAtText)}`,
+      '',
+    ];
+
+    const tableLines = [
+      headers.map(escapeCsvValue).join(';'),
+      ...rows.map(row => row.map(escapeCsvValue).join(';'))
+    ];
+
+    const csvContent = "\uFEFF" + [...metadataLines, ...tableLines].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
