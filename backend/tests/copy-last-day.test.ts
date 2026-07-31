@@ -57,6 +57,7 @@ function matchesReportWhere(report: FakeReport, where: any, orders: FakeOrder[])
   if (where.deletedAt === null && report.deletedAt !== null) return false;
   if (where.date instanceof Date && !sameDate(report.date, where.date)) return false;
   if (where.date?.lt && report.date.getTime() >= where.date.lt.getTime()) return false;
+  if (where.workTimeTypeCode?.notIn && where.workTimeTypeCode.notIn.includes(report.workTimeTypeCode)) return false;
   if (where.OR) {
     const matchesEligibleOrder = where.OR.some((condition: any) => {
       if (condition.orderId === null) return report.orderId === null;
@@ -757,6 +758,161 @@ describe('POST /api/reports/copy-last-day', () => {
         .expect(200);
 
       expect(res.body[0].missingCard).toBe(true);
+    });
+  });
+
+  describe('absence type exclusion during copy-last-day', () => {
+    it('should NOT copy UW (Urlop wypoczynkowy) entry from Friday to Monday, but copy work entry G', async () => {
+      // Friday 2026-07-24 has work entry 'G' and absence 'UW'
+      const friday = new Date('2026-07-24T00:00:00.000Z');
+      fakePrisma.reports.push(
+        {
+          id: randomUUID(),
+          date: friday,
+          employeeId: EMPLOYEE_A_ID,
+          orderId: null,
+          hours: 8,
+          workTimeTypeCode: 'G',
+          createdByUserId: ADMIN_ID,
+          createdAt: new Date(),
+          deletedAt: null,
+        },
+        {
+          id: randomUUID(),
+          date: friday,
+          employeeId: EMPLOYEE_A_ID,
+          orderId: null,
+          hours: 8,
+          workTimeTypeCode: 'UW',
+          createdByUserId: ADMIN_ID,
+          createdAt: new Date(),
+          deletedAt: null,
+        },
+      );
+
+      // Copy to Monday 2026-07-27
+      const res = await request(app)
+        .post('/api/reports/copy-last-day')
+        .set('Authorization', `Bearer ${tokenFor(LEADER_ID)}`)
+        .send({
+          employeeId: EMPLOYEE_A_ID,
+          date: '2026-07-27',
+        })
+        .expect(201);
+
+      expect(res.body.createdCount).toBe(1);
+
+      const mondayReports = fakePrisma.reports.filter(
+        (r) => r.employeeId === EMPLOYEE_A_ID && sameDate(r.date, new Date('2026-07-27T00:00:00.000Z')),
+      );
+      expect(mondayReports).toHaveLength(1);
+      expect(mondayReports[0].workTimeTypeCode).toBe('G');
+    });
+
+    it('should NOT create empty/broken entries when previous day contains ONLY an absence (UW)', async () => {
+      // Friday 2026-07-24 contains ONLY 'UW' (no previous work days)
+      fakePrisma.reports = fakePrisma.reports.filter((r) => r.employeeId !== EMPLOYEE_B_ID);
+      const friday = new Date('2026-07-24T00:00:00.000Z');
+      fakePrisma.reports.push({
+        id: randomUUID(),
+        date: friday,
+        employeeId: EMPLOYEE_B_ID,
+        orderId: null,
+        hours: 8,
+        workTimeTypeCode: 'UW',
+        createdByUserId: ADMIN_ID,
+        createdAt: new Date(),
+        deletedAt: null,
+      });
+
+      // Copy to Monday 2026-07-27 returns 404 because no eligible work entry day exists
+      const res = await request(app)
+        .post('/api/reports/copy-last-day')
+        .set('Authorization', `Bearer ${tokenFor(LEADER_ID)}`)
+        .send({
+          employeeId: EMPLOYEE_B_ID,
+          date: '2026-07-27',
+        })
+        .expect(404);
+
+      expect(res.body.code).toBe('SOURCE_DAY_NOT_FOUND');
+
+      const mondayReports = fakePrisma.reports.filter(
+        (r) => r.employeeId === EMPLOYEE_B_ID && sameDate(r.date, new Date('2026-07-27T00:00:00.000Z')),
+      );
+      expect(mondayReports).toHaveLength(0);
+    });
+
+    it('should correctly copy regular work entries (G, NDR, NS)', async () => {
+      const Thursday = new Date('2026-07-23T00:00:00.000Z');
+      const orderId = randomUUID();
+      fakePrisma.orders.push({ id: orderId, deletedAt: null });
+
+      fakePrisma.reports.push(
+        {
+          id: randomUUID(),
+          date: Thursday,
+          employeeId: EMPLOYEE_A_ID,
+          orderId,
+          hours: 8,
+          workTimeTypeCode: 'G',
+          createdByUserId: ADMIN_ID,
+          createdAt: new Date(),
+          deletedAt: null,
+        },
+        {
+          id: randomUUID(),
+          date: Thursday,
+          employeeId: EMPLOYEE_A_ID,
+          orderId,
+          hours: 2,
+          workTimeTypeCode: 'NDR',
+          createdByUserId: ADMIN_ID,
+          createdAt: new Date(),
+          deletedAt: null,
+        },
+      );
+
+      const res = await request(app)
+        .post('/api/reports/copy-last-day')
+        .set('Authorization', `Bearer ${tokenFor(LEADER_ID)}`)
+        .send({
+          employeeId: EMPLOYEE_A_ID,
+          date: '2026-07-28',
+        })
+        .expect(201);
+
+      expect(res.body.createdCount).toBe(2);
+    });
+
+    it('should copy non-absence work time types that do not require an order (e.g. SZK)', async () => {
+      const Thursday = new Date('2026-07-23T00:00:00.000Z');
+      fakePrisma.reports.push({
+        id: randomUUID(),
+        date: Thursday,
+        employeeId: EMPLOYEE_B_ID,
+        orderId: null,
+        hours: 8,
+        workTimeTypeCode: 'SZK',
+        createdByUserId: ADMIN_ID,
+        createdAt: new Date(),
+        deletedAt: null,
+      });
+
+      const res = await request(app)
+        .post('/api/reports/copy-last-day')
+        .set('Authorization', `Bearer ${tokenFor(LEADER_ID)}`)
+        .send({
+          employeeId: EMPLOYEE_B_ID,
+          date: '2026-07-29',
+        })
+        .expect(201);
+
+      expect(res.body.createdCount).toBe(1);
+      const copied = fakePrisma.reports.find(
+        (r) => r.employeeId === EMPLOYEE_B_ID && sameDate(r.date, new Date('2026-07-29T00:00:00.000Z')),
+      );
+      expect(copied?.workTimeTypeCode).toBe('SZK');
     });
   });
 });

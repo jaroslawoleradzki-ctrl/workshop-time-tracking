@@ -299,6 +299,7 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 
 * [Rozpoczęcie sesji projektowej](docs/session-start.md) – obowiązkowa kontrola stanu i zasady przekazania między ChatGPT i Codexem.
 * [Status projektu](PROJECT_STATUS.md) – bieżąca wersja, ostatnio zakończone prace, wyniki weryfikacji i znane ustalenia.
+* [Backlog produktu](docs/BACKLOG.md) – planowane wersje, priorytety i opis przyrostów.
 * [Architektura](docs/architecture.md) – komponenty, model danych i przepływy.
 * [Konfiguracja](docs/configuration.md) – zmienne środowiskowe i różnice środowisk.
 * [Testowanie](docs/testing.md) – istniejące testy, polecenia i checklista regresji.
@@ -318,6 +319,6 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 
 ## Status projektu
 
-* **Aktualna wersja**: `0.3.2`
+* **Aktualna wersja**: `0.3.3`
 * **Docelowa gałąź integracyjna**: `development`
 * **Status prac**: Aktywny rozwój (Active development)

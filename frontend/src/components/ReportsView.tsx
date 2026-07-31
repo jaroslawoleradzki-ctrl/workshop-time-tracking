@@ -362,9 +362,9 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                 <label className="form-label">Status zlecenia</label>
                 <select className="form-control" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
                   <option value="">Wszystkie statusy</option>
-                  <option value="open">Otwarte</option>
-                  <option value="suspended">Wstrzymane</option>
-                  <option value="closed">Zamknięte</option>
+                  <option value="OPEN">Otwarte</option>
+                  <option value="SUSPENDED">Wstrzymane</option>
+                  <option value="CLOSED">Zamknięte</option>
                 </select>
               </div>
             </>

@@ -185,4 +185,32 @@ describe('ReportsView — miesięczny raport pracowników', () => {
       'table-scroll-wide',
     );
   });
+
+  it('sends uppercase status parameter when filtering order report by status', async () => {
+    let lastUrl = '';
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      lastUrl = url;
+      if (url === '/api/employees' || url === '/api/orders') return response([]);
+      if (url === '/api/work-time-types') return response(workTimeTypes);
+      if (url.startsWith('/api/analytics/report-by-order')) {
+        return response([]);
+      }
+      return response([]);
+    }));
+
+    render(
+      <ReportsView
+        token="test-token"
+        user={{ id: '1', username: 'admin', role: 'admin', fullName: 'Administrator Testowy' }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Godziny wg Zleceń' }));
+
+    const statusSelect = screen.getByRole('combobox');
+    fireEvent.change(statusSelect, { target: { value: 'OPEN' } });
+
+    expect(lastUrl).toContain('status=OPEN');
+  });
 });

@@ -3,11 +3,11 @@
 ## Stan bieżący
 
 - Projekt: Workshop Time Tracking
-- Aktualna wersja produkcyjna: `0.3.1`
-- Aktualna wersja development: `0.3.2`
+- Aktualna wersja produkcyjna: `0.3.2`
+- Aktualna wersja development: `0.3.3`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: wersja `0.3.2` ukończona, zweryfikowana i gotowa do wdrożenia produkcyjnego
+- Stan prac: wersja `0.3.3` w trakcie wdrożenia poprawek błędów (bugfix)
 
 Wersja `0.3.1` została zweryfikowana, ustabilizowana i wdrożona produkcyjnie u klienta.
 

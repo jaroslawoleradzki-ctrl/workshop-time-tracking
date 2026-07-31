@@ -3,6 +3,14 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.3.3] - 2026-07-31
+
+### Fixed
+
+- Zabezpieczono operację „Kopiuj ostatni dzień” przed kopiowaniem nieobecności (takich jak `UW`, `L4`, `UOK`, `UŻ`): kopiowanie przenosi wyłącznie faktyczne wpisy robocze z poprzedniego dnia roboczego.
+- Naprawiono filtr statusu zlecenia (`OPEN`, `SUSPENDED`, `CLOSED`) w raporcie godzin według zleceń oraz eksporcie XLSX, zapewniając spójność wielkości liter w zapytaniu API i Prisma ORM.
+- Zdiagnozowano mechanizm tabel: ustalono brak wcześniejszego mechanizmu manualnego resize kolumn w aplikacji i udokumentowano wymaganie dla kolejnych wydań.
+
 ## [0.3.2] - 2026-07-27
 
 ### Added
