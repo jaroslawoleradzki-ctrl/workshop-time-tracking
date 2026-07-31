@@ -26,7 +26,7 @@ import ImportsView from './components/ImportsView';
 export interface UserSession {
   id: string;
   username: string;
-  role: 'admin' | 'leader';
+  role: 'admin' | 'leader' | 'employee';
   fullName: string;
 }
 
@@ -290,6 +290,9 @@ function App() {
       case 'reporting':
         return <ReportingPanel token={token} user={user} />;
       case 'orders':
+        if (user.role !== 'admin' && user.role !== 'leader') {
+          return <ReportingPanel token={token} user={user} />;
+        }
         return <OrdersView token={token} user={user} />;
       case 'employees':
         return <EmployeesView token={token} />;
@@ -339,6 +342,13 @@ function App() {
             {user.role === 'leader' ? (
               <>
                 <button
+                  onClick={() => setCurrentTab('orders')}
+                  className={`nav-item ${currentTab === 'orders' ? 'active' : ''}`}
+                >
+                  <FolderGit2 size={18} />
+                  <span>Zlecenia</span>
+                </button>
+                <button
                   onClick={() => setCurrentTab('reporting')}
                   className={`nav-item ${currentTab === 'reporting' ? 'active' : ''}`}
                 >
@@ -353,7 +363,7 @@ function App() {
                   <span>Raporty</span>
                 </button>
               </>
-            ) : (
+            ) : user.role === 'admin' ? (
               <>
                 {/* Robocza (Workspace) Section */}
                 <button
@@ -444,6 +454,23 @@ function App() {
                     </button>
                   </div>
                 </div>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => setCurrentTab('reporting')}
+                  className={`nav-item ${currentTab === 'reporting' ? 'active' : ''}`}
+                >
+                  <Clock size={18} />
+                  <span>Raportowanie</span>
+                </button>
+                <button
+                  onClick={() => setCurrentTab('reports')}
+                  className={`nav-item ${currentTab === 'reports' ? 'active' : ''}`}
+                >
+                  <FileDown size={18} />
+                  <span>Raporty</span>
+                </button>
               </>
             )}
           </nav>

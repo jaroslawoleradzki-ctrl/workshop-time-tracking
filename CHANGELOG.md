@@ -3,6 +3,19 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.3.6] - 2026-07-31
+
+### Added
+
+- Added status filter in Orders Database.
+- Orders can now be filtered by Open, Suspended and Closed status.
+
+### Fixed
+
+- Restored Orders Database access for Leader users.
+- Leader now has full read-only access to Orders Database.
+- Added regression tests for Leader navigation and Orders status filtering.
+
 ## [0.3.5] - 2026-07-31
 
 ### Added

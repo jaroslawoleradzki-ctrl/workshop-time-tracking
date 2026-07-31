@@ -42,11 +42,8 @@ Funkcjonalności zaplanowane dla wersji 0.4.0 (nieimplementowane w 0.3.3):
 
 ### Wersja 0.5.0 — Zarządzanie zleceniami i role (Planowany przyrost)
 
-Funkcjonalności zaplanowane dla wersji 0.5.0 (nieimplementowane w 0.3.3):
+Funkcjonalności zaplanowane dla wersji 0.5.0:
 
-- **Ekran „Baza zleceń” dla Lidera**: Udostępnienie użytkownikowi z rolą `Leader` widoku „Baza zleceń”.
-- **Uprawnienia Lidera**: Lider może przeglądać wszystkie dane tego ekranu, ale nie może tworzyć, edytować ani usuwać zleceń.
-- **Sortowanie zleceń**: Sortowanie bazy zleceń po kliknięciu nagłówka daty.
 - **Filtrowanie pulpitu**: Na pulpicie (Dashboard) zamknięte zlecenia mają być wyświetlane tylko wtedy, gdy zostały zamknięte w bieżącym miesiącu.
 
 ---
