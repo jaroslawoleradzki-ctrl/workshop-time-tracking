@@ -3,19 +3,33 @@
 ## Stan bieżący
 
 - Projekt: Workshop Time Tracking
-- Aktualna wersja produkcyjna: `0.3.2`
-- Aktualna wersja development: `0.3.3`
+- Aktualna wersja produkcyjna: `0.3.3`
+- Aktualna wersja development: `0.3.4`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: wersja `0.3.3` w trakcie wdrożenia poprawek błędów (bugfix)
+- Stan prac: wersja `0.3.4` zaimplementowana i zweryfikowana
 
-Wersja `0.3.1` została zweryfikowana, ustabilizowana i wdrożona produkcyjnie u klienta.
+Zakres wersji `0.3.4`:
 
-Zakres wersji `0.3.2`:
+- Dodano kolumnę „Ilość” w raporcie „Godziny wg Zleceń” oraz eksportach CSV i XLSX.
+- Dodano filtr „Pokaż tylko zlecenia z zaraportowanymi godzinami” w raporcie i eksportach zleceń.
+- Dodano sortowanie Bazy Zleceń Produkcyjnych po dacie zlecenia i dacie wysyłki (rosnąco / malejąco).
+- Dodano sortowanie pracowników według nazwiska w raporcie pracowników.
+- Zmieniono układ kolumn w raporcie pracowników: Pracownik, Suma godzin z nadgodzinami, Suma godzin bez nadgodzin, kody czasu pracy.
+- Zaktualizowano eksporty CSV i XLSX w celu odzwierciedlenia nowych kolumn i filtrowania.
 
-- ujednolicenie raportu według pracowników w tabeli oraz eksportach XLSX i CSV,
-- wspólne poziome przewijanie tabel,
-- opcjonalne uwagi do zleceń.
+## Weryfikacja wersji 0.3.4
+
+- backend: 46 testów zakończonych powodzeniem,
+- backend: build (`npm run build`) zakończony powodzeniem,
+- frontend: 26 testów zakończonych powodzeniem,
+- frontend: build (`npm run build`) zakończony powodzeniem.
+
+## Następne kroki (Plan na v0.3.5)
+
+- Dostęp tylko do odczytu do Bazy Zleceń dla roli `Leader`.
+- Poprawki modułu urlopów i nieobecności.
+- Poprawki raportów wynikające z testów użytkowników.
 
 ## Weryfikacja uwag do zleceń w wersji 0.3.2
 

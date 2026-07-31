@@ -56,6 +56,7 @@ describe('ReportsView — miesięczny raport pracowników', () => {
           NOC: 2.5,
           LEGACY: 3,
           suma: 13.5,
+          sumaBezNadgodzin: 13.5,
         }]);
       }
       if (url.startsWith('/api/analytics/report-by-account')) {
@@ -107,6 +108,8 @@ describe('ReportsView — miesięczny raport pracowników', () => {
 
     expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
       'Pracownik',
+      'Suma godzin z nadgodzinami',
+      'Suma godzin bez nadgodzin',
       'G (Standardowe godziny pracy)',
       'NDR (Nadgodziny)',
       'NS (Nadgodziny sobota/niedziela)',
@@ -115,7 +118,6 @@ describe('ReportsView — miesięczny raport pracowników', () => {
       'UŻ (Urlop na żądanie)',
       'L4 (Zwolnienie chorobowe)',
       'NOC (Zmiana nocna)',
-      'Suma godzin',
     ]);
     expect(screen.queryByRole('columnheader', { name: /LEGACY/ })).not.toBeInTheDocument();
     expect(screen.getByText('2.5 h')).toBeInTheDocument();
@@ -146,13 +148,14 @@ describe('ReportsView — miesięczny raport pracowników', () => {
 
     expect(lines[0]).toBe([
       'Pracownik',
+      'Suma godzin z nadgodzinami',
+      'Suma godzin bez nadgodzin',
       ...workTimeTypes
         .slice()
         .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
         .map((type) => `${type.code} (${type.name})`),
-      'Suma godzin',
     ].join(';'));
-    expect(lines[1]).toBe('Jan Kowalski;8;0;0;0;0;0;0;2.5;13.5');
+    expect(lines[1]).toBe('Jan Kowalski;13.5;13.5;8;0;0;0;0;0;0;2.5');
     expect(lines.join('\n')).not.toContain('LEGACY');
   });
 

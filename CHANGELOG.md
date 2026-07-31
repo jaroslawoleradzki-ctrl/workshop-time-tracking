@@ -3,6 +3,22 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.3.4] - 2026-07-31
+
+### Added
+
+- Kolumna Ilość w raporcie zleceń oraz eksportach CSV/XLSX.
+- Filtr zleceń z zaraportowanymi godzinami (`onlyWithHours`) w raporcie i eksportach.
+- Sortowanie Bazy Zleceń Produkcyjnych wg daty zlecenia i daty wysyłki (rosnąco / malejąco).
+- Suma godzin bez nadgodzin (`sumaBezNadgodzin`) w raporcie pracowników.
+- Sortowanie pracowników wg nazwiska (nazwisko, imię) w raporcie pracowników.
+
+### Changed
+
+- Zmieniono nazwę kolumny „Suma godzin” na „Suma godzin z nadgodzinami”.
+- Zmieniono układ raportu pracowników (Pracownik, Suma z nadgodzinami, Suma bez nadgodzin, kody czasu pracy).
+- Eksporty CSV/XLSX dostosowano do nowych kolumn i filtrów.
+
 ## [0.3.3] - 2026-07-31
 
 ### Fixed

@@ -37,9 +37,20 @@ Dokument przedstawia zrealizowane etapy rozwoju i kamienie milowe aplikacji Work
 ## Sprint 0.2.0
 *Status: Zakończony*
 - [x] ✔ Nowy dwusekcyjny układ menu bocznego (Robocza vs Administracja) dla administratora z collapsible dropdownem.
-- [x] ✔ Zabezpieczenie ról w nawigacji – rola Leader widzi wyłącznie zakładki Raportowanie oraz Raporty.
-- [x] ✔ Przeniesienie panelu użytkownika oraz czerwonego przycisku Wyloguj do górnego paska (Navbar).
-- [x] ✔ Stała, stabilna wysokość sidebara (`100vh`) i dedykowany pasek wersji systemu w stopce sidebara.
-- [x] ✔ Dodanie przycisku **Dzisiaj** (niebieski - primary) automatycznie odświeżającego wpisy dla wybranej daty.
-- [x] ✔ Pamięć stanu wybranej zakładki oraz otwartej sekcji Administracji po odświeżeniu strony w `sessionStorage`.
-- [x] ✔ Płynne animacje CSS Grid rozwijania podmenu oraz obrotu ikony Chevron.
+## Sprint 0.3.4
+*Status: Zakończony*
+- [x] ✔ Kolumna Ilość w raporcie „Godziny wg Zleceń” oraz eksportach CSV i XLSX.
+- [x] ✔ Filtr „Pokaż tylko zlecenia z zaraportowanymi godzinami” w raporcie i eksportach.
+- [x] ✔ Sortowanie Bazy Zleceń Produkcyjnych po dacie zlecenia i dacie wysyłki (rosnąco / malejąco).
+- [x] ✔ Sortowanie pracowników według nazwiska w raporcie pracowników.
+- [x] ✔ Zmiana nazwy kolumny „Suma godzin” na „Suma godzin z nadgodzinami”.
+- [x] ✔ Nowa kolumna „Suma godzin bez nadgodzin” w raporcie pracowników.
+- [x] ✔ Nowy układ kolumn raportu pracowników oraz dostosowanie eksportów CSV i XLSX.
+
+---
+
+## Sprint 0.3.5
+*Status: Planowany*
+- [ ] Dostęp tylko do odczytu do Bazy Zleceń dla roli `Leader`.
+- [ ] Poprawki modułu urlopów i nieobecności.
+- [ ] Poprawki raportów wynikające z testów użytkowników.

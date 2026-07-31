@@ -28,6 +28,17 @@ type EmployeeReportType = {
   name: string;
 };
 
+export const OVERTIME_CODES = ['NDR', 'NS'];
+
+type InternalPivotRow = {
+  employeeId: string;
+  employeeName: string;
+  sortKey: string;
+  suma: number;
+  sumaBezNadgodzin: number;
+  counts: Record<string, number>;
+};
+
 async function getEmployeeReportRows(filters: EmployeeReportFilters): Promise<EmployeeReportRow[]> {
   const reports = await prisma.workTimeReport.findMany({
     where: {
@@ -40,29 +51,55 @@ async function getEmployeeReportRows(filters: EmployeeReportFilters): Promise<Em
     },
     include: {
       employee: true,
+      workTimeType: true,
     },
   });
 
-  const pivot: Record<string, EmployeeReportRow> = {};
+  const pivot: Record<string, InternalPivotRow> = {};
 
   reports.forEach((report) => {
     const employeeId = report.employeeId;
     if (!pivot[employeeId]) {
+      const emp = report.employee;
+      const lastName = (emp.lastName || emp.fullName.trim().split(' ').slice(-1)[0] || '').trim();
+      const firstName = (emp.firstName || emp.fullName.trim().split(' ').slice(0, -1).join(' ') || '').trim();
+      const sortKey = `${lastName} ${firstName}`.trim().toLowerCase();
+      const employeeName = emp.firstName && emp.lastName ? `${emp.firstName} ${emp.lastName}` : emp.fullName;
+
       pivot[employeeId] = {
         employeeId,
-        employeeName: report.employee.fullName,
+        employeeName,
+        sortKey,
         suma: 0,
+        sumaBezNadgodzin: 0,
+        counts: {},
       };
     }
 
     const hours = Number(report.hours);
     const code = report.workTimeTypeCode;
+    const isOvertime =
+      OVERTIME_CODES.includes(code) ||
+      code.startsWith('ND') ||
+      code.startsWith('NS') ||
+      (report.workTimeType?.name?.toLowerCase().includes('nadgodzin') ?? false);
 
-    pivot[employeeId][code] = (Number(pivot[employeeId][code]) || 0) + hours;
+    pivot[employeeId].counts[code] = (pivot[employeeId].counts[code] || 0) + hours;
     pivot[employeeId].suma += hours;
+    if (!isOvertime) {
+      pivot[employeeId].sumaBezNadgodzin += hours;
+    }
   });
 
-  return Object.values(pivot).sort((a, b) => a.employeeName.localeCompare(b.employeeName));
+  return Object.values(pivot)
+    .sort((a, b) => a.sortKey.localeCompare(b.sortKey, 'pl'))
+    .map((item) => {
+      const { sortKey, counts, ...rest } = item;
+      return {
+        ...rest,
+        ...counts,
+      };
+    });
 }
 
 async function getEmployeeReportTypes(): Promise<EmployeeReportType[]> {
@@ -113,104 +150,85 @@ async function generateExcelResponse(params: {
 
   // Add data rows
   data.forEach((rowData) => {
-    const row = worksheet.addRow(rowData);
-    row.height = 20;
-
-    // Apply borders and custom alignments/formats
-    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-      cell.border = {
-        top: { style: 'thin', color: { argb: 'FFE0E0E0' } },
-        left: { style: 'thin', color: { argb: 'FFE0E0E0' } },
-        bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } },
-        right: { style: 'thin', color: { argb: 'FFE0E0E0' } },
-      };
-
-      // Format as number (e.g. 0.00 for hours)
-      if (numberColumns.includes(colNumber) && typeof cell.value === 'number') {
-        cell.numFmt = '#,##0.00';
-        cell.alignment = { horizontal: 'right' };
-      }
-
-      // Format as date
-      if (dateColumns.includes(colNumber)) {
-        cell.alignment = { horizontal: 'center' };
-      }
-    });
+    worksheet.addRow(rowData);
   });
 
-  // Freeze top row
+  // Formatting
   worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
-  // Enable Autofilter
-  worksheet.autoFilter = {
-    from: { row: 1, column: 1 },
-    to: { row: 1, column: headers.length },
-  };
-
-  // Adjust column widths automatically
+  // Auto-fit column widths
   worksheet.columns.forEach((column) => {
-    let maxLength = 0;
-    column.eachCell!({ includeEmpty: true }, (cell) => {
-      const valStr = cell.value ? cell.value.toString() : '';
-      if (valStr.length > maxLength) {
-        maxLength = valStr.length;
-      }
-    });
-    column.width = Math.max(maxLength + 4, 12);
+    let maxLen = 10;
+    if (column.values) {
+      column.values.forEach((val) => {
+        if (val) {
+          const len = val.toString().length;
+          if (len > maxLen) maxLen = len;
+        }
+      });
+    }
+    column.width = Math.min(maxLen + 4, 40);
+  });
+
+  // Apply number formatting
+  numberColumns.forEach((colIdx) => {
+    worksheet.getColumn(colIdx).numFmt = '#,##0.00';
+  });
+
+  dateColumns.forEach((colIdx) => {
+    worksheet.getColumn(colIdx).numFmt = 'YYYY-MM-DD';
   });
 
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
   await workbook.xlsx.write(res);
   res.end();
 }
 
-// 1. Dashboard summary numbers
-router.get('/dashboard', async (req: AuthRequest, res: Response) => {
+// ================= ROUTES =================
+
+// 1. Dashboard Synthetics
+router.get('/dashboard', async (_req: AuthRequest, res: Response) => {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
-
-    // Otwarte zlecenia
-    const openOrdersCount = await prisma.order.count({
-      where: { status: 'OPEN', deletedAt: null },
+    const activeOrdersCount = await prisma.order.count({
+      where: { deletedAt: null, status: 'OPEN', isActive: true },
     });
-
-    // Zamknięte zlecenia
+    const suspendedOrdersCount = await prisma.order.count({
+      where: { deletedAt: null, status: 'SUSPENDED', isActive: true },
+    });
     const closedOrdersCount = await prisma.order.count({
-      where: { status: 'CLOSED', deletedAt: null },
+      where: { deletedAt: null, status: 'CLOSED' },
     });
 
-    // Godziny dzisiaj
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
     const reportsToday = await prisma.workTimeReport.aggregate({
       where: {
-        date: today,
         deletedAt: null,
+        date: { gte: startOfToday, lte: endOfToday },
       },
       _sum: { hours: true },
     });
-    const hoursToday = reportsToday._sum.hours ? Number(reportsToday._sum.hours) : 0;
 
-    // Godziny w tym miesiącu
     const reportsMonth = await prisma.workTimeReport.aggregate({
       where: {
-        date: {
-          gte: startOfMonth,
-          lte: endOfMonth,
-        },
         deletedAt: null,
+        date: { gte: startOfMonth, lte: endOfMonth },
       },
       _sum: { hours: true },
     });
-    const hoursMonth = reportsMonth._sum.hours ? Number(reportsMonth._sum.hours) : 0;
 
-    // Pobierz zlecenia z policzonym czasem pracy, aby wykryć przekroczenia planu
-    const orders = await prisma.order.findMany({
-      where: { deletedAt: null },
+    // Recent 5 active orders with their hours
+    const recentOrders = await prisma.order.findMany({
+      where: { deletedAt: null, status: 'OPEN', isActive: true },
+      take: 5,
+      orderBy: { updatedAt: 'desc' },
       include: {
         reports: {
           where: { deletedAt: null },
@@ -219,41 +237,33 @@ router.get('/dashboard', async (req: AuthRequest, res: Response) => {
       },
     });
 
-    const ordersExceeding: any[] = [];
-    const ordersApproaching: any[] = [];
-
-    orders.forEach((o) => {
+    const formattedRecentOrders = recentOrders.map((o) => {
       const est = Number(o.plannedHours);
       const actual = o.reports.reduce((sum: number, r: any) => sum + Number(r.hours), 0);
       const percent = est > 0 ? (actual / est) * 100 : 0;
 
-      const orderData = {
+      return {
         id: o.id,
         orderNumber: o.orderNumber,
         productName: o.productName,
         plannedHours: est,
         actualHours: actual,
         percent: Math.round(percent * 100) / 100,
+        status: o.status,
       };
-
-      if (percent > 100) {
-        ordersExceeding.push(orderData);
-      } else if (percent >= 80 && percent <= 100) {
-        ordersApproaching.push(orderData);
-      }
     });
 
     return res.json({
-      openOrdersCount,
+      activeOrdersCount,
+      suspendedOrdersCount,
       closedOrdersCount,
-      hoursToday,
-      hoursMonth,
-      ordersExceeding: ordersExceeding.slice(0, 10), // cap top 10
-      ordersApproaching: ordersApproaching.slice(0, 10),
+      hoursToday: Number(reportsToday._sum.hours || 0),
+      hoursMonth: Number(reportsMonth._sum.hours || 0),
+      recentOrders: formattedRecentOrders,
     });
   } catch (error) {
-    logger.error(error, 'Błąd podczas generowania statystyk dashboardu');
-    return res.status(500).json({ message: 'Błąd podczas generowania statystyk dashboardu' });
+    logger.error(error, 'Błąd podczas pobierania danych pulpitu');
+    return res.status(500).json({ message: 'Błąd podczas pobierania danych pulpitu' });
   }
 });
 
@@ -266,7 +276,7 @@ const parseOrderStatus = (statusParam: unknown): OrderStatus | undefined => {
 
 // 2. Report by Order
 router.get('/report-by-order', async (req: AuthRequest, res: Response) => {
-  const { dateFrom, dateTo, status, orderNumber } = req.query;
+  const { dateFrom, dateTo, status, orderNumber, onlyWithHours } = req.query;
 
   try {
     const orders = await prisma.order.findMany({
@@ -290,7 +300,7 @@ router.get('/report-by-order', async (req: AuthRequest, res: Response) => {
       orderBy: { orderNumber: 'asc' },
     });
 
-    const reportData = orders.map((o) => {
+    let reportData = orders.map((o) => {
       const est = Number(o.plannedHours);
       const actual = o.reports.reduce((sum: number, r: any) => sum + Number(r.hours), 0);
       const deviation = est - actual;
@@ -300,6 +310,8 @@ router.get('/report-by-order', async (req: AuthRequest, res: Response) => {
         orderNumber: o.orderNumber,
         productName: o.productName,
         productCode: o.productCode,
+        quantity: o.quantity !== null ? Number(o.quantity) : null,
+        quantityUnit: o.quantityUnit || 'szt.',
         plannedHours: est,
         actualHours: Math.round(actual * 100) / 100,
         deviation: Math.round(deviation * 100) / 100,
@@ -307,6 +319,10 @@ router.get('/report-by-order', async (req: AuthRequest, res: Response) => {
         status: o.status,
       };
     });
+
+    if (onlyWithHours === 'true' || onlyWithHours === '1') {
+      reportData = reportData.filter((r) => r.actualHours > 0);
+    }
 
     return res.json(reportData);
   } catch (error) {
@@ -375,27 +391,29 @@ router.get('/report-by-account', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// 5. Detailed report (Full list)
+// 5. Detailed Report
 router.get('/report-detailed', async (req: AuthRequest, res: Response) => {
-  const { dateFrom, dateTo, employeeId, orderId } = req.query;
+  const { dateFrom, dateTo, employeeId, orderNumber } = req.query;
 
   try {
     const reports = await prisma.workTimeReport.findMany({
       where: {
         deletedAt: null,
         employeeId: employeeId ? (employeeId as string) : undefined,
-        orderId: orderId ? (orderId as string) : undefined,
         date: {
           gte: dateFrom ? new Date(dateFrom as string) : undefined,
           lte: dateTo ? new Date(dateTo as string) : undefined,
         },
+        order: orderNumber
+          ? { orderNumber: { contains: orderNumber as string, mode: 'insensitive' } }
+          : undefined,
       },
       include: {
         employee: true,
         order: true,
         createdByUser: true,
       },
-      orderBy: { date: 'desc' },
+      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
     });
 
     const formatted = reports.map((r) => ({
@@ -403,19 +421,19 @@ router.get('/report-detailed', async (req: AuthRequest, res: Response) => {
       date: r.date.toISOString().split('T')[0],
       employeeName: r.employee.fullName,
       orderNumber: r.order?.orderNumber || '-',
-      productCode: r.order?.productCode || '-',
       productName: r.order?.productName || '-',
-      accountingAccount: r.order?.accountingAccount || '-',
+      accountingAccount: r.order?.accountingAccount || 'brak',
       hours: Number(r.hours),
       workTimeTypeCode: r.workTimeTypeCode,
       creatorName: r.createdByUser.fullName,
-      createdAt: r.createdAt,
+      createdAt: r.createdAt.toISOString(),
+      missingCard: r.missingCard,
     }));
 
     return res.json(formatted);
   } catch (error) {
-    logger.error(error, 'Błąd podczas pobierania szczegółowych wpisów');
-    return res.status(500).json({ message: 'Błąd podczas pobierania szczegółowych wpisów' });
+    logger.error(error, 'Błąd podczas pobierania raportu szczegółowego');
+    return res.status(500).json({ message: 'Błąd podczas pobierania raportu szczegółowego' });
   }
 });
 
@@ -423,7 +441,7 @@ router.get('/report-detailed', async (req: AuthRequest, res: Response) => {
 
 // Export: Order Report
 router.get('/export/by-order', async (req: AuthRequest, res: Response) => {
-  const { dateFrom, dateTo, status, orderNumber } = req.query;
+  const { dateFrom, dateTo, status, orderNumber, onlyWithHours } = req.query;
 
   try {
     const orders = await prisma.order.findMany({
@@ -447,11 +465,38 @@ router.get('/export/by-order', async (req: AuthRequest, res: Response) => {
       orderBy: { orderNumber: 'asc' },
     });
 
+    let filteredOrders = orders.map((o) => {
+      const est = Number(o.plannedHours);
+      const actual = o.reports.reduce((sum: number, r: any) => sum + Number(r.hours), 0);
+      const deviation = est - actual;
+      const percent = est > 0 ? (actual / est) * 100 : 0;
+      const statusPolish = o.status === 'OPEN' ? 'Otwarte' : o.status === 'SUSPENDED' ? 'Wstrzymane' : 'Zamknięte';
+      const quantityDisplay = o.quantity !== null ? `${Number(o.quantity)} ${o.quantityUnit || 'szt.'}` : '-';
+
+      return {
+        orderNumber: o.orderNumber,
+        productCode: o.productCode || '-',
+        productName: o.productName,
+        accountingAccount: o.accountingAccount || '-',
+        quantityDisplay,
+        est,
+        actual: Math.round(actual * 100) / 100,
+        deviation: Math.round(deviation * 100) / 100,
+        percent: Math.round(percent * 100) / 100,
+        statusPolish,
+      };
+    });
+
+    if (onlyWithHours === 'true' || onlyWithHours === '1') {
+      filteredOrders = filteredOrders.filter((o) => o.actual > 0);
+    }
+
     const headers = [
       'Numer zlecenia',
       'Numer produktu',
       'Nazwa produktu',
       'Konto księgowe',
+      'Ilość',
       'Godziny planowane (estymata)',
       'Godziny rzeczywiste',
       'Odchylenie (plan - rzecz.)',
@@ -459,33 +504,26 @@ router.get('/export/by-order', async (req: AuthRequest, res: Response) => {
       'Status zlecenia',
     ];
 
-    const data = orders.map((o) => {
-      const est = Number(o.plannedHours);
-      const actual = o.reports.reduce((sum: number, r: any) => sum + Number(r.hours), 0);
-      const deviation = est - actual;
-      const percent = est > 0 ? (actual / est) * 100 : 0;
-      const statusPolish = o.status === 'OPEN' ? 'Otwarte' : o.status === 'SUSPENDED' ? 'Wstrzymane' : 'Zamknięte';
-
-      return [
-        o.orderNumber,
-        o.productCode,
-        o.productName,
-        o.accountingAccount,
-        est,
-        Math.round(actual * 100) / 100,
-        Math.round(deviation * 100) / 100,
-        Math.round(percent * 100) / 100,
-        statusPolish,
-      ];
-    });
+    const data = filteredOrders.map((o) => [
+      o.orderNumber,
+      o.productCode,
+      o.productName,
+      o.accountingAccount,
+      o.quantityDisplay,
+      o.est,
+      o.actual,
+      o.deviation,
+      o.percent,
+      o.statusPolish,
+    ]);
 
     await generateExcelResponse({
       res,
-      filename: 'Raport_godzin_wg_zlecen.xlsx',
+      filename: 'Raport_zlecen.xlsx',
       sheetName: 'Zlecenia',
       headers,
       data,
-      numberColumns: [5, 6, 7, 8],
+      numberColumns: [6, 7, 8, 9],
     });
   } catch (error) {
     logger.error(error, 'Błąd eksportu XLSX (by-order)');
@@ -493,7 +531,7 @@ router.get('/export/by-order', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// Export: Employee (Monthly) Report
+// Export: Employee Monthly Report
 router.get('/export/by-employee', async (req: AuthRequest, res: Response) => {
   const { dateFrom, dateTo, employeeId } = req.query;
 
@@ -510,17 +548,19 @@ router.get('/export/by-employee', async (req: AuthRequest, res: Response) => {
 
     const headers = [
       'Pracownik',
+      'Suma godzin z nadgodzinami',
+      'Suma godzin bez nadgodzin',
       ...workTimeTypes.map((type) => `${type.code} (${type.name})`),
-      'Suma godzin',
     ];
 
     const data = rows.map((row) => [
       row.employeeName,
-      ...workTimeTypes.map((type) => Number(row[type.code]) || 0),
       row.suma,
+      row.sumaBezNadgodzin,
+      ...workTimeTypes.map((type) => Number(row[type.code]) || 0),
     ]);
     const numberColumns = Array.from(
-      { length: workTimeTypes.length + 1 },
+      { length: workTimeTypes.length + 2 },
       (_, index) => index + 2,
     );
 
