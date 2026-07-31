@@ -67,3 +67,67 @@ describe('App Component - Login Screen', () => {
     });
   });
 });
+
+describe('App Component - Role Navigation & Route Access', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    localStorage.clear();
+    sessionStorage.clear();
+    vi.stubGlobal('ResizeObserver', class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    });
+  });
+
+  it('renders "Zlecenia" menu item for admin user and opens OrdersView', async () => {
+    localStorage.setItem('token', 'fake-admin-token');
+    localStorage.setItem('user', JSON.stringify({
+      id: '1',
+      username: 'admin',
+      role: 'admin',
+      fullName: 'Jan Administrator',
+    }));
+
+    render(<App />);
+
+    const ordersNav = screen.getByRole('button', { name: /Zlecenia/i });
+    expect(ordersNav).toBeInTheDocument();
+  });
+
+  it('renders "Zlecenia" menu item for leader user and allows navigating to OrdersView', async () => {
+    localStorage.setItem('token', 'fake-leader-token');
+    localStorage.setItem('user', JSON.stringify({
+      id: '2',
+      username: 'leader',
+      role: 'leader',
+      fullName: 'Adam Lider',
+    }));
+
+    render(<App />);
+
+    const ordersNav = screen.getByRole('button', { name: /Zlecenia/i });
+    expect(ordersNav).toBeInTheDocument();
+  });
+
+  it('does NOT render "Zlecenia" menu item for employee role and blocks route access', async () => {
+    localStorage.setItem('token', 'fake-employee-token');
+    localStorage.setItem('user', JSON.stringify({
+      id: '3',
+      username: 'employee',
+      role: 'employee',
+      fullName: 'Piotr Pracownik',
+    }));
+    sessionStorage.setItem('current_tab', 'orders');
+
+    render(<App />);
+
+    expect(screen.queryByRole('button', { name: /Zlecenia/i })).not.toBeInTheDocument();
+    // Guard redirects employee away from orders view
+    expect(screen.queryByText('Baza Zleceń Produkcyjnych')).not.toBeInTheDocument();
+  });
+});
