@@ -257,6 +257,13 @@ router.get('/dashboard', async (req: AuthRequest, res: Response) => {
   }
 });
 
+const VALID_ORDER_STATUSES: OrderStatus[] = ['OPEN', 'SUSPENDED', 'CLOSED'];
+const parseOrderStatus = (statusParam: unknown): OrderStatus | undefined => {
+  if (typeof statusParam !== 'string' || !statusParam.trim()) return undefined;
+  const upper = statusParam.trim().toUpperCase() as OrderStatus;
+  return VALID_ORDER_STATUSES.includes(upper) ? upper : undefined;
+};
+
 // 2. Report by Order
 router.get('/report-by-order', async (req: AuthRequest, res: Response) => {
   const { dateFrom, dateTo, status, orderNumber } = req.query;
@@ -265,7 +272,7 @@ router.get('/report-by-order', async (req: AuthRequest, res: Response) => {
     const orders = await prisma.order.findMany({
       where: {
         deletedAt: null,
-        status: status ? (status as OrderStatus) : undefined,
+        status: parseOrderStatus(status),
         orderNumber: orderNumber ? { contains: orderNumber as string, mode: 'insensitive' } : undefined,
       },
       include: {
@@ -422,7 +429,7 @@ router.get('/export/by-order', async (req: AuthRequest, res: Response) => {
     const orders = await prisma.order.findMany({
       where: {
         deletedAt: null,
-        status: status ? (status as OrderStatus) : undefined,
+        status: parseOrderStatus(status),
         orderNumber: orderNumber ? { contains: orderNumber as string, mode: 'insensitive' } : undefined,
       },
       include: {

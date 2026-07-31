@@ -150,4 +150,35 @@ describe('Analytics reports', () => {
 
     expect(response.body[0].accountingAccount).toBe('brak');
   });
+
+  it('filters report-by-order by status case-insensitively', async () => {
+    const orderSpy = vi.spyOn(prisma.order, 'findMany').mockResolvedValue([]);
+
+    await authenticatedGet('/api/analytics/report-by-order?status=open').expect(200);
+    expect(orderSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: 'OPEN',
+        }),
+      }),
+    );
+
+    await authenticatedGet('/api/analytics/report-by-order?status=SUSPENDED').expect(200);
+    expect(orderSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: 'SUSPENDED',
+        }),
+      }),
+    );
+
+    await authenticatedGet('/api/analytics/report-by-order?status=').expect(200);
+    expect(orderSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: undefined,
+        }),
+      }),
+    );
+  });
 });
