@@ -45,6 +45,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | 'SUSPENDED' | 'CLOSED'>('ALL');
 
   // Form states (Admin only)
   const [showFormModal, setShowFormModal] = useState(false);
@@ -213,13 +214,16 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
   const [sortField, setSortField] = useState<'orderDate' | 'plannedShipmentDate' | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
-  const filteredOrders = orders.filter(o => 
-    (o.orderNumber?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-    (o.orderedBy?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-    (o.productCode?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-    (o.productName?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-    (o.accountingAccount?.toLowerCase() || '').includes(searchQuery.toLowerCase())
-  );
+  const filteredOrders = orders.filter(o => {
+    const matchesSearch =
+      (o.orderNumber?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+      (o.orderedBy?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+      (o.productCode?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+      (o.productName?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+      (o.accountingAccount?.toLowerCase() || '').includes(searchQuery.toLowerCase());
+    const matchesStatus = statusFilter === 'ALL' || o.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   const sortedOrders = useMemo(() => {
     if (!sortField) return filteredOrders;
@@ -543,7 +547,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
 
       {/* Wyszukiwanie i Sortowanie */}
       <div className="card" style={{ padding: '1rem', marginBottom: '1rem', flexShrink: 0 }}>
-        <div className="form-row" style={{ alignItems: 'center' }}>
+        <div className="form-row" style={{ alignItems: 'center', gap: '0.75rem' }}>
           <div className="form-group" style={{ flex: 1, position: 'relative', margin: 0 }}>
             <Search size={18} style={{ color: 'var(--text-muted)', position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
             <input
@@ -555,7 +559,20 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
               onChange={e => setSearchQuery(e.target.value)}
             />
           </div>
-          <div className="form-group" style={{ width: '240px', margin: 0 }}>
+          <div className="form-group" style={{ width: '170px', margin: 0 }}>
+            <select
+              className="form-control"
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value as any)}
+              aria-label="Filtr statusu"
+            >
+              <option value="ALL">Wszystkie statusy</option>
+              <option value="OPEN">Otwarte</option>
+              <option value="SUSPENDED">Wstrzymane</option>
+              <option value="CLOSED">Zamknięte</option>
+            </select>
+          </div>
+          <div className="form-group" style={{ width: '220px', margin: 0 }}>
             <select
               className="form-control"
               value={sortField ? `${sortField}:${sortOrder}` : ''}

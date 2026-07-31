@@ -4,30 +4,28 @@
 
 - Projekt: Workshop Time Tracking
 - Aktualna wersja produkcyjna: `0.3.3`
-- Aktualna wersja development: `0.3.5`
+- Aktualna wersja development: `0.3.6`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: wersja `0.3.5` zaimplementowana i zweryfikowana
+- Stan prac: wersja `0.3.6` zaimplementowana i zweryfikowana
 
-Zakres wersji `0.3.5`:
+Zakres wersji `0.3.6`:
 
-- Udostępnienie ekranu „Baza Zleceń” dla użytkownika z rolą `Leader` w trybie tylko do odczytu.
-- Możliwość przeglądania, wyszukiwania oraz dwukierunkowego sortowania zleceń we wszystkich kolumnach dla Lidera.
-- Ukrycie i zablokowanie przycisków dodawania, edycji, usuwania oraz zapisu danych dla Lidera w interfejsie.
-- Weryfikacja i zabezpieczenie backendu przed niedozwolonym wykonaniem operacji zapisu przez rolę Leader (`403 Forbidden` na endpointach POST/PUT/DELETE `/api/orders`).
+- Dodano filtr statusów zleceń w Bazie Zleceń Produkcyjnych (*Wszystkie*, *Otwarte*, *Wstrzymane*, *Zamknięte*).
+- Zapewniono pełny dostęp dla użytkownika z rolą `Leader` do ekranu Baza Zleceń w trybie tylko do odczytu (wraz z nawigacją w Sidebarze).
+- Dodano kompleksowe testy regresyjne filtrowania statusów, nawigacji oraz braku dostępu/opcji modyfikujących dla Leadera i Employee.
 
-## Weryfikacja wersji 0.3.5
+## Weryfikacja wersji 0.3.6
 
 - backend: 48 testów zakończonych powodzeniem,
 - backend: build (`npm run build`) zakończony powodzeniem,
-- frontend: 27 testów zakończonych powodzeniem,
+- frontend: 30 testów zakończonych powodzeniem,
 - frontend: build (`npm run build`) zakończony powodzeniem.
 
-## Następne kroki (Plan na v0.3.6)
+## Następne kroki (Plan na v0.3.7 / v0.4.0)
 
 - Poprawki modułu urlopów i nieobecności.
-- Poprawki zgłoszone przez użytkowników.
-- Dalsze usprawnienia raportów.
+- Dalsze usprawnienia i zgłoszenia użytkowników.
 
 ## Weryfikacja uwag do zleceń w wersji 0.3.2
 
