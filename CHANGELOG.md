@@ -3,6 +3,14 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.3.8] - 2026-07-31
+
+### Fixed
+
+- Changed employee name presentation in the monthly employee report to “Last name First name”.
+- Unified employee name format across the application view, XLSX export and CSV export.
+- Updated report sorting to use last name and first name consistently, if required by the existing implementation.
+
 ## [0.3.7] - 2026-07-31
 
 ### Added

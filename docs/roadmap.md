@@ -58,7 +58,17 @@ Dokument przedstawia zrealizowane etapy rozwoju i kamienie milowe aplikacji Work
 ---
 
 ## Sprint 0.3.6
-*Status: Planowany*
-- [ ] Poprawki modułu urlopów i nieobecności.
-- [ ] Poprawki zgłoszone przez użytkowników.
-- [ ] Dalsze usprawnienia raportów.
+*Status: Zakończony*
+- [x] ✔ Dodano filtr statusów zleceń w Bazie Zleceń.
+
+---
+
+## Sprint 0.3.7
+*Status: Zakończony*
+- [x] ✔ Ujednolicono nagłówki metadanych dla wszystkich eksportów XLSX i CSV.
+
+---
+
+## Sprint 0.3.8
+*Status: Zakończony*
+- [x] ✔ Ujednolicono formatowanie nazwiska i imienia (`Nazwisko Imię`) w miesięcznym raporcie pracowników w widoku, XLSX oraz CSV.

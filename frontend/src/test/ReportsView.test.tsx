@@ -51,7 +51,7 @@ describe('ReportsView — miesięczny raport pracowników', () => {
       if (url.startsWith('/api/analytics/report-by-employee')) {
         return response([{
           employeeId: '20000000-0000-4000-8000-000000000001',
-          employeeName: 'Jan Kowalski',
+          employeeName: 'Kowalski Jan',
           G: 8,
           NOC: 2.5,
           LEGACY: 3,
@@ -164,7 +164,7 @@ describe('ReportsView — miesięczny raport pracowników', () => {
         .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
         .map((type) => `${type.code} (${type.name})`),
     ].join(';'));
-    expect(lines[6]).toBe('Jan Kowalski;13.5;13.5;8;0;0;0;0;0;0;2.5');
+    expect(lines[6]).toBe('Kowalski Jan;13.5;13.5;8;0;0;0;0;0;0;2.5');
     expect(lines.join('\n')).not.toContain('LEGACY');
   });
 

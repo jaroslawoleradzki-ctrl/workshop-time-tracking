@@ -39,6 +39,30 @@ type InternalPivotRow = {
   counts: Record<string, number>;
 };
 
+export function formatEmployeeName(emp: {
+  firstName?: string | null;
+  lastName?: string | null;
+  fullName?: string | null;
+}): string {
+  const lastName = emp.lastName ? emp.lastName.trim() : '';
+  const firstName = emp.firstName ? emp.firstName.trim() : '';
+
+  if (lastName && firstName) {
+    return `${lastName} ${firstName}`;
+  }
+  if (lastName) {
+    return lastName;
+  }
+  if (firstName) {
+    return firstName;
+  }
+  const fullName = emp.fullName ? emp.fullName.trim() : '';
+  if (fullName) {
+    return fullName;
+  }
+  return 'Brak danych';
+}
+
 async function getEmployeeReportRows(filters: EmployeeReportFilters): Promise<EmployeeReportRow[]> {
   const reports = await prisma.workTimeReport.findMany({
     where: {
@@ -61,10 +85,10 @@ async function getEmployeeReportRows(filters: EmployeeReportFilters): Promise<Em
     const employeeId = report.employeeId;
     if (!pivot[employeeId]) {
       const emp = report.employee;
-      const lastName = (emp.lastName || emp.fullName.trim().split(' ').slice(-1)[0] || '').trim();
-      const firstName = (emp.firstName || emp.fullName.trim().split(' ').slice(0, -1).join(' ') || '').trim();
-      const sortKey = `${lastName} ${firstName}`.trim().toLowerCase();
-      const employeeName = emp.firstName && emp.lastName ? `${emp.firstName} ${emp.lastName}` : emp.fullName;
+      const lastNameForSort = (emp.lastName || (emp.fullName ? emp.fullName.trim().split(' ').slice(-1)[0] : '') || '').trim();
+      const firstNameForSort = (emp.firstName || (emp.fullName ? emp.fullName.trim().split(' ').slice(0, -1).join(' ') : '') || '').trim();
+      const sortKey = `${lastNameForSort} ${firstNameForSort}`.trim().toLowerCase();
+      const employeeName = formatEmployeeName(emp);
 
       pivot[employeeId] = {
         employeeId,
@@ -667,7 +691,7 @@ router.get('/export/by-employee', async (req: AuthRequest, res: Response) => {
         empNameVal = rows[0].employeeName;
       } else {
         const emp = await prisma.employee.findUnique({ where: { id: employeeId as string } });
-        if (emp) empNameVal = emp.fullName;
+        if (emp) empNameVal = formatEmployeeName(emp);
         else empNameVal = employeeId as string;
       }
     }
