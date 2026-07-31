@@ -142,4 +142,49 @@ describe('Orders notes', () => {
       })
       .expect(400, { message: 'Uwagi muszą być tekstem.' });
   });
+
+  it('allows leader role to fetch order list but blocks modification endpoints with 403', async () => {
+    const leaderToken = jwt.sign(
+      {
+        id: '10000000-0000-4000-8000-000000000002',
+        username: 'test-leader',
+        role: 'leader',
+        fullName: 'Test Leader',
+      },
+      TEST_JWT_SECRET,
+    );
+    vi.spyOn(prisma.user, 'findUnique').mockResolvedValue({
+      id: '10000000-0000-4000-8000-000000000002',
+      username: 'test-leader',
+      passwordHash: 'unused',
+      fullName: 'Test Leader',
+      role: 'leader',
+      isActive: true,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+    vi.spyOn(prisma.order, 'findMany').mockResolvedValue([{ ...order, reports: [] }] as any);
+
+    await request(app)
+      .get('/api/orders')
+      .set('Authorization', `Bearer ${leaderToken}`)
+      .expect(200);
+
+    await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${leaderToken}`)
+      .send({ orderNumber: 'ZL-NEW', orderDate: '2026-07-27', productName: 'Produkt', quantity: 1, hoursPerUnit: 1, status: 'OPEN' })
+      .expect(403);
+
+    await request(app)
+      .put(`/api/orders/${ORDER_ID}`)
+      .set('Authorization', `Bearer ${leaderToken}`)
+      .send({ orderNumber: 'ZL-NEW', orderDate: '2026-07-27', productName: 'Produkt', quantity: 1, hoursPerUnit: 1, status: 'OPEN' })
+      .expect(403);
+
+    await request(app)
+      .delete(`/api/orders/${ORDER_ID}`)
+      .set('Authorization', `Bearer ${leaderToken}`)
+      .expect(403);
+  });
 });

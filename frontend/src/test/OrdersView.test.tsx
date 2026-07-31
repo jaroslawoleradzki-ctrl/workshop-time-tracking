@@ -130,4 +130,19 @@ describe('OrdersView — wyszukiwarka zleceń', () => {
     const requestBody = JSON.parse(String(updateCall?.[1]?.body));
     expect(requestBody.notes).toBe('Uzgodnić termin wysyłki');
   });
+
+  it('renders in read-only mode for leader role without write action buttons', async () => {
+    render(
+      <OrdersView
+        token="test-token"
+        user={{ id: '2', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    expect(await screen.findByText('ZL-ALPHA-001')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Dodaj/ })).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Edytuj')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Usuń')).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Akcje' })).not.toBeInTheDocument();
+  });
 });

@@ -3,6 +3,18 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.3.5] - 2026-07-31
+
+### Added
+
+- Leader otrzymał dostęp do ekranu Baza Zleceń w trybie tylko do odczytu.
+
+### Changed
+
+- Rozszerzono uprawnienia roli Leader.
+- Zablokowano wszystkie operacje modyfikujące dane dla tej roli.
+- Zachowano możliwość filtrowania i sortowania zleceń.
+
 ## [0.3.4] - 2026-07-31
 
 ### Added

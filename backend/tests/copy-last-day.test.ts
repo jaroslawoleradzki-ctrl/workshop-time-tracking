@@ -628,7 +628,7 @@ describe('POST /api/reports/copy-last-day', () => {
   it('rejects a role that is not allowed to use reporting copy', async () => {
     fakePrisma.seedReport({ employeeId: EMPLOYEE_A_ID, date: '2026-07-15' });
 
-    await copyRequest(VIEWER_ID).expect(430);
+    await copyRequest(VIEWER_ID).expect(403);
 
     expect(fakePrisma.activeReports(EMPLOYEE_A_ID, '2026-07-16')).toHaveLength(0);
   });

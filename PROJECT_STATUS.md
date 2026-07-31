@@ -4,32 +4,30 @@
 
 - Projekt: Workshop Time Tracking
 - Aktualna wersja produkcyjna: `0.3.3`
-- Aktualna wersja development: `0.3.4`
+- Aktualna wersja development: `0.3.5`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: wersja `0.3.4` zaimplementowana i zweryfikowana
+- Stan prac: wersja `0.3.5` zaimplementowana i zweryfikowana
 
-Zakres wersji `0.3.4`:
+Zakres wersji `0.3.5`:
 
-- Dodano kolumnę „Ilość” w raporcie „Godziny wg Zleceń” oraz eksportach CSV i XLSX.
-- Dodano filtr „Pokaż tylko zlecenia z zaraportowanymi godzinami” w raporcie i eksportach zleceń.
-- Dodano sortowanie Bazy Zleceń Produkcyjnych po dacie zlecenia i dacie wysyłki (rosnąco / malejąco).
-- Dodano sortowanie pracowników według nazwiska w raporcie pracowników.
-- Zmieniono układ kolumn w raporcie pracowników: Pracownik, Suma godzin z nadgodzinami, Suma godzin bez nadgodzin, kody czasu pracy.
-- Zaktualizowano eksporty CSV i XLSX w celu odzwierciedlenia nowych kolumn i filtrowania.
+- Udostępnienie ekranu „Baza Zleceń” dla użytkownika z rolą `Leader` w trybie tylko do odczytu.
+- Możliwość przeglądania, wyszukiwania oraz dwukierunkowego sortowania zleceń we wszystkich kolumnach dla Lidera.
+- Ukrycie i zablokowanie przycisków dodawania, edycji, usuwania oraz zapisu danych dla Lidera w interfejsie.
+- Weryfikacja i zabezpieczenie backendu przed niedozwolonym wykonaniem operacji zapisu przez rolę Leader (`403 Forbidden` na endpointach POST/PUT/DELETE `/api/orders`).
 
-## Weryfikacja wersji 0.3.4
+## Weryfikacja wersji 0.3.5
 
-- backend: 46 testów zakończonych powodzeniem,
+- backend: 48 testów zakończonych powodzeniem,
 - backend: build (`npm run build`) zakończony powodzeniem,
-- frontend: 26 testów zakończonych powodzeniem,
+- frontend: 27 testów zakończonych powodzeniem,
 - frontend: build (`npm run build`) zakończony powodzeniem.
 
-## Następne kroki (Plan na v0.3.5)
+## Następne kroki (Plan na v0.3.6)
 
-- Dostęp tylko do odczytu do Bazy Zleceń dla roli `Leader`.
 - Poprawki modułu urlopów i nieobecności.
-- Poprawki raportów wynikające z testów użytkowników.
+- Poprawki zgłoszone przez użytkowników.
+- Dalsze usprawnienia raportów.
 
 ## Weryfikacja uwag do zleceń w wersji 0.3.2
 
