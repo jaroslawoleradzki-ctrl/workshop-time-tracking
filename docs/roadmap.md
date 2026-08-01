@@ -72,3 +72,9 @@ Dokument przedstawia zrealizowane etapy rozwoju i kamienie milowe aplikacji Work
 ## Sprint 0.3.8
 *Status: Zakończony*
 - [x] ✔ Ujednolicono formatowanie nazwiska i imienia (`Nazwisko Imię`) w miesięcznym raporcie pracowników w widoku, XLSX oraz CSV.
+
+---
+
+## Sprint 0.3.9
+*Status: Do weryfikacji*
+- [x] ✔ Naprawiono główny layout aplikacji (stały navbar i sidebar, izolacja przewijania do `content-wrapper`, lepki nagłówek `.table th`, brak podwójnych scrollbarów).
