@@ -72,6 +72,12 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
 body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
@@ -79,7 +85,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.5;
-  overflow-x: hidden;
+  overflow: hidden;
   transition: background-color var(--transition-normal), color var(--transition-normal);
 }
 
@@ -109,12 +115,15 @@ h1, h2, h3, h4, h5, h6 {
 .app-container {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .main-layout {
   display: flex;
   flex: 1;
+  min-height: 0;
+  overflow: hidden;
   position: relative;
 }
 
@@ -122,6 +131,8 @@ h1, h2, h3, h4, h5, h6 {
 .sidebar {
   width: 260px;
   flex-shrink: 0;
+  min-height: 0;
+  overflow-y: auto;
   background-color: var(--bg-secondary);
   border-right: 1px solid var(--border-color);
   padding: 1.5rem 1rem;
@@ -129,11 +140,7 @@ h1, h2, h3, h4, h5, h6 {
   flex-direction: column;
   gap: 1.5rem;
   transition: width var(--transition-normal), background-color var(--transition-normal);
-  height: calc(100vh - 70px);
-  position: sticky;
-  top: 70px;
   box-sizing: border-box;
-  overflow-y: auto;
 }
 
 .nav-links {
@@ -173,6 +180,7 @@ h1, h2, h3, h4, h5, h6 {
 /* Header / Navbar */
 .navbar {
   height: 70px;
+  flex-shrink: 0;
   background-color: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   display: flex;
@@ -231,13 +239,26 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* Content Area */
+.main-content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: var(--bg-primary);
+}
+
 .content-wrapper {
   flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
   padding: 2rem;
-  overflow-y: auto;
   max-width: 1600px;
   margin: 0 auto;
   width: 100%;
+  box-sizing: border-box;
 }
 
 /* Cards & Containers */
@@ -376,6 +397,9 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .table th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   background-color: var(--bg-tertiary);
   color: var(--text-secondary);
   font-weight: 600;
@@ -734,13 +758,14 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Orders tab custom layout constraints for version 0.1.6 */
 .orders-tab-wrapper {
-  height: 100%;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   padding: 1.5rem;
   box-sizing: border-box;
-  min-width: 0;
   max-width: 100%;
 }
 
@@ -752,6 +777,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .table-container-fixed {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: auto;
   border: 1px solid var(--border-color);

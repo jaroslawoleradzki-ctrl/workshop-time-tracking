@@ -3,6 +3,14 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.3.9] - 2026-08-01
+
+### Fixed
+
+- Fixed global application layout so top navbar and sidebar remain permanently visible during page and table scrolling.
+- Constrained application viewport height (`height: 100vh`, `overflow: hidden`) and isolated vertical scrolling strictly to `.content-wrapper`.
+- Prevented double vertical scrollbars and enabled internal scrolling for sidebar when content exceeds screen height.
+
 ## [0.3.8] - 2026-07-31
 
 ### Fixed

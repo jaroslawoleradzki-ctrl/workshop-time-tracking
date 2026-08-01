@@ -3,24 +3,24 @@
 ## Stan bieżący
 
 - Projekt: Workshop Time Tracking
-- Aktualna wersja produkcyjna: `0.3.7`
-- Aktualna wersja development: `0.3.8`
+- Aktualna wersja produkcyjna: `0.3.8`
+- Aktualna wersja development: `0.3.9`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: wersja `0.3.8` zaimplementowana i zweryfikowana
+- Stan prac: zaimplementowana, oczekuje na test ręczny
 
-Zakres wersji `0.3.8`:
+Zakres wersji `0.3.9`:
 
-- Ujednolicono formatowanie nazwiska i imienia pracownika w miesięcznym raporcie czasu pracy według pracowników na format `Nazwisko Imię` (np. `Kowalski Jan`).
-- Formatowanie opiera się na dedykowanej funkcji `formatEmployeeName(emp)` w backendzie i jest 100% spójne w widoku aplikacji, eksploatacyjnym pliku XLSX oraz pliku CSV.
-- Zapewniono bezpieczne zasady fallbacku (samo nazwisko, samo imię, legacy fullName lub "Brak danych") bez wygenerowania `undefined`, `null` czy podwójnych spacji.
-- Zachowano sortowanie po nazwisku, a następnie imieniu.
+- Naprawiono układ CSS głównego layoutu aplikacji, zamykając obszar roboczy w stałym viewport `100vh` z `body { overflow: hidden; }`.
+- Gwarancja stałej widoczności górnego paska nawigacji (`.navbar`) oraz bocznego menu (`.sidebar`) podczas przewijania obszaru treści.
+- Izolacja przewijania pionowego wyłącznie do kontenera `.content-wrapper` bez podwójnych suwaków pionowych.
+- Dedykowane przewijanie `.sidebar` w przypadku przepełnienia menu na mniejszych ekranach.
 
-## Weryfikacja wersji 0.3.8
+## Weryfikacja wersji 0.3.9
 
 - backend: 49 testów zakończonych powodzeniem,
 - backend: build (`npm run build`) zakończony powodzeniem,
-- frontend: 33 testy zakończone powodzeniem,
+- frontend: 34 testy zakończone powodzeniem,
 - frontend: build (`npm run build`) zakończony powodzeniem.
 
 ## Weryfikacja uwag do zleceń w wersji 0.3.2

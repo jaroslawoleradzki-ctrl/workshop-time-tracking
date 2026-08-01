@@ -130,4 +130,22 @@ describe('App Component - Role Navigation & Route Access', () => {
     // Guard redirects employee away from orders view
     expect(screen.queryByText('Baza Zleceń Produkcyjnych')).not.toBeInTheDocument();
   });
+
+  it('renders fixed application layout containers (app-container, navbar, main-layout, sidebar, content-wrapper)', async () => {
+    localStorage.setItem('token', 'fake-admin-token');
+    localStorage.setItem('user', JSON.stringify({
+      id: '1',
+      username: 'admin',
+      role: 'admin',
+      fullName: 'Jan Administrator',
+    }));
+
+    const { container } = render(<App />);
+
+    expect(container.querySelector('.app-container')).toBeInTheDocument();
+    expect(container.querySelector('.navbar')).toBeInTheDocument();
+    expect(container.querySelector('.main-layout')).toBeInTheDocument();
+    expect(container.querySelector('.sidebar')).toBeInTheDocument();
+    expect(container.querySelector('.content-wrapper')).toBeInTheDocument();
+  });
 });
