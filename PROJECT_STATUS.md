@@ -4,21 +4,24 @@
 
 - Projekt: Workshop Time Tracking
 - Aktualna wersja produkcyjna: `0.3.8`
-- Aktualna wersja development: `0.4.0`
+- Aktualna wersja development: `0.4.1`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: v0.4.0 — zaimplementowana, oczekuje na test ręczny
+- Stan prac: v0.4.1 — zaimplementowana, oczekuje na test ręczny
 
-Zakres wersji `0.4.0`:
+Zakres wersji `0.4.1`:
 
-- Naprawiono i ujednolicono kontrakt API endpointu `GET /api/analytics/dashboard` z interfejsem frontendu.
-- Usunięto nieużywane pola (`activeOrdersCount`, `suspendedOrdersCount`, `closedOrdersCount`, `recentOrders`).
-- Kafelek „Otwarte zlecenia” korzysta z `openOrdersCount` (`status = OPEN`, `isActive = true`, `deletedAt = null`).
-- Zmieniono etykietę kafelka na „Zamknięte w tym miesiącu” (`closedThisMonthCount`) z wyliczaniem po `completionDate` z bieżącego miesiąca.
-- Usunięto ograniczenie 5 zleceń dla analizy budżetowej otwartych zleceń.
-- Poprawiono zasilanie i sortowanie sekcji >100% (`ordersExceeding`) oraz 80–100% (`ordersApproaching`).
-- Zweryfikowano logikę `completionDate` podczas przejść statusów zleceń.
-- Dodano testy automatyczne dla backendu i frontendu.
+- Wdrożono blokadę automatycznego kopiowania wpisów (`Copy Last Day`) na soboty i niedziele z dedykowanym kodem błędu `WEEKEND_COPY_NOT_ALLOWED` (HTTP 400).
+- Zablokowano możliwość rejestrowania i edycji nieobecności (L4, urlopy itp.) w weekendy; dopuszczalna jest wyłącznie praca wykonywana na zleceniu (`requiresOrder = true` i `orderId != null`).
+- Skorygowano wyliczanie przepracowanych godzin na Pulpicie Menedżerskim (`hoursToday`, `hoursMonth`): kafelki zliczają wyłącznie godziny ze zleceń produkcyjnych (`requiresOrder = true` i `orderId != null`).
+- Dodano testy regresyjne backendu i frontendu.
+
+## Weryfikacja wersji 0.4.1
+
+- backend: 61 testów zakończonych powodzeniem,
+- backend: build (`npm run build`) zakończony powodzeniem,
+- frontend: 36 testów zakończonych powodzeniem,
+- frontend: build (`npm run build`) zakończony powodzeniem.
 
 ## Weryfikacja wersji 0.4.0
 
