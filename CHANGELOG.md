@@ -3,6 +3,15 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.4.2] - 2026-08-02
+
+### Fixed
+
+- Przywrócono sumowanie wszystkich zaraportowanych godzin (`deletedAt = null`) w kafelkach `hoursToday` oraz `hoursMonth` Pulpitu Menedżerskiego (wycofano nadmiarowe filtry `orderId` i `requiresOrder` wprowadzone w v0.4.1).
+- L4, urlopy (UW), opieka (UOK), chorobowe (CH) oraz inne typy czasu są ponownie uwzględniane w bilansie dobowym i miesięcznym, zachowując funkcję kontrolną dashboardu dla kadry menedżerskiej.
+- Zachowano w całości backendową blokadę rejestracji nieprawidłowych wpisów weekendowych oraz blokadę Copy Last Day na sobotę i niedzielę z v0.4.1.
+- Zaktualizowano zestaw testów regresyjnych dashboardu i potwierdzono przejście testów weekendowych.
+
 ## [0.4.1] - 2026-08-02
 
 ### Fixed

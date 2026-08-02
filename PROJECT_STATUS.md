@@ -4,17 +4,24 @@
 
 - Projekt: Workshop Time Tracking
 - Aktualna wersja produkcyjna: `0.3.8`
-- Aktualna wersja development: `0.4.1`
+- Aktualna wersja development: `0.4.2`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: v0.4.1 — zaimplementowana, oczekuje na test ręczny
+- Stan prac: v0.4.2 — zaimplementowana, oczekuje na test ręczny
 
-Zakres wersji `0.4.1`:
+Zakres wersji `0.4.2`:
 
-- Wdrożono blokadę automatycznego kopiowania wpisów (`Copy Last Day`) na soboty i niedziele z dedykowanym kodem błędu `WEEKEND_COPY_NOT_ALLOWED` (HTTP 400).
-- Zablokowano możliwość rejestrowania i edycji nieobecności (L4, urlopy itp.) w weekendy; dopuszczalna jest wyłącznie praca wykonywana na zleceniu (`requiresOrder = true` i `orderId != null`).
-- Skorygowano wyliczanie przepracowanych godzin na Pulpicie Menedżerskim (`hoursToday`, `hoursMonth`): kafelki zliczają wyłącznie godziny ze zleceń produkcyjnych (`requiresOrder = true` i `orderId != null`).
-- Dodano testy regresyjne backendu i frontendu.
+- Przywrócono sumowanie wszystkich zaraportowanych godzin (`deletedAt = null`) w kafelkach `hoursToday` oraz `hoursMonth` na Pulpicie Menedżerskim (wycofano nadmiarowe filtry `orderId` i `requiresOrder` z wersji 0.4.1).
+- L4, urlopy (UW), opieka (UOK), chorobowe (CH) oraz wpisy bez zlecenia są ponownie widoczne w bilansie dobowym i miesięcznym dashboardu dla zachowania funkcji kontrolnej.
+- Zachowano w całości backendową blokadę rejestracji nieprawidłowych wpisów weekendowych bez zlecenia oraz blokadę `Copy Last Day` z błędem `WEEKEND_COPY_NOT_ALLOWED` na soboty i niedziele z wersji 0.4.1.
+- Zaktualizowano testy automatyczne backendu.
+
+## Weryfikacja wersji 0.4.2
+
+- backend: 61 testów zakończonych powodzeniem,
+- backend: build (`npm run build`) zakończony powodzeniem,
+- frontend: 36 testów zakończonych powodzeniem,
+- frontend: build (`npm run build`) zakończony powodzeniem.
 
 ## Weryfikacja wersji 0.4.1
 
