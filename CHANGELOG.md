@@ -3,6 +3,19 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.4.0] - 2026-08-02
+
+### Fixed
+
+- Ujednolicono kontrakt API endpointu `GET /api/analytics/dashboard` z frontendem (`openOrdersCount`, `closedThisMonthCount`, `hoursToday`, `hoursMonth`, `ordersExceeding`, `ordersApproaching`).
+- Usunięto nieużywane i niespójne pola API (`activeOrdersCount`, `suspendedOrdersCount`, `closedOrdersCount`, `recentOrders`).
+- Kafelek „Otwarte zlecenia” zlicza wyłącznie zlecenia o statusie `OPEN`, `isActive = true` oraz `deletedAt = null`.
+- Zmieniono etykietę kafelka z „Zamknięte zlecenia” na „Zamknięte w tym miesiącu” (`closedThisMonthCount`), zliczając zlecenia zamknięte w bieżącym miesiącu na podstawie pola `completionDate`.
+- Usunięto limit 5 zleceń przy analizie budżetowej; backend przeanalizuje teraz wszystkie otwarte zlecenia.
+- Poprawiono i rozdzielono sekcje budżetowe: `ordersExceeding` (>100%) oraz `ordersApproaching` (80%–100%) ze stabilnym sortowaniem malejąco po procencie wykorzystania i rosnąco po numerze zlecenia.
+- Zweryfikowano logikę `completionDate` podczas przejść statusów (ustawianie przy zamknięciu, czyszczenie przy ponownym otwarciu, zachowanie dotychczasowej daty przy edycji zlecenia już zamkniętego).
+- Dodano zestaw testów regresyjnych dla backendu (`analytics.test.ts`, `orders.test.ts`) oraz frontendu (`DashboardView.test.tsx`).
+
 ## [0.3.9] - 2026-08-01
 
 ### Fixed

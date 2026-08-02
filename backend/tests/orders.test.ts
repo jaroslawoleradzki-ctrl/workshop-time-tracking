@@ -187,4 +187,109 @@ describe('Orders notes', () => {
       .set('Authorization', `Bearer ${leaderToken}`)
       .expect(403);
   });
+
+  describe('completionDate status transitions', () => {
+    it('sets completionDate when status changes from OPEN to CLOSED', async () => {
+      vi.spyOn(prisma.order, 'findFirst').mockResolvedValue(order as any);
+      const updateSpy = vi.spyOn(prisma.order, 'update').mockResolvedValue({
+        ...order,
+        status: 'CLOSED',
+        completionDate: new Date(),
+      } as any);
+
+      await request(app)
+        .put(`/api/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          orderNumber: order.orderNumber,
+          orderDate: '2026-07-27',
+          productName: order.productName,
+          quantity: 2,
+          quantityUnit: 'szt.',
+          hoursPerUnit: 2,
+          status: 'CLOSED',
+          isActive: true,
+        })
+        .expect(200);
+
+      expect(updateSpy).toHaveBeenCalledWith({
+        where: { id: ORDER_ID },
+        data: expect.objectContaining({
+          status: 'CLOSED',
+          completionDate: expect.any(Date),
+        }),
+      });
+    });
+
+    it('clears completionDate to null when status changes from CLOSED to OPEN', async () => {
+      const closedOrder = {
+        ...order,
+        status: 'CLOSED',
+        completionDate: new Date('2026-07-28T12:00:00.000Z'),
+      };
+      vi.spyOn(prisma.order, 'findFirst').mockResolvedValue(closedOrder as any);
+      const updateSpy = vi.spyOn(prisma.order, 'update').mockResolvedValue({
+        ...order,
+        status: 'OPEN',
+        completionDate: null,
+      } as any);
+
+      await request(app)
+        .put(`/api/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          orderNumber: order.orderNumber,
+          orderDate: '2026-07-27',
+          productName: order.productName,
+          quantity: 2,
+          quantityUnit: 'szt.',
+          hoursPerUnit: 2,
+          status: 'OPEN',
+          isActive: true,
+        })
+        .expect(200);
+
+      expect(updateSpy).toHaveBeenCalledWith({
+        where: { id: ORDER_ID },
+        data: expect.objectContaining({
+          status: 'OPEN',
+          completionDate: null,
+        }),
+      });
+    });
+
+    it('preserves existing completionDate when updating an already CLOSED order', async () => {
+      const originalCompletionDate = new Date('2026-07-28T12:00:00.000Z');
+      const closedOrder = {
+        ...order,
+        status: 'CLOSED',
+        completionDate: originalCompletionDate,
+      };
+      vi.spyOn(prisma.order, 'findFirst').mockResolvedValue(closedOrder as any);
+      const updateSpy = vi.spyOn(prisma.order, 'update').mockResolvedValue(closedOrder as any);
+
+      await request(app)
+        .put(`/api/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          orderNumber: order.orderNumber,
+          orderDate: '2026-07-27',
+          productName: 'Produkt zaktualizowany',
+          quantity: 2,
+          quantityUnit: 'szt.',
+          hoursPerUnit: 2,
+          status: 'CLOSED',
+          isActive: true,
+        })
+        .expect(200);
+
+      expect(updateSpy).toHaveBeenCalledWith({
+        where: { id: ORDER_ID },
+        data: expect.objectContaining({
+          status: 'CLOSED',
+          completionDate: originalCompletionDate,
+        }),
+      });
+    });
+  });
 });

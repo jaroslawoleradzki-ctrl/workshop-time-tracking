@@ -78,3 +78,13 @@ Dokument przedstawia zrealizowane etapy rozwoju i kamienie milowe aplikacji Work
 ## Sprint 0.3.9
 *Status: Do weryfikacji*
 - [x] ✔ Naprawiono główny layout aplikacji (stały navbar i sidebar, izolacja przewijania do `content-wrapper`, lepki nagłówek `.table th`, brak podwójnych scrollbarów).
+
+---
+
+## Sprint 0.4.0
+*Status: Do weryfikacji*
+- [x] ✔ Ujednolicenie kontraktu API Pulpitu Menedżerskiego (`GET /api/analytics/dashboard`).
+- [x] ✔ Poprawne zliczanie otwartych zleceń (`openOrdersCount`) oraz zleceń zamkniętych w bieżącym miesiącu (`closedThisMonthCount`).
+- [x] ✔ Analiza wykorzystania budżetu dla wszystkich otwartych zleceń bez limitu 5 zleceń.
+- [x] ✔ Poprawne zasilanie i sortowanie sekcji zleceń przekraczających budżet (`ordersExceeding` >100%) oraz blisko przekroczenia (`ordersApproaching` 80%–100%).
+- [x] ✔ Dodanie pełnego pakietu testów regresyjnych dla backendu i frontendu.
