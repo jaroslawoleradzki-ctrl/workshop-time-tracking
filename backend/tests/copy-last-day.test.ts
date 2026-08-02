@@ -552,6 +552,22 @@ describe('POST /api/reports/copy-last-day', () => {
     expect(response.body.code).toBe('INVALID_COPY_REQUEST');
   });
 
+  it('rejects copy-last-day when targetDate is Saturday', async () => {
+    fakePrisma.seedReport({ employeeId: EMPLOYEE_A_ID, date: '2026-07-31' }); // Friday
+    const response = await copyRequest(LEADER_ID, EMPLOYEE_A_ID, '2026-08-01').expect(400); // Saturday
+
+    expect(response.body.code).toBe('WEEKEND_COPY_NOT_ALLOWED');
+    expect(response.body.message).toBe('Kopiowanie wpisów na dzień wolny nie jest dozwolone.');
+  });
+
+  it('rejects copy-last-day when targetDate is Sunday', async () => {
+    fakePrisma.seedReport({ employeeId: EMPLOYEE_A_ID, date: '2026-07-31' }); // Friday
+    const response = await copyRequest(LEADER_ID, EMPLOYEE_A_ID, '2026-08-02').expect(400); // Sunday
+
+    expect(response.body.code).toBe('WEEKEND_COPY_NOT_ALLOWED');
+    expect(response.body.message).toBe('Kopiowanie wpisów na dzień wolny nie jest dozwolone.');
+  });
+
   it('returns 409 without appending when the target day is not empty', async () => {
     fakePrisma.seedReport({ employeeId: EMPLOYEE_A_ID, date: '2026-07-15' });
     fakePrisma.seedReport({ employeeId: EMPLOYEE_A_ID, date: '2026-07-16' });

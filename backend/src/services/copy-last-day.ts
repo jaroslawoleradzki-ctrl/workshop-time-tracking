@@ -75,6 +75,15 @@ export async function copyLastDayForEmployee({
   client = prisma,
 }: CopyLastDayParams): Promise<CopyLastDayResult> {
   const targetDateValue = new Date(`${targetDate}T00:00:00.000Z`);
+  const dayOfWeek = targetDateValue.getUTCDay();
+  if (dayOfWeek === 0 || dayOfWeek === 6) {
+    throw new CopyLastDayError(
+      400,
+      'WEEKEND_COPY_NOT_ALLOWED',
+      'Kopiowanie wpisów na dzień wolny nie jest dozwolone.',
+    );
+  }
+
   const lockKey = getReportDayLockKey(employeeId, targetDate);
   const operationId = randomUUID();
 

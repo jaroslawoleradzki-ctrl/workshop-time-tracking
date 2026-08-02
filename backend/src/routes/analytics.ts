@@ -324,6 +324,10 @@ router.get('/dashboard', async (_req: AuthRequest, res: Response) => {
       where: {
         deletedAt: null,
         date: { gte: startOfToday, lte: endOfToday },
+        orderId: { not: null },
+        workTimeType: {
+          requiresOrder: true,
+        },
       },
       _sum: { hours: true },
     });
@@ -332,6 +336,10 @@ router.get('/dashboard', async (_req: AuthRequest, res: Response) => {
       where: {
         deletedAt: null,
         date: { gte: startOfMonth, lte: endOfMonth },
+        orderId: { not: null },
+        workTimeType: {
+          requiresOrder: true,
+        },
       },
       _sum: { hours: true },
     });

@@ -183,6 +183,12 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Kod czasu pracy nie istnieje' });
     }
 
+    // 2b. Validate weekend entries: only work on orders is allowed
+    const dayOfWeek = reportDate.getUTCDay();
+    if ((dayOfWeek === 0 || dayOfWeek === 6) && (!type.requiresOrder || !orderId)) {
+      return res.status(400).json({ message: 'W dni wolne (sobota, niedziela) dozwolona jest wyłącznie rejestracja pracy nad zleceniem.' });
+    }
+
     // 3. Enforce order requirement
     if (type.requiresOrder) {
       if (!orderId) {
@@ -272,6 +278,13 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
 
   const missingCardBool = missingCard === true;
 
+  const parsedDate = new Date(date);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return res.status(400).json({ message: 'Nieprawidłowa data wpisu' });
+  }
+  const workDate = parsedDate.toISOString().slice(0, 10);
+  const reportDate = new Date(`${workDate}T00:00:00.000Z`);
+
   try {
     const oldReport = await prisma.workTimeReport.findUnique({
       where: { id, deletedAt: null },
@@ -287,6 +300,11 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
     });
     if (!type) {
       return res.status(400).json({ message: 'Kod czasu pracy nie istnieje' });
+    }
+
+    const dayOfWeek = reportDate.getUTCDay();
+    if ((dayOfWeek === 0 || dayOfWeek === 6) && (!type.requiresOrder || !orderId)) {
+      return res.status(400).json({ message: 'W dni wolne (sobota, niedziela) dozwolona jest wyłącznie rejestracja pracy nad zleceniem.' });
     }
 
     if (type.requiresOrder) {

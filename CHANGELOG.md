@@ -3,6 +3,15 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.4.1] - 2026-08-02
+
+### Fixed
+
+- Wdrożono całkowitą blokadę automatycznego kopiowania wpisów (`Copy Last Day`) na dzień wolny (sobota, niedziela), zwracając kod `400 Bad Request` oraz kod błędu `WEEKEND_COPY_NOT_ALLOWED`.
+- Zablokowano możliwość rejestrowania i edytowania nieobecności (np. L4, UW, UŻ, UOK itp.) oraz innych wpisów bez zlecenia w weekendy; w sobótę i niedzielę dozwolona jest wyłącznie praca na zleceniu (`requiresOrder = true` oraz `orderId != null`).
+- Zaktualizowano wyliczanie godzin dobowych (`hoursToday`) oraz miesięcznych (`hoursMonth`) na Pulpicie Menedżerskim: kafelki uwzględniają wyłącznie przepracowane godziny na zleceniach (`requiresOrder = true` i `orderId != null`), ignorując godziny nieobecności.
+- Rozbudowano zestaw testów automatycznych backendu dla walidacji weekendowych, Copy Last Day oraz agregacji godzin na dashboardzie.
+
 ## [0.4.0] - 2026-08-02
 
 ### Fixed

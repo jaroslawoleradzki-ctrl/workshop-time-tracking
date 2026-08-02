@@ -425,5 +425,29 @@ describe('Analytics reports', () => {
       expect(approachingNumbers).not.toContain('ZL-105');
       expect(approachingNumbers).not.toContain('ZL-101');
     });
+
+    it('calculates hoursToday and hoursMonth filtering out absences (L4, UW) and counting order work including weekend order work', async () => {
+      vi.spyOn(prisma.order, 'count').mockResolvedValue(0 as any);
+      vi.spyOn(prisma.order, 'findMany').mockResolvedValue([]);
+
+      const aggregateSpy = vi.spyOn(prisma.workTimeReport, 'aggregate').mockResolvedValue({
+        _sum: { hours: 16 },
+      } as any);
+
+      const response = await authenticatedGet('/api/analytics/dashboard').expect(200);
+
+      expect(response.body.hoursToday).toBe(16);
+      expect(response.body.hoursMonth).toBe(16);
+
+      // Verify aggregate where clause enforces orderId != null and workTimeType.requiresOrder = true
+      expect(aggregateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            orderId: { not: null },
+            workTimeType: { requiresOrder: true },
+          }),
+        }),
+      );
+    });
   });
 });
