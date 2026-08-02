@@ -4,17 +4,25 @@
 
 - Projekt: Workshop Time Tracking
 - Aktualna wersja produkcyjna: `0.3.8`
-- Aktualna wersja development: `0.4.2`
+- Aktualna wersja development: `0.4.4`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: v0.4.2 — zaimplementowana, oczekuje na test ręczny
+- Stan prac: v0.4.4 — zaimplementowana, oczekuje na test ręczny
 
-Zakres wersji `0.4.2`:
+Zakres wersji `0.4.4`:
 
-- Przywrócono sumowanie wszystkich zaraportowanych godzin (`deletedAt = null`) w kafelkach `hoursToday` oraz `hoursMonth` na Pulpicie Menedżerskim (wycofano nadmiarowe filtry `orderId` i `requiresOrder` z wersji 0.4.1).
-- L4, urlopy (UW), opieka (UOK), chorobowe (CH) oraz wpisy bez zlecenia są ponownie widoczne w bilansie dobowym i miesięcznym dashboardu dla zachowania funkcji kontrolnej.
-- Zachowano w całości backendową blokadę rejestracji nieprawidłowych wpisów weekendowych bez zlecenia oraz blokadę `Copy Last Day` z błędem `WEEKEND_COPY_NOT_ALLOWED` na soboty i niedziele z wersji 0.4.1.
-- Zaktualizowano testy automatyczne backendu.
+- Dodano funkcję eksportu aktualnego widoku Bazy Zleceń do pliku Excel (.xlsx) na ekranie `OrdersView`.
+- Utworzono backendowy endpoint `POST /api/orders/export-xlsx` dla ról Administrator oraz Leader z walidacją parametrów Zod.
+- Odzwierciedlenie aktualnego filtrowania (`searchQuery`, `statusFilter`) i sortowania (`sortField`, `sortOrder`) z obsługą brakujących dat.
+- Wydzielono wspólny moduł generatora ExcelJS `backend/src/utils/excel-report.ts`, zachowujący spójny wygląd nagłówków we wszystkich raportach XLSX.
+- Wygenerowany plik XLSX zawiera 16 osobnych kolumn biznesowych bez kolumny Akcje i bez parametrów technicznych.
+
+## Weryfikacja wersji 0.4.4
+
+- backend: 87 testów zakończonych powodzeniem,
+- backend: build (`npm run build`) zakończony powodzeniem,
+- frontend: 45 testów zakończonych powodzeniem,
+- frontend: build (`npm run build`) zakończony powodzeniem.
 
 ## Weryfikacja wersji 0.4.2
 
