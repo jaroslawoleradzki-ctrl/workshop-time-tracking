@@ -13,6 +13,7 @@ import {
   Calendar
 } from 'lucide-react';
 import type { UserSession } from '../App';
+import AbsenceRangeModal from './AbsenceRangeModal';
 
 interface Employee {
   id: string;
@@ -118,6 +119,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
   const [currentEmployeeIdx, setCurrentEmployeeIdx] = useState<number>(0);
 
   const currentEmployee = employees[currentEmployeeIdx];
+  const [showAbsenceModal, setShowAbsenceModal] = useState(false);
   
   // Form input states
   const [searchOrderQuery, setSearchOrderQuery] = useState('');
@@ -976,17 +978,30 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
               Wpisy z dnia ({totalHoursToday.toFixed(1)} h)
             </h3>
             
-            <button 
-              type="button"
-              className="btn btn-secondary btn-sm" 
-              onClick={handleCopyPreviousDay}
-              disabled={isCopyingPreviousDay}
-              aria-busy={isCopyingPreviousDay}
-              title={isCopyingPreviousDay ? 'Kopiowanie wpisów w toku' : 'Kopiuj z ostatniego dnia, w którym są zaraportowane godziny'}
-            >
-              <Copy size={14} />
-              {isCopyingPreviousDay ? 'Kopiowanie...' : 'Kopiuj ostatni dzień'}
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              {currentEmployee && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setShowAbsenceModal(true)}
+                  title="Dodaj nieobecność w zakresie dat dla wybranego pracownika"
+                >
+                  <Calendar size={14} />
+                  Dodaj nieobecność
+                </button>
+              )}
+              <button 
+                type="button"
+                className="btn btn-secondary btn-sm" 
+                onClick={handleCopyPreviousDay}
+                disabled={isCopyingPreviousDay}
+                aria-busy={isCopyingPreviousDay}
+                title={isCopyingPreviousDay ? 'Kopiowanie wpisów w toku' : 'Kopiuj z ostatniego dnia, w którym są zaraportowane godziny'}
+              >
+                <Copy size={14} />
+                {isCopyingPreviousDay ? 'Kopiowanie...' : 'Kopiuj ostatni dzień'}
+              </button>
+            </div>
           </div>
 
           {dayEntries.length === 0 ? (
@@ -1070,6 +1085,24 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
           )}
         </div>
       </div>
+
+      {currentEmployee && (
+        <AbsenceRangeModal
+          isOpen={showAbsenceModal}
+          onClose={() => setShowAbsenceModal(false)}
+          token={token}
+          employeeId={currentEmployee.id}
+          employeeName={getFormattedEmployeeName(currentEmployee)}
+          initialDate={currentDate}
+          workTimeTypes={workTypes}
+          onSuccess={(msg) => {
+            notifySuccess(msg);
+            if (currentEmployee) {
+              fetchDayEntries(currentEmployee.id, currentDate);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
