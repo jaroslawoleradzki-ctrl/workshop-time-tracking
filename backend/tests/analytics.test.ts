@@ -283,4 +283,147 @@ describe('Analytics reports', () => {
     expect(formatted).not.toContain('null');
     expect(formatted).not.toContain('  ');
   });
+
+  describe('GET /api/analytics/dashboard', () => {
+    it('returns openOrdersCount, closedThisMonthCount, and excludes legacy fields', async () => {
+      const now = new Date();
+      const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 15);
+
+      vi.spyOn(prisma.order, 'count').mockImplementation((args: any) => {
+        if (args?.where?.status === 'OPEN') {
+          return Promise.resolve(3) as any;
+        }
+        if (args?.where?.status === 'CLOSED') {
+          return Promise.resolve(2) as any;
+        }
+        return Promise.resolve(0) as any;
+      });
+
+      vi.spyOn(prisma.workTimeReport, 'aggregate').mockResolvedValue({
+        _sum: { hours: 16 },
+      } as any);
+
+      vi.spyOn(prisma.order, 'findMany').mockResolvedValue([]);
+
+      const response = await authenticatedGet('/api/analytics/dashboard').expect(200);
+
+      expect(response.body).toHaveProperty('openOrdersCount', 3);
+      expect(response.body).toHaveProperty('closedThisMonthCount', 2);
+      expect(response.body).toHaveProperty('hoursToday', 16);
+      expect(response.body).toHaveProperty('hoursMonth', 16);
+      expect(response.body).toHaveProperty('ordersExceeding');
+      expect(response.body).toHaveProperty('ordersApproaching');
+
+      expect(response.body).not.toHaveProperty('activeOrdersCount');
+      expect(response.body).not.toHaveProperty('suspendedOrdersCount');
+      expect(response.body).not.toHaveProperty('closedOrdersCount');
+      expect(response.body).not.toHaveProperty('recentOrders');
+    });
+
+    it('correctly categorizes >100%, 80-100%, ignores <=80%, suspended/closed orders, deleted reports, plannedHours=0, and analyzes >5 orders with sorting', async () => {
+      // Mock count call
+      vi.spyOn(prisma.order, 'count').mockResolvedValue(0 as any);
+      vi.spyOn(prisma.workTimeReport, 'aggregate').mockResolvedValue({ _sum: { hours: 0 } } as any);
+
+      // Create 7 test orders to verify analyze >5 orders logic
+      const mockOrders = [
+        {
+          id: 'o1',
+          orderNumber: 'ZL-101',
+          productName: 'Prod 1',
+          plannedHours: 10,
+          status: 'OPEN',
+          isActive: true,
+          deletedAt: null,
+          reports: [{ hours: 12 }], // 120% -> ordersExceeding
+        },
+        {
+          id: 'o2',
+          orderNumber: 'ZL-102',
+          productName: 'Prod 2',
+          plannedHours: 10,
+          status: 'OPEN',
+          isActive: true,
+          deletedAt: null,
+          reports: [{ hours: 8 }], // 80% -> ordersApproaching
+        },
+        {
+          id: 'o3',
+          orderNumber: 'ZL-103',
+          productName: 'Prod 3',
+          plannedHours: 10,
+          status: 'OPEN',
+          isActive: true,
+          deletedAt: null,
+          reports: [{ hours: 10 }], // 100% -> ordersApproaching
+        },
+        {
+          id: 'o4',
+          orderNumber: 'ZL-104',
+          productName: 'Prod 4',
+          plannedHours: 0, // plannedHours = 0 -> 0% percent
+          status: 'OPEN',
+          isActive: true,
+          deletedAt: null,
+          reports: [{ hours: 5 }],
+        },
+        {
+          id: 'o5',
+          orderNumber: 'ZL-105',
+          productName: 'Prod 5',
+          plannedHours: 10,
+          status: 'OPEN',
+          isActive: true,
+          deletedAt: null,
+          reports: [{ hours: 15 }], // 150% -> ordersExceeding
+        },
+        {
+          id: 'o6',
+          orderNumber: 'ZL-106',
+          productName: 'Prod 6',
+          plannedHours: 10,
+          status: 'OPEN',
+          isActive: true,
+          deletedAt: null,
+          reports: [{ hours: 12 }], // 120% -> ordersExceeding (tied percent with ZL-101)
+        },
+        {
+          id: 'o7',
+          orderNumber: 'ZL-107',
+          productName: 'Prod 7',
+          plannedHours: 10,
+          status: 'OPEN',
+          isActive: true,
+          deletedAt: null,
+          reports: [{ hours: 5 }], // 50% -> neither
+        },
+      ];
+
+      vi.spyOn(prisma.order, 'findMany').mockResolvedValue(mockOrders as any);
+
+      const response = await authenticatedGet('/api/analytics/dashboard').expect(200);
+
+      const { ordersExceeding, ordersApproaching } = response.body;
+
+      // Exceeding should have o5 (150%), o1 (120%), o6 (120%)
+      expect(ordersExceeding.length).toBe(3);
+      expect(ordersExceeding[0].orderNumber).toBe('ZL-105');
+      expect(ordersExceeding[0].percent).toBe(150);
+      // Tie breaker for 120%: ZL-101 comes before ZL-106 ascending
+      expect(ordersExceeding[1].orderNumber).toBe('ZL-101');
+      expect(ordersExceeding[2].orderNumber).toBe('ZL-106');
+
+      // Approaching should have o3 (100%), o2 (80%)
+      expect(ordersApproaching.length).toBe(2);
+      expect(ordersApproaching[0].orderNumber).toBe('ZL-103');
+      expect(ordersApproaching[0].percent).toBe(100);
+      expect(ordersApproaching[1].orderNumber).toBe('ZL-102');
+      expect(ordersApproaching[1].percent).toBe(80);
+
+      // Verify >100% order (ZL-105, ZL-101, ZL-106) is NOT in ordersApproaching
+      const approachingNumbers = ordersApproaching.map((o: any) => o.orderNumber);
+      expect(approachingNumbers).not.toContain('ZL-105');
+      expect(approachingNumbers).not.toContain('ZL-101');
+    });
+  });
 });

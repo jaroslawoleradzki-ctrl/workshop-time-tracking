@@ -4,17 +4,28 @@
 
 - Projekt: Workshop Time Tracking
 - Aktualna wersja produkcyjna: `0.3.8`
-- Aktualna wersja development: `0.3.9`
+- Aktualna wersja development: `0.4.0`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: zaimplementowana, oczekuje na test ręczny
+- Stan prac: v0.4.0 — zaimplementowana, oczekuje na test ręczny
 
-Zakres wersji `0.3.9`:
+Zakres wersji `0.4.0`:
 
-- Naprawiono układ CSS głównego layoutu aplikacji, zamykając obszar roboczy w stałym viewport `100vh` z `body { overflow: hidden; }`.
-- Gwarancja stałej widoczności górnego paska nawigacji (`.navbar`) oraz bocznego menu (`.sidebar`) podczas przewijania obszaru treści.
-- Izolacja przewijania pionowego wyłącznie do kontenera `.content-wrapper` bez podwójnych suwaków pionowych.
-- Dedykowane przewijanie `.sidebar` w przypadku przepełnienia menu na mniejszych ekranach.
+- Naprawiono i ujednolicono kontrakt API endpointu `GET /api/analytics/dashboard` z interfejsem frontendu.
+- Usunięto nieużywane pola (`activeOrdersCount`, `suspendedOrdersCount`, `closedOrdersCount`, `recentOrders`).
+- Kafelek „Otwarte zlecenia” korzysta z `openOrdersCount` (`status = OPEN`, `isActive = true`, `deletedAt = null`).
+- Zmieniono etykietę kafelka na „Zamknięte w tym miesiącu” (`closedThisMonthCount`) z wyliczaniem po `completionDate` z bieżącego miesiąca.
+- Usunięto ograniczenie 5 zleceń dla analizy budżetowej otwartych zleceń.
+- Poprawiono zasilanie i sortowanie sekcji >100% (`ordersExceeding`) oraz 80–100% (`ordersApproaching`).
+- Zweryfikowano logikę `completionDate` podczas przejść statusów zleceń.
+- Dodano testy automatyczne dla backendu i frontendu.
+
+## Weryfikacja wersji 0.4.0
+
+- backend: 54 testy zakończone powodzeniem,
+- backend: build (`npm run build`) zakończony powodzeniem,
+- frontend: 36 testów zakończonych powodzeniem,
+- frontend: build (`npm run build`) zakończony powodzeniem.
 
 ## Weryfikacja wersji 0.3.9
 

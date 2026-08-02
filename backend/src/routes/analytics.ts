@@ -298,22 +298,27 @@ async function generateExcelResponse(params: {
 // 1. Dashboard Synthetics
 router.get('/dashboard', async (_req: AuthRequest, res: Response) => {
   try {
-    const activeOrdersCount = await prisma.order.count({
-      where: { deletedAt: null, status: 'OPEN', isActive: true },
-    });
-    const suspendedOrdersCount = await prisma.order.count({
-      where: { deletedAt: null, status: 'SUSPENDED', isActive: true },
-    });
-    const closedOrdersCount = await prisma.order.count({
-      where: { deletedAt: null, status: 'CLOSED' },
+    const openOrdersCount = await prisma.order.count({
+      where: { deletedAt: null, status: OrderStatus.OPEN, isActive: true },
     });
 
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    const closedThisMonthCount = await prisma.order.count({
+      where: {
+        deletedAt: null,
+        status: OrderStatus.CLOSED,
+        completionDate: {
+          gte: startOfMonth,
+          lte: endOfMonth,
+        },
+      },
+    });
 
     const reportsToday = await prisma.workTimeReport.aggregate({
       where: {
@@ -331,11 +336,9 @@ router.get('/dashboard', async (_req: AuthRequest, res: Response) => {
       _sum: { hours: true },
     });
 
-    // Recent 5 active orders with their hours
-    const recentOrders = await prisma.order.findMany({
-      where: { deletedAt: null, status: 'OPEN', isActive: true },
-      take: 5,
-      orderBy: { updatedAt: 'desc' },
+    // Fetch ALL open active orders with their reports
+    const openOrders = await prisma.order.findMany({
+      where: { deletedAt: null, status: OrderStatus.OPEN, isActive: true },
       include: {
         reports: {
           where: { deletedAt: null },
@@ -344,29 +347,46 @@ router.get('/dashboard', async (_req: AuthRequest, res: Response) => {
       },
     });
 
-    const formattedRecentOrders = recentOrders.map((o) => {
-      const est = Number(o.plannedHours);
-      const actual = o.reports.reduce((sum: number, r: any) => sum + Number(r.hours), 0);
-      const percent = est > 0 ? (actual / est) * 100 : 0;
+    const analyzedOrders = openOrders.map((o) => {
+      const plannedHours = Number(o.plannedHours || 0);
+      const actualHours = o.reports.reduce((sum: number, r: any) => sum + Number(r.hours), 0);
+      const rawPercent = plannedHours > 0 ? (actualHours / plannedHours) * 100 : 0;
+      const percent = Math.round(rawPercent * 100) / 100;
+      const roundedActual = Math.round(actualHours * 100) / 100;
+      const roundedPlanned = Math.round(plannedHours * 100) / 100;
 
       return {
         id: o.id,
         orderNumber: o.orderNumber,
         productName: o.productName,
-        plannedHours: est,
-        actualHours: actual,
-        percent: Math.round(percent * 100) / 100,
-        status: o.status,
+        plannedHours: roundedPlanned,
+        actualHours: roundedActual,
+        percent,
       };
     });
 
+    const sortOrders = (a: typeof analyzedOrders[0], b: typeof analyzedOrders[0]) => {
+      if (b.percent !== a.percent) {
+        return b.percent - a.percent;
+      }
+      return a.orderNumber.localeCompare(b.orderNumber);
+    };
+
+    const ordersExceeding = analyzedOrders
+      .filter((o) => o.percent > 100)
+      .sort(sortOrders);
+
+    const ordersApproaching = analyzedOrders
+      .filter((o) => o.percent >= 80 && o.percent <= 100)
+      .sort(sortOrders);
+
     return res.json({
-      activeOrdersCount,
-      suspendedOrdersCount,
-      closedOrdersCount,
+      openOrdersCount,
+      closedThisMonthCount,
       hoursToday: Number(reportsToday._sum.hours || 0),
       hoursMonth: Number(reportsMonth._sum.hours || 0),
-      recentOrders: formattedRecentOrders,
+      ordersExceeding,
+      ordersApproaching,
     });
   } catch (error) {
     logger.error(error, 'Błąd podczas pobierania danych pulpitu');
