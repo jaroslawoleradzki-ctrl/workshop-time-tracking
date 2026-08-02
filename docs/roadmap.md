@@ -96,5 +96,12 @@ Dokument przedstawia zrealizowane etapy rozwoju i kamienie milowe aplikacji Work
 - [x] ✔ Blokada automatycznego kopiowania wpisów (`Copy Last Day`) na dni wolne (sobota, niedziela).
 - [x] ✔ Możliwość ręcznej rejestracji w weekend wyłącznie rzeczywistej pracy wykonywanej na zleceniu (`requiresOrder = true` i `orderId != null`).
 - [x] ✔ Blokada rejestracji i edycji wszelkich nieobecności w weekendy.
-- [x] ✔ Pulpit Menedżerski liczy wyłącznie rzeczywiście przepracowane godziny produkcyjne (na zleceniu), z wykluczeniem L4 i urlopów.
 - [x] ✔ Rozbudowany pakiet testów regresyjnych.
+
+---
+
+## Sprint 0.4.2
+*Status: Do weryfikacji*
+- [x] ✔ Przywrócenie sumowania wszystkich aktywnych godzin (`deletedAt = null`) na Pulpicie Menedżerskim (`hoursToday`, `hoursMonth`) dla zapewnienia funkcji kontrolnej (L4, urlopy, godziny bez zlecenia).
+- [x] ✔ Zachowanie w całości backendowej blokady nieprawidłowych wpisów weekendowych oraz blokady Copy Last Day z v0.4.1.
+- [x] ✔ Zaktualizowany pakiet testów regresyjnych dashboardu.

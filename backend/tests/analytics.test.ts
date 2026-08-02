@@ -426,28 +426,34 @@ describe('Analytics reports', () => {
       expect(approachingNumbers).not.toContain('ZL-101');
     });
 
-    it('calculates hoursToday and hoursMonth filtering out absences (L4, UW) and counting order work including weekend order work', async () => {
+    it('calculates hoursToday and hoursMonth summing ALL active work time entries (order work, L4, urlop, entries without orderId) without filtering by orderId or requiresOrder', async () => {
       vi.spyOn(prisma.order, 'count').mockResolvedValue(0 as any);
       vi.spyOn(prisma.order, 'findMany').mockResolvedValue([]);
 
       const aggregateSpy = vi.spyOn(prisma.workTimeReport, 'aggregate').mockResolvedValue({
-        _sum: { hours: 16 },
+        _sum: { hours: 24 },
       } as any);
 
       const response = await authenticatedGet('/api/analytics/dashboard').expect(200);
 
-      expect(response.body.hoursToday).toBe(16);
-      expect(response.body.hoursMonth).toBe(16);
+      expect(response.body.hoursToday).toBe(24);
+      expect(response.body.hoursMonth).toBe(24);
 
-      // Verify aggregate where clause enforces orderId != null and workTimeType.requiresOrder = true
-      expect(aggregateSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            orderId: { not: null },
-            workTimeType: { requiresOrder: true },
-          }),
-        }),
-      );
+      // Verify aggregate where clause requires deletedAt: null and date range, but NO orderId or requiresOrder filters
+      const aggregateCalls = aggregateSpy.mock.calls;
+      expect(aggregateCalls.length).toBeGreaterThanOrEqual(2);
+
+      const todayWhere = aggregateCalls[0][0].where;
+      expect(todayWhere).toHaveProperty('deletedAt', null);
+      expect(todayWhere).toHaveProperty('date');
+      expect(todayWhere).not.toHaveProperty('orderId');
+      expect(todayWhere).not.toHaveProperty('workTimeType');
+
+      const monthWhere = aggregateCalls[1][0].where;
+      expect(monthWhere).toHaveProperty('deletedAt', null);
+      expect(monthWhere).toHaveProperty('date');
+      expect(monthWhere).not.toHaveProperty('orderId');
+      expect(monthWhere).not.toHaveProperty('workTimeType');
     });
   });
 });
