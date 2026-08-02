@@ -3,6 +3,28 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.4.4] - 2026-08-02
+
+### Added
+
+- Dodano funkcję eksportu aktualnie wyświetlanego widoku Bazy Zleceń do pliku Excel (.xlsx) na ekranie `OrdersView`.
+- Wdrożono nowy endpoint backendowy `POST /api/orders/export-xlsx` z walidacją parametrów (Zod) oraz obsługą ról `admin` i `leader`.
+- Odzwierciedlenie aktualnej frazy wyszukiwania (`searchQuery`), filtra statusu (`statusFilter`), pola sortowania (`sortField`) oraz kierunku sortowania (`sortOrder`) z zachowaniem stabilnego sortowania po `orderNumber`.
+- Wydzielono wspólny moduł `backend/src/utils/excel-report.ts` z helperami generowania i formatowania pliku ExcelJS, z którego korzystają endpointy w `analytics.ts` oraz `orders.ts`.
+- Wygenerowany plik XLSX zawiera pełne 16 osobnych kolumn danych biznesowych bez łączenia ilości z jednostką oraz bez technicznych pól/przycisków Akcje.
+- Dodano pakiet testów backendowych oraz frontendowych potwierdzających poprawność eksportu, pobierania Bloba, wyznaczania nazwy pliku z `Content-Disposition` oraz brak wpływu na istniejące eksporty.
+
+## [0.4.3] - 2026-08-02
+
+### Added
+
+- Dodano funkcję seryjnej rejestracji nieobecności w zakresie dat dla wybranego pracownika na ekranie Raportowania.
+- Wdrożono nowy endpoint podglądu `POST /api/reports/absence-range/preview` zwracający szczegółowe podsumowanie (dni kalendarzowe, dni robocze, pominięte weekendy, konflikty z istniejącymi wpisami, łączną liczbę godzin).
+- Wdrożono nowy endpoint transakcyjnego zapisu `POST /api/reports/absence-range` z automatycznym pomijaniem sobót i niedziel oraz dni zawierających konflikty z istniejącymi wpisami.
+- Wdrożono dedykowane zdarzenie audytowe `CREATE_ABSENCE_RANGE` w transakcji z blokadą współbieżności advisory lock (`absence-range:employeeId`).
+- Dodano komponent interfejsu `AbsenceRangeModal.tsx` z filtrowaniem słownika (wyłącznie `requiresOrder = false`), kalkulacją podglądu w czasie rzeczywistym i automatycznym odświeżaniem listy po zapisie.
+- Uwaga: Obsługa świąt ustawowych oraz zakładowych dni wolnych pozostaje kolejnym planowanym krokiem rozwoju systemu.
+
 ## [0.4.2] - 2026-08-02
 
 ### Fixed

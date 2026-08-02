@@ -6,7 +6,8 @@ import {
   Trash2, 
   Search, 
   X,
-  Lock
+  Lock,
+  FileSpreadsheet
 } from 'lucide-react';
 import { UserSession } from '../App';
 import ScrollableTable from './ScrollableTable';
@@ -40,12 +41,15 @@ interface OrdersViewProps {
 
 export default function OrdersView({ token, user }: OrdersViewProps) {
   const isAdmin = user.role === 'admin';
+  const isLeader = user.role === 'leader';
+  const canExport = isAdmin || isLeader;
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | 'SUSPENDED' | 'CLOSED'>('ALL');
+  const [isExporting, setIsExporting] = useState(false);
 
   // Form states (Admin only)
   const [showFormModal, setShowFormModal] = useState(false);
@@ -246,6 +250,61 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
     } else {
       setSortField(field);
       setSortOrder('asc');
+    }
+  };
+
+  const handleExportXLSX = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+
+    try {
+      const res = await fetch('/api/orders/export-xlsx', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          searchQuery,
+          statusFilter,
+          sortField,
+          sortOrder,
+        }),
+      });
+
+      if (!res.ok) {
+        let errorMsg = 'Nie udało się wygenerować pliku Excel.';
+        try {
+          const errData = await res.json();
+          if (errData.message) errorMsg = errData.message;
+        } catch (_) {}
+        throw new Error(errorMsg);
+      }
+
+      const blob = await res.blob();
+
+      // Get filename from Content-Disposition header if provided
+      let filename = 'baza_zlecen.xlsx';
+      const disposition = res.headers.get('Content-Disposition');
+      if (disposition && disposition.includes('filename=')) {
+        const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+        if (matches != null && matches[1]) {
+          filename = matches[1].replace(/['"]/g, '');
+        }
+      }
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(err.message || 'Wystąpił błąd podczas eksportowania pliku Excel.');
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -535,13 +594,26 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
         </h2>
       </div>
 
-      {/* Główna akcja */}
-      {isAdmin && (
-        <div style={{ marginBottom: '1rem', flexShrink: 0 }}>
-          <button className="btn btn-primary" onClick={handleOpenCreateModal}>
-            <Plus size={16} />
-            Dodaj zlecenie
-          </button>
+      {/* Główne akcje */}
+      {(isAdmin || canExport) && (
+        <div style={{ marginBottom: '1rem', flexShrink: 0, display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          {isAdmin && (
+            <button className="btn btn-primary" onClick={handleOpenCreateModal}>
+              <Plus size={16} />
+              Dodaj zlecenie
+            </button>
+          )}
+          {canExport && (
+            <button
+              className="btn btn-secondary"
+              onClick={handleExportXLSX}
+              disabled={isExporting}
+              title="Eksportuj aktualny widok Bazy Zleceń do pliku Excel (.xlsx)"
+            >
+              <FileSpreadsheet size={16} />
+              {isExporting ? 'Eksportowanie...' : 'Eksportuj do Excel'}
+            </button>
+          )}
         </div>
       )}
 

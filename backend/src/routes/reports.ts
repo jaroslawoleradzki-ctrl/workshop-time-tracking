@@ -11,6 +11,12 @@ import {
   copyLastDayRequestSchema,
   getReportDayLockKey,
 } from '../services/copy-last-day';
+import {
+  AbsenceRangeError,
+  absenceRangeRequestSchema,
+  createAbsenceRange,
+  getAbsenceRangePreview,
+} from '../services/absence-range';
 
 const router = Router();
 
@@ -143,6 +149,79 @@ router.post('/check-warnings', async (req: AuthRequest, res: Response) => {
     return res.status(500).json({ message: 'Błąd podczas sprawdzania limitów' });
   }
 });
+
+// POST /absence-range/preview - Preview absence range entries without modifying DB
+router.post(
+  '/absence-range/preview',
+  requireRole(['admin', 'leader']),
+  async (req: AuthRequest, res: Response) => {
+    const parsedRequest = absenceRangeRequestSchema.safeParse(req.body);
+    if (!parsedRequest.success) {
+      return res.status(400).json({
+        message: 'Nieprawidłowe dane żądania podglądu nieobecności.',
+        code: 'INVALID_ABSENCE_RANGE_REQUEST',
+        errors: parsedRequest.error.flatten().fieldErrors,
+      });
+    }
+
+    try {
+      const result = await getAbsenceRangePreview(parsedRequest.data);
+      return res.json(result);
+    } catch (error) {
+      if (error instanceof AbsenceRangeError) {
+        return res.status(error.statusCode).json({
+          message: error.message,
+          code: error.code,
+        });
+      }
+      logger.error(error, 'Błąd podczas generowania podglądu nieobecności');
+      return res.status(500).json({ message: 'Błąd podczas generowania podglądu nieobecności' });
+    }
+  },
+);
+
+// POST /absence-range - Save absence range entries
+router.post(
+  '/absence-range',
+  requireRole(['admin', 'leader']),
+  async (req: AuthRequest, res: Response) => {
+    const requestId = randomUUID();
+    const parsedRequest = absenceRangeRequestSchema.safeParse(req.body);
+    if (!parsedRequest.success) {
+      return res.status(400).json({
+        message: 'Nieprawidłowe dane żądania zapisu nieobecności.',
+        code: 'INVALID_ABSENCE_RANGE_REQUEST',
+        errors: parsedRequest.error.flatten().fieldErrors,
+        requestId,
+      });
+    }
+
+    try {
+      const result = await createAbsenceRange({
+        ...parsedRequest.data,
+        userId: req.user!.id,
+        requestId,
+      });
+
+      const statusCode = result.created > 0 ? 201 : 200;
+      return res.status(statusCode).json(result);
+    } catch (error) {
+      if (error instanceof AbsenceRangeError) {
+        return res.status(error.statusCode).json({
+          message: error.message,
+          code: error.code,
+          requestId,
+        });
+      }
+      logger.error(error, 'Błąd podczas zapisywania zakresu nieobecności');
+      return res.status(500).json({
+        message: 'Błąd podczas zapisywania zakresu nieobecności',
+        code: 'ABSENCE_RANGE_SAVE_FAILED',
+        requestId,
+      });
+    }
+  },
+);
 
 // POST / - create a report
 router.post('/', async (req: AuthRequest, res: Response) => {

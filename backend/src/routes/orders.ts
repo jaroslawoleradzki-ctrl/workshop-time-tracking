@@ -1,9 +1,11 @@
 import { Router, Response } from 'express';
+import { z } from 'zod';
 import prisma from '../utils/prisma';
 import { AuthRequest, authenticateJWT, requireRole } from '../middlewares/auth';
 import { logChange } from '../utils/audit';
 import { OrderStatus } from '@prisma/client';
 import logger from '../utils/logger';
+import { generateExcelResponse } from '../utils/excel-report';
 
 const router = Router();
 
@@ -81,6 +83,177 @@ router.get('/active', async (req: AuthRequest, res: Response) => {
   } catch (error) {
     logger.error(error, 'Błąd podczas pobierania aktywnych zleceń');
     return res.status(500).json({ message: 'Błąd podczas pobierania aktywnych zleceń' });
+  }
+});
+
+const exportOrdersSchema = z
+  .object({
+    searchQuery: z.string().optional().default(''),
+    statusFilter: z.enum(['ALL', 'OPEN', 'SUSPENDED', 'CLOSED']).optional().default('ALL'),
+    sortField: z.enum(['orderDate', 'plannedShipmentDate']).nullable().optional().default(null),
+    sortOrder: z.enum(['asc', 'desc']).optional().default('asc'),
+  })
+  .strict();
+
+// POST /export-xlsx - Export filtered and sorted orders list to Excel XLSX
+router.post('/export-xlsx', requireRole(['admin', 'leader']), async (req: AuthRequest, res: Response) => {
+  const parseResult = exportOrdersSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    return res.status(400).json({
+      message: 'Nieprawidłowe parametry eksportu zleceń.',
+      code: 'INVALID_EXPORT_PARAMS',
+      errors: parseResult.error.flatten().fieldErrors,
+    });
+  }
+
+  const { searchQuery, statusFilter, sortField, sortOrder } = parseResult.data;
+
+  try {
+    const orders = await prisma.order.findMany({
+      where: { deletedAt: null },
+      include: {
+        reports: {
+          where: { deletedAt: null },
+          select: { hours: true },
+        },
+      },
+    });
+
+    const formattedOrders = orders.map((order) => {
+      const actualHours = order.reports.reduce((sum, r) => sum + Number(r.hours), 0);
+      const plannedHours = Number(order.plannedHours);
+      const utilizationPercent = plannedHours > 0 ? (actualHours / plannedHours) * 100 : 0;
+
+      return {
+        ...order,
+        actualHours: Math.round(actualHours * 100) / 100,
+        plannedHours,
+        utilizationPercent: Math.round(utilizationPercent * 100) / 100,
+      };
+    });
+
+    // 1. Filtering
+    const searchLower = searchQuery.toLowerCase().trim();
+    const filteredOrders = formattedOrders.filter((o) => {
+      const matchesSearch =
+        !searchLower ||
+        (o.orderNumber?.toLowerCase() || '').includes(searchLower) ||
+        (o.orderedBy?.toLowerCase() || '').includes(searchLower) ||
+        (o.productCode?.toLowerCase() || '').includes(searchLower) ||
+        (o.productName?.toLowerCase() || '').includes(searchLower) ||
+        (o.accountingAccount?.toLowerCase() || '').includes(searchLower);
+
+      const matchesStatus = statusFilter === 'ALL' || o.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+
+    // 2. Sorting
+    const sortedOrders = [...filteredOrders].sort((a, b) => {
+      if (sortField) {
+        const valA = a[sortField] ? new Date(a[sortField] as any).getTime() : (sortOrder === 'asc' ? Infinity : -Infinity);
+        const valB = b[sortField] ? new Date(b[sortField] as any).getTime() : (sortOrder === 'asc' ? Infinity : -Infinity);
+
+        if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+        if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+        // Tie breaker: stable orderNumber asc
+        return a.orderNumber.localeCompare(b.orderNumber, 'pl');
+      }
+
+      // Default sort (sortField === null): match GET /api/orders default order (orderNumber desc)
+      return b.orderNumber.localeCompare(a.orderNumber, 'pl');
+    });
+
+    // 3. Build data rows (16 columns)
+    const headers = [
+      'Numer zlecenia',
+      'Data zlecenia',
+      'Planowana data wysyłki',
+      'Kod produktu',
+      'Nazwa produktu',
+      'Zamawiający',
+      'Konto księgowe',
+      'Ilość',
+      'Jednostka',
+      'Godziny na jednostkę',
+      'Godziny planowane',
+      'Godziny rzeczywiste',
+      'Wykorzystanie budżetu [%]',
+      'Status',
+      'Data zamknięcia',
+      'Uwagi',
+    ];
+
+    const data = sortedOrders.map((o) => {
+      const statusPolish =
+        o.status === 'OPEN' ? 'Otwarte' : o.status === 'SUSPENDED' ? 'Wstrzymane' : 'Zamknięte';
+
+      const orderNumberDisplay = o.isActive ? o.orderNumber : `${o.orderNumber} (nieaktywne)`;
+
+      return [
+        orderNumberDisplay,
+        o.orderDate ? new Date(o.orderDate).toISOString().split('T')[0] : '',
+        o.plannedShipmentDate ? new Date(o.plannedShipmentDate).toISOString().split('T')[0] : '',
+        o.productCode || '',
+        o.productName,
+        o.orderedBy || '',
+        o.accountingAccount || '',
+        o.quantity !== null ? Number(o.quantity) : null,
+        o.quantityUnit || '',
+        o.hoursPerUnit !== null ? Number(o.hoursPerUnit) : null,
+        Number(o.plannedHours),
+        Number(o.actualHours),
+        Number(o.utilizationPercent),
+        statusPolish,
+        o.completionDate ? new Date(o.completionDate).toISOString().split('T')[0] : '',
+        o.notes || '',
+      ];
+    });
+
+    // 4. Filename & Metadata
+    const now = new Date();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const filename = `baza_zlecen_${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.xlsx`;
+
+    const statusFilterVal =
+      statusFilter === 'OPEN'
+        ? 'Otwarte'
+        : statusFilter === 'SUSPENDED'
+        ? 'Wstrzymane'
+        : statusFilter === 'CLOSED'
+        ? 'Zamknięte'
+        : 'Wszystkie';
+
+    const searchQueryVal = searchLower ? searchQuery.trim() : 'Brak';
+
+    let sortVal = 'Brak';
+    if (sortField === 'orderDate') {
+      sortVal = sortOrder === 'asc' ? 'Data zlecenia rosnąco' : 'Data zlecenia malejąco';
+    } else if (sortField === 'plannedShipmentDate') {
+      sortVal = sortOrder === 'asc' ? 'Planowana wysyłka rosnąco' : 'Planowana wysyłka malejąco';
+    }
+
+    await generateExcelResponse({
+      res,
+      filename,
+      sheetName: 'Baza zleceń',
+      headers,
+      data,
+      metadata: {
+        reportTitle: 'Baza zleceń',
+        filters: [
+          { label: 'Zakres danych', value: 'Aktualny widok' },
+          { label: 'Filtr statusu', value: statusFilterVal },
+          { label: 'Wyszukiwanie', value: searchQueryVal },
+          { label: 'Sortowanie', value: sortVal },
+          { label: 'Liczba rekordów', value: `${data.length}` },
+        ],
+      },
+      numberColumns: [8, 10, 11, 12, 13],
+      dateColumns: [2, 3, 15],
+    });
+  } catch (error) {
+    logger.error(error, 'Błąd podczas eksportowania bazy zleceń do Excela');
+    return res.status(500).json({ message: 'Błąd podczas eksportowania bazy zleceń do Excela' });
   }
 });
 

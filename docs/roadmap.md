@@ -105,3 +105,24 @@ Dokument przedstawia zrealizowane etapy rozwoju i kamienie milowe aplikacji Work
 - [x] ✔ Przywrócenie sumowania wszystkich aktywnych godzin (`deletedAt = null`) na Pulpicie Menedżerskim (`hoursToday`, `hoursMonth`) dla zapewnienia funkcji kontrolnej (L4, urlopy, godziny bez zlecenia).
 - [x] ✔ Zachowanie w całości backendowej blokady nieprawidłowych wpisów weekendowych oraz blokady Copy Last Day z v0.4.1.
 - [x] ✔ Zaktualizowany pakiet testów regresyjnych dashboardu.
+
+---
+
+## Sprint 0.4.3
+*Status: Do weryfikacji*
+- [x] ✔ Wdrożenie seryjnej rejestracji nieobecności w zakresie dat dla wybranego pracownika.
+- [x] ✔ Dedykowane endpointy backendowe: podgląd (`POST /api/reports/absence-range/preview`) oraz zapis (`POST /api/reports/absence-range`).
+- [x] ✔ Automatyczne pomijanie sobót i niedziel oraz wykrywanie konfliktów z istniejącymi wpisami.
+- [x] ✔ Transakcyjny zapis z blokadą współbieżności i zdarzeniem audytowym `CREATE_ABSENCE_RANGE`.
+- [x] ✔ Komponent `AbsenceRangeModal.tsx` z wyliczaniem podglądu na żywo i automatycznym odświeżaniem listy wpisów.
+- [*] *Planowane w kolejnym przyroście: Obsługa świąt ustawowych oraz zakładowych dni wolnych.*
+
+---
+
+## Sprint 0.4.4
+*Status: Do weryfikacji*
+- [x] ✔ Wdrożenie eksportu aktualnie wyświetlanego widoku Bazy Zleceń do pliku Excel (.xlsx) na ekranie `OrdersView`.
+- [x] ✔ Backendowy endpoint `POST /api/orders/export-xlsx` z obsługą wyszukiwania, statusu, sortowania i walidacją parametrów.
+- [x] ✔ Wydzielenie wspólnego modułu ExcelJS `backend/src/utils/excel-report.ts` dla zapewnienia identycznej stylistyki i struktur nagłówków we wszystkich eksportach.
+- [x] ✔ Dostęp do eksportu dla ról Administrator oraz Leader.
+- [x] ✔ Pełny pakiet testów automatycznych backendowych i frontendowych z weryfikacją braku regresji w obecnych raportach XLSX.
