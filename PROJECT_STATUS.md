@@ -4,10 +4,24 @@
 
 - Projekt: Workshop Time Tracking
 - Aktualna wersja produkcyjna: `0.3.8`
-- Aktualna wersja development: `0.4.4`
+- Aktualna wersja development: `0.4.5`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: v0.4.4 — zaimplementowana, oczekuje na test ręczny
+- Stan prac: v0.4.5 — zaimplementowana, oczekuje na test ręczny
+
+Zakres wersji `0.4.5`:
+
+- Przywrócono kopiowanie wpisów nieobecności (m.in. UW i L4) pomiędzy dniami roboczymi w funkcji „Kopiuj ostatni dzień”.
+- Zachowano całkowitą blokadę kopiowania na docelową sobotę lub niedzielę (`400`, `WEEKEND_COPY_NOT_ALLOWED`).
+- Zachowano filtrowanie wpisów powiązanych z usuniętymi zleceniami oraz zabezpieczenia pustego celu, aktywnego pracownika, limitu, współbieżności i audytu.
+
+## Weryfikacja wersji 0.4.5
+
+- backend: 88 testów zakończonych powodzeniem,
+- backend: build (`npm run build`) zakończony powodzeniem,
+- frontend: 45 testów zakończonych powodzeniem,
+- frontend: build (`npm run build`) zakończony powodzeniem,
+- frontend: lint (`npm run lint`) zakończony powodzeniem po uzupełnieniu brakującej deklaracji narzędzi i minimalnej konfiguracji ESLint.
 
 Zakres wersji `0.4.4`:
 

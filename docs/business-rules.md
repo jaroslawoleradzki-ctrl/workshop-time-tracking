@@ -36,7 +36,8 @@ Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.3.2.
 
 - Operację mogą uruchomić role `admin` i `leader`. Interfejs wysyła identyfikator aktualnie wybranego pracownika oraz datę docelową.
 - Źródłem jest najnowsza data wcześniejsza od docelowej, na której ten pracownik ma co najmniej jeden aktywny wpis. Wpisy usunięte logicznie oraz wpisy powiązane z usuniętym zleceniem nie są kopiowane.
-- Pracownik musi istnieć, być aktywny i nieusunięty. Kopiowane są godziny, rodzaj czasu i opcjonalne zlecenie wyłącznie jego wpisów.
+- Pracownik musi istnieć, być aktywny i nieusunięty. Kopiowane są godziny, rodzaj czasu i opcjonalne zlecenie wyłącznie jego wpisów. Dotyczy to również nieobecności, takich jak UW i L4, gdy dniem docelowym jest dzień roboczy.
+- Jeżeli data docelowa przypada w sobotę lub niedzielę, cała operacja jest odrzucana odpowiedzią `400 Bad Request` i kodem `WEEKEND_COPY_NOT_ALLOWED`, zanim powstaną jakiekolwiek wpisy. Blokada zależy od dnia docelowego, a nie od rodzaju wpisu źródłowego.
 - Jeżeli dzień docelowy zawiera już aktywny wpis tego pracownika, cała operacja jest odrzucana odpowiedzią `409 Conflict`; nie ma trybu dopisywania, scalania ani nadpisywania.
 - Maksymalny rozmiar źródła wynosi 100 aktywnych wpisów. Przekroczenie limitu kończy operację bez utworzenia danych.
 - Blokada transakcyjna PostgreSQL dla pary `(employeeId, targetDate)` oraz ponowne sprawdzenie dnia po jej uzyskaniu chronią również przed równoległymi żądaniami z wielu kart, użytkowników i instancji API.

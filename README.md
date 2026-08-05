@@ -319,6 +319,8 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 
 ## Status projektu
 
-* **Aktualna wersja**: 0.4.4
+* **Aktualna wersja**: `0.4.5`
 * **Docelowa gałąź integracyjna**: `development`
 * **Status prac**: Aktywny rozwój (Active development)
+
+W funkcji **Kopiuj ostatni dzień** kompletny zestaw wpisów, w tym nieobecności takie jak UW i L4, może być kopiowany pomiędzy dniami roboczymi. Jeżeli wybrany dzień docelowy jest sobotą lub niedzielą, cała operacja jest blokowana bez tworzenia rekordów.

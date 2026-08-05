@@ -17,7 +17,7 @@ Otwórz aplikację, wpisz login i hasło, wybierz **Zaloguj się**. Po zalogowan
 
 > **Zrzut ekranu do wstawienia:** panel Raportowanie z wybranym pracownikiem i datą, otwartą listą pasujących zleceń oraz formularzem nowego wpisu.
 
-Wpisy wybranego pracownika i dnia są widoczne obok formularza. **Edytuj** ładuje wpis do formularza; **Usuń** wymaga potwierdzenia i wykonuje soft delete. **Kopiuj ostatni dzień** kopiuje wyłącznie wpisy aktualnie wybranego pracownika z jego najnowszej wcześniejszej daty. Podczas operacji przycisk jest zablokowany. Jeśli wybrany dzień zawiera już wpis tego pracownika, aplikacja nie dopisze danych i wyświetli komunikat o konflikcie.
+Wpisy wybranego pracownika i dnia są widoczne obok formularza. **Edytuj** ładuje wpis do formularza; **Usuń** wymaga potwierdzenia i wykonuje soft delete. **Kopiuj ostatni dzień** kopiuje wyłącznie wpisy aktualnie wybranego pracownika z jego najnowszej wcześniejszej daty. W dni robocze kopiowany jest kompletny zestaw, również nieobecności takie jak UW i L4. Wybranie soboty lub niedzieli jako dnia docelowego blokuje całą operację bez utworzenia wpisów, niezależnie od ich rodzaju. Podczas operacji przycisk jest zablokowany. Jeśli wybrany dzień zawiera już wpis tego pracownika, aplikacja nie dopisze danych i wyświetli komunikat o konflikcie.
 
 Jeśli kod `G` przekroczy 8 godzin lub suma przekroczy 12/24 godziny, pojawi się ostrzeżenie. Można anulować albo wybrać **Ignoruj i zapisz**.
 
