@@ -259,7 +259,7 @@ router.post('/export-xlsx', requireRole(['admin', 'leader']), async (req: AuthRe
 
 // Admin-only paths below
 router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response) => {
-  const { orderNumber, orderDate, plannedShipmentDate, productCode, productName, accountingAccount, orderedBy, notes, quantity, quantityUnit, hoursPerUnit, status, isActive } = req.body;
+  const { orderNumber, orderDate, plannedShipmentDate, productCode, productName, accountingAccount, orderedBy, notes, quantity, quantityUnit, hoursPerUnit, status, isActive, completionDate } = req.body;
 
   if (!orderNumber || !orderDate || !productName || quantity === undefined || hoursPerUnit === undefined || !status) {
     return res.status(400).json({ message: 'Numer zlecenia, data zlecenia, nazwa produktu, ilość, godziny/szt. oraz status są wymagane.' });
@@ -290,6 +290,35 @@ router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response)
   }
 
   const calculatedPlannedHours = parsedQuantity * parsedHoursPerUnit;
+  const orderStatusVal = (status as OrderStatus) || OrderStatus.OPEN;
+
+  let parsedCompletionDate: Date | null = null;
+  if (completionDate !== undefined && completionDate !== null && completionDate !== '') {
+    if (typeof completionDate === 'string' && completionDate.trim() === '') {
+      if (orderStatusVal === OrderStatus.CLOSED) {
+        return res.status(400).json({
+          message: 'Rzeczywista data zakończenia jest wymagana przy zamykaniu zlecenia.',
+          code: 'COMPLETION_DATE_REQUIRED',
+        });
+      }
+    } else {
+      const d = new Date(completionDate);
+      if (isNaN(d.getTime())) {
+        return res.status(400).json({
+          message: 'Rzeczywista data zakończenia jest wymagana przy zamykaniu zlecenia.',
+          code: 'COMPLETION_DATE_REQUIRED',
+        });
+      }
+      parsedCompletionDate = d;
+    }
+  }
+
+  if (orderStatusVal === OrderStatus.CLOSED && !parsedCompletionDate) {
+    return res.status(400).json({
+      message: 'Rzeczywista data zakończenia jest wymagana przy zamykaniu zlecenia.',
+      code: 'COMPLETION_DATE_REQUIRED',
+    });
+  }
 
   try {
     const existing = await prisma.order.findFirst({
@@ -300,7 +329,6 @@ router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response)
       return res.status(400).json({ message: `Zlecenie o numerze ${orderNumber} już istnieje` });
     }
 
-    const orderStatusVal = (status as OrderStatus) || OrderStatus.OPEN;
     const cleanProductCode = productCode && productCode.trim() !== '' ? productCode.trim() : null;
     const cleanAccountingAccount = accountingAccount && accountingAccount.trim() !== '' ? accountingAccount.trim() : null;
     const cleanOrderedBy = orderedBy && orderedBy.trim() !== '' ? orderedBy.trim() : null;
@@ -322,7 +350,7 @@ router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response)
         hoursPerUnit: parsedHoursPerUnit,
         status: orderStatusVal,
         isActive: isActive !== undefined ? isActive : true,
-        completionDate: orderStatusVal === OrderStatus.CLOSED ? new Date() : null,
+        completionDate: parsedCompletionDate,
       },
     });
 
@@ -346,7 +374,7 @@ router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response)
 
 router.put('/:id', requireRole(['admin']), async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  const { orderNumber, orderDate, plannedShipmentDate, productCode, productName, accountingAccount, orderedBy, notes, quantity, quantityUnit, hoursPerUnit, status, isActive } = req.body;
+  const { orderNumber, orderDate, plannedShipmentDate, productCode, productName, accountingAccount, orderedBy, notes, quantity, quantityUnit, hoursPerUnit, status, isActive, completionDate } = req.body;
 
   if (!orderNumber || !orderDate || !productName || quantity === undefined || hoursPerUnit === undefined || !status) {
     return res.status(400).json({ message: 'Wszystkie pola są wymagane.' });
@@ -399,12 +427,33 @@ router.put('/:id', requireRole(['admin']), async (req: AuthRequest, res: Respons
 
     const orderStatusVal = status as OrderStatus;
 
-    // Set completionDate when changing to CLOSED
-    let completionDate = oldOrder.completionDate;
-    if (orderStatusVal === OrderStatus.CLOSED && oldOrder.status !== OrderStatus.CLOSED) {
-      completionDate = new Date();
-    } else if (orderStatusVal !== OrderStatus.CLOSED) {
-      completionDate = null;
+    let finalCompletionDate: Date | null = oldOrder.completionDate;
+
+    if (completionDate !== undefined) {
+      if (completionDate === null || (typeof completionDate === 'string' && completionDate.trim() === '')) {
+        if (orderStatusVal === OrderStatus.CLOSED) {
+          return res.status(400).json({
+            message: 'Rzeczywista data zakończenia jest wymagana przy zamykaniu zlecenia.',
+            code: 'COMPLETION_DATE_REQUIRED',
+          });
+        }
+      } else {
+        const d = new Date(completionDate);
+        if (isNaN(d.getTime())) {
+          return res.status(400).json({
+            message: 'Rzeczywista data zakończenia jest wymagana przy zamykaniu zlecenia.',
+            code: 'COMPLETION_DATE_REQUIRED',
+          });
+        }
+        finalCompletionDate = d;
+      }
+    }
+
+    if (orderStatusVal === OrderStatus.CLOSED && !finalCompletionDate) {
+      return res.status(400).json({
+        message: 'Rzeczywista data zakończenia jest wymagana przy zamykaniu zlecenia.',
+        code: 'COMPLETION_DATE_REQUIRED',
+      });
     }
 
     const cleanProductCode = productCode && productCode.trim() !== '' ? productCode.trim() : null;
@@ -429,7 +478,7 @@ router.put('/:id', requireRole(['admin']), async (req: AuthRequest, res: Respons
         hoursPerUnit: parsedHoursPerUnit,
         status: orderStatusVal,
         isActive: isActive !== undefined ? isActive : true,
-        completionDate,
+        completionDate: finalCompletionDate,
       },
     });
 
@@ -470,6 +519,7 @@ router.delete('/:id', requireRole(['admin']), async (req: AuthRequest, res: Resp
       data: {
         deletedAt: new Date(),
         status: OrderStatus.CLOSED, // Automatically mark as CLOSED
+        completionDate: oldOrder.completionDate || new Date(),
       },
     });
 

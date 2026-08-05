@@ -259,4 +259,139 @@ describe('OrdersView — wyszukiwarka i filtry zleceń', () => {
     expect(screen.queryByTitle('Usuń')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Zapisz/ })).not.toBeInTheDocument();
   });
+
+  describe('Obowiązkowa data zakończenia zlecenia (v0.4.6)', () => {
+    it('pokazuje pole daty z prawidłową etykietą i gwiazdką po wybraniu statusu Zamknięte', async () => {
+      render(
+        <OrdersView
+          token="test-token"
+          user={{ id: '1', username: 'admin', role: 'admin', fullName: 'Administrator Testowy' }}
+        />,
+      );
+
+      await screen.findByText('ZL-ALPHA-001');
+      fireEvent.click(screen.getByRole('button', { name: /Dodaj/ }));
+
+      expect(screen.queryByLabelText(/Rzeczywista data zakończenia/)).not.toBeInTheDocument();
+
+      const statusSelect = screen.getByLabelText('Status zlecenia');
+      fireEvent.change(statusSelect, { target: { value: 'CLOSED' } });
+
+      const dateInput = screen.getByLabelText(/Rzeczywista data zakończenia/);
+      expect(dateInput).toBeInTheDocument();
+      expect(dateInput).toHaveAttribute('type', 'date');
+      expect(dateInput).toBeRequired();
+    });
+
+    it('pokazuje komunikat walidacyjny i blokuje wysyłkę przy braku daty dla statusu Zamknięte', async () => {
+      const fetchMock = vi.mocked(fetch);
+
+      render(
+        <OrdersView
+          token="test-token"
+          user={{ id: '1', username: 'admin', role: 'admin', fullName: 'Administrator Testowy' }}
+        />,
+      );
+
+      await screen.findByText('ZL-ALPHA-001');
+      fireEvent.click(screen.getByRole('button', { name: /Dodaj/ }));
+
+      fireEvent.change(screen.getByPlaceholderText('np. ZL-2026-001'), { target: { value: 'ZL-NEW-999' } });
+      fireEvent.change(screen.getByPlaceholderText('np. Silnik Elektryczny 15kW'), { target: { value: 'Nowy produkt' } });
+      fireEvent.change(screen.getByLabelText('Status zlecenia'), { target: { value: 'CLOSED' } });
+
+      const dateInput = screen.getByLabelText(/Rzeczywista data zakończenia/);
+      fireEvent.change(dateInput, { target: { value: '' } });
+
+      fetchMock.mockClear();
+      const form = dateInput.closest('form')!;
+      fireEvent.submit(form);
+
+      expect(screen.getByText('Podaj rzeczywistą datę zakończenia zlecenia.')).toBeInTheDocument();
+      expect(fetchMock).not.toHaveBeenCalledWith('/api/orders', expect.objectContaining({ method: 'POST' }));
+    });
+
+    it('pozwala zapisać zlecenie po podaniu prawidłowej daty zakończenia', async () => {
+      const fetchMock = vi.mocked(fetch);
+
+      render(
+        <OrdersView
+          token="test-token"
+          user={{ id: '1', username: 'admin', role: 'admin', fullName: 'Administrator Testowy' }}
+        />,
+      );
+
+      await screen.findByText('ZL-ALPHA-001');
+      fireEvent.click(screen.getByRole('button', { name: /Dodaj/ }));
+
+      fireEvent.change(screen.getByPlaceholderText('np. ZL-2026-001'), { target: { value: 'ZL-NEW-999' } });
+      fireEvent.change(screen.getByPlaceholderText('np. Silnik Elektryczny 15kW'), { target: { value: 'Nowy produkt' } });
+      fireEvent.change(screen.getByLabelText('Status zlecenia'), { target: { value: 'CLOSED' } });
+
+      const dateInput = screen.getByLabelText(/Rzeczywista data zakończenia/);
+      fireEvent.change(dateInput, { target: { value: '2026-08-05' } });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Zapisz zlecenie' }));
+
+      await vi.waitFor(() => {
+        const postCall = fetchMock.mock.calls.find(([url, opts]) => url === '/api/orders' && opts?.method === 'POST');
+        expect(postCall).toBeDefined();
+      });
+
+      const postCall = fetchMock.mock.calls.find(([url, opts]) => url === '/api/orders' && opts?.method === 'POST');
+      const body = JSON.parse(String(postCall?.[1]?.body));
+      expect(body.status).toBe('CLOSED');
+      expect(body.completionDate).toBe('2026-08-05');
+    });
+
+    it('edycja zamkniętego zlecenia prezentuje zapisaną datę zakończenia', async () => {
+      render(
+        <OrdersView
+          token="test-token"
+          user={{ id: '1', username: 'admin', role: 'admin', fullName: 'Administrator Testowy' }}
+        />,
+      );
+
+      await screen.findByText(/ZL-DELTA-004/);
+      const editButtons = screen.getAllByTitle('Edytuj');
+      // ZL-DELTA-004 to ostatnie zlecenie na liście
+      fireEvent.click(editButtons[3]);
+
+      const dateInput = screen.getByLabelText(/Rzeczywista data zakończenia/);
+      expect(dateInput).toHaveValue('2026-07-10');
+    });
+
+    it('ponowne otwarcie zlecenia przesyła zachowaną datę zakończenia bez jej automatycznego czyszczenia', async () => {
+      const fetchMock = vi.mocked(fetch);
+
+      render(
+        <OrdersView
+          token="test-token"
+          user={{ id: '1', username: 'admin', role: 'admin', fullName: 'Administrator Testowy' }}
+        />,
+      );
+
+      await screen.findByText(/ZL-DELTA-004/);
+      const editButtons = screen.getAllByTitle('Edytuj');
+      fireEvent.click(editButtons[3]);
+
+      // Zmiana statusu na Otwarte
+      fireEvent.change(screen.getByLabelText('Status zlecenia'), { target: { value: 'OPEN' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Zapisz zlecenie' }));
+
+      await vi.waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledWith(
+          '/api/orders/10000000-0000-4000-8000-000000000004',
+          expect.objectContaining({ method: 'PUT' }),
+        );
+      });
+
+      const putCall = fetchMock.mock.calls.find(([url]) =>
+        url === '/api/orders/10000000-0000-4000-8000-000000000004'
+      );
+      const body = JSON.parse(String(putCall?.[1]?.body));
+      expect(body.status).toBe('OPEN');
+      expect(body.completionDate).toBe('2026-07-10');
+    });
+  });
 });

@@ -1,6 +1,6 @@
 # Reguły biznesowe
 
-Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.3.2.
+Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.4.6.
 
 ## Role i dostęp
 
@@ -18,7 +18,7 @@ Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.3.2.
 - Usunięcie pracownika ustawia `deletedAt` oraz `isActive=false`; rekord i historyczne raporty pozostają w bazie.
 - Zlecenie ma status `OPEN`, `SUSPENDED` lub `CLOSED`, flagę `isActive` i opcjonalny `deletedAt`.
 - W panelu raportowania dostępne są wyłącznie zlecenia `OPEN`, aktywne i nieusunięte. Odczyt historyczny zachowuje relacje do pozostałych zleceń.
-- Usunięcie zlecenia ustawia `deletedAt` i status `CLOSED`. Przejście do `CLOSED` ustawia `completionDate`; ponowne otwarcie ją czyści.
+- Zmiana statusu na `CLOSED` bezwzględnie wymaga podania rzeczywistej daty zakończenia (`completionDate`); brak daty zwraca błąd walidacji `COMPLETION_DATE_REQUIRED` (HTTP 400). Ponowne otwarcie zlecenia (`CLOSED` -> `OPEN` / `SUSPENDED`) nie usuwa automatycznie wcześniej zapisanej daty. Usunięcie zlecenia (soft delete) ustawia `deletedAt` i status `CLOSED`.
 - `plannedHours` jest zawsze wyliczane jako `quantity * hoursPerUnit`. Ilość musi być większa od zera, a godziny na jednostkę nieujemne.
 
 ## Rejestrowanie czasu
