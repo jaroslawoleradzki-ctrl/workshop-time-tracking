@@ -545,20 +545,14 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                   </div>
                 </div>
 
-                <div className="form-row" style={{ marginTop: '0.75rem', alignItems: 'center' }}>
+                <div className="form-row" style={{ marginTop: '0.75rem' }}>
                   <div className="form-group">
                     <label className="form-label" htmlFor="orderStatusSelect">Status zlecenia</label>
                     <select
                       id="orderStatusSelect"
                       className="form-control"
                       value={orderStatus}
-                      onChange={e => {
-                        const newStatus = e.target.value as any;
-                        setOrderStatus(newStatus);
-                        if (newStatus === 'CLOSED' && !completionDate) {
-                          setCompletionDate(new Date().toISOString().split('T')[0]);
-                        }
-                      }}
+                      onChange={e => setOrderStatus(e.target.value as any)}
                     >
                       <option value="OPEN">Otwarte (aktywne do raportowania)</option>
                       <option value="SUSPENDED">Wstrzymane</option>
@@ -566,24 +560,9 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                     </select>
                   </div>
 
-                  <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1.2rem' }}>
-                    <input
-                      type="checkbox"
-                      id="isActiveCheckbox"
-                      checked={isActive}
-                      onChange={e => setIsActive(e.target.checked)}
-                      style={{ cursor: 'pointer', width: '18px', height: '18px' }}
-                    />
-                    <label htmlFor="isActiveCheckbox" style={{ cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }}>
-                      Zlecenie aktywne
-                    </label>
-                  </div>
-                </div>
-
-                {orderStatus === 'CLOSED' && (
-                  <div className="form-group" style={{ marginTop: '0.75rem' }}>
+                  <div className="form-group">
                     <label className="form-label" htmlFor="completionDateInput">
-                      Rzeczywista data zakończenia <span style={{ color: 'var(--danger-color)' }}>*</span>
+                      Rzeczywista data zakończenia {orderStatus === 'CLOSED' && <span style={{ color: 'var(--danger-color)' }}>*</span>}
                     </label>
                     <input
                       id="completionDateInput"
@@ -591,10 +570,25 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                       className="form-control"
                       value={completionDate}
                       onChange={e => setCompletionDate(e.target.value)}
+                      disabled={orderStatus !== 'CLOSED'}
                       required={orderStatus === 'CLOSED'}
+                      placeholder="Wybierz datę zakończenia"
                     />
                   </div>
-                )}
+                </div>
+
+                <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <input
+                    type="checkbox"
+                    id="isActiveCheckbox"
+                    checked={isActive}
+                    onChange={e => setIsActive(e.target.checked)}
+                    style={{ cursor: 'pointer', width: '18px', height: '18px' }}
+                  />
+                  <label htmlFor="isActiveCheckbox" style={{ cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }}>
+                    Zlecenie aktywne
+                  </label>
+                </div>
               </div>
 
               <div

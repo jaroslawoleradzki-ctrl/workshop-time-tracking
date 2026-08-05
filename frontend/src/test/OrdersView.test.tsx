@@ -261,7 +261,7 @@ describe('OrdersView — wyszukiwarka i filtry zleceń', () => {
   });
 
   describe('Obowiązkowa data zakończenia zlecenia (v0.4.6)', () => {
-    it('pokazuje pole daty z prawidłową etykietą i gwiazdką po wybraniu statusu Zamknięte', async () => {
+    it('renderuje stale pole daty, zablokowane dla statusu Otwarte i odblokowane z gwiazdką dla statusu Zamknięte', async () => {
       render(
         <OrdersView
           token="test-token"
@@ -272,14 +272,17 @@ describe('OrdersView — wyszukiwarka i filtry zleceń', () => {
       await screen.findByText('ZL-ALPHA-001');
       fireEvent.click(screen.getByRole('button', { name: /Dodaj/ }));
 
-      expect(screen.queryByLabelText(/Rzeczywista data zakończenia/)).not.toBeInTheDocument();
+      // Pole jest od początku w DOM, zablokowane i niewymagane dla statusu OPEN
+      const dateInput = screen.getByLabelText(/Rzeczywista data zakończenia/);
+      expect(dateInput).toBeInTheDocument();
+      expect(dateInput).toBeDisabled();
+      expect(dateInput).not.toBeRequired();
 
+      // Po zmianie statusu na CLOSED pole zostaje odblokowane i staje się wymagane
       const statusSelect = screen.getByLabelText('Status zlecenia');
       fireEvent.change(statusSelect, { target: { value: 'CLOSED' } });
 
-      const dateInput = screen.getByLabelText(/Rzeczywista data zakończenia/);
-      expect(dateInput).toBeInTheDocument();
-      expect(dateInput).toHaveAttribute('type', 'date');
+      expect(dateInput).not.toBeDisabled();
       expect(dateInput).toBeRequired();
     });
 
