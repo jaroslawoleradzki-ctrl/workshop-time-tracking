@@ -165,7 +165,7 @@ export default function UsersView({ token, currentUser }: UsersViewProps) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div data-testid="users-view" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Create/Edit User Form Modal */}
       {showFormModal && (
         <div className="modal-overlay">

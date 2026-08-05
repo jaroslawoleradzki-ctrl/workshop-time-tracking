@@ -203,7 +203,7 @@ export default function AbsenceRangeModal({
     Boolean(previewError);
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={onClose} data-testid="absence-modal">
       <div
         className="modal-content"
         style={{

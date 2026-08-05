@@ -1,0 +1,110 @@
+[
+  {
+    "id": "screen-login",
+    "component": "App.tsx (Login Modal)",
+    "type": "view",
+    "roles": ["admin", "leader"],
+    "documentationPath": "docs/source/user-manual/02-logowanie.md",
+    "screenshotScenarioIds": ["login-form", "login-validation-error"],
+    "required": true
+  },
+  {
+    "id": "screen-dashboard",
+    "component": "DashboardView.tsx",
+    "type": "view",
+    "roles": ["admin"],
+    "documentationPath": "docs/source/user-manual/03-dashboard.md",
+    "screenshotScenarioIds": ["dashboard-overview"],
+    "required": true
+  },
+  {
+    "id": "screen-reporting",
+    "component": "ReportingPanel.tsx",
+    "type": "view",
+    "roles": ["admin", "leader"],
+    "documentationPath": "docs/source/user-manual/04-raportowanie.md",
+    "screenshotScenarioIds": ["reporting-panel", "reporting-missing-card"],
+    "required": true
+  },
+  {
+    "id": "modal-absence-range",
+    "component": "AbsenceRangeModal.tsx",
+    "type": "modal",
+    "roles": ["admin", "leader"],
+    "documentationPath": "docs/source/user-manual/04-raportowanie.md",
+    "screenshotScenarioIds": ["absence-modal"],
+    "required": true
+  },
+  {
+    "id": "screen-orders",
+    "component": "OrdersView.tsx",
+    "type": "view",
+    "roles": ["admin", "leader"],
+    "documentationPath": "docs/source/user-manual/05-zlecenia.md",
+    "screenshotScenarioIds": ["orders-table", "orders-export-success"],
+    "required": true
+  },
+  {
+    "id": "screen-users",
+    "component": "UsersView.tsx",
+    "type": "view",
+    "roles": ["admin"],
+    "documentationPath": "docs/source/admin-manual/01-uzytkownicy.md",
+    "screenshotScenarioIds": ["admin-users-table"],
+    "required": true
+  },
+  {
+    "id": "screen-dictionaries",
+    "component": "DictionariesView.tsx",
+    "type": "view",
+    "roles": ["admin"],
+    "documentationPath": "docs/source/admin-manual/02-slowniki.md",
+    "screenshotScenarioIds": ["admin-dictionaries-table"],
+    "required": false
+  },
+  {
+    "id": "screen-employees",
+    "component": "EmployeesView.tsx",
+    "type": "view",
+    "roles": ["admin"],
+    "documentationPath": "docs/source/admin-manual/03-pracownicy.md",
+    "screenshotScenarioIds": ["admin-employees-table"],
+    "required": false
+  },
+  {
+    "id": "screen-imports",
+    "component": "ImportsView.tsx",
+    "type": "view",
+    "roles": ["admin"],
+    "documentationPath": "docs/source/admin-manual/04-importy.md",
+    "screenshotScenarioIds": ["admin-imports-view"],
+    "required": false
+  },
+  {
+    "id": "screen-reports",
+    "component": "ReportsView.tsx",
+    "type": "view",
+    "roles": ["admin", "leader"],
+    "documentationPath": "docs/source/user-manual/06-raporty.md",
+    "screenshotScenarioIds": ["reports-center"],
+    "required": false
+  },
+  {
+    "id": "component-scrollable-table",
+    "component": "ScrollableTable.tsx",
+    "type": "technical",
+    "roles": [],
+    "documentationPath": "",
+    "screenshotScenarioIds": [],
+    "required": false
+  },
+  {
+    "id": "component-error-boundary",
+    "component": "ErrorBoundary.tsx",
+    "type": "technical",
+    "roles": [],
+    "documentationPath": "",
+    "screenshotScenarioIds": [],
+    "required": false
+  }
+]

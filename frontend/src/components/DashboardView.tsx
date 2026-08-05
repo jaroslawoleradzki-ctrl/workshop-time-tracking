@@ -78,7 +78,7 @@ export default function DashboardView({ token }: DashboardViewProps) {
   }
 
   return (
-    <div>
+    <div data-testid="dashboard-view">
       {/* Tytuł */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', flexShrink: 0 }}>
         <BarChart3 size={28} />

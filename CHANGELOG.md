@@ -3,6 +3,26 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] — System Automatycznego Generowania Dokumentacji
+
+### Added
+
+- Wdrożono pełny system automatycznego generowania dokumentacji użytkownika i administratora (`docs:*` pipeline).
+- Stworzono pipeline poleceń NPM: `docs:prepare`, `docs:screenshots`, `docs:diagrams`, `docs:validate`, `docs:build`, `docs:release-notes`, `docs:report`, `docs:cleanup` uruchamianych z katalogu głównego projektu.
+- Wdrożono izolowane środowisko dokumentacyjne z dedykowaną bazą PostgreSQL (`time_reporting_docs`) i osobnym seedem demonstracyjnym (`backend/prisma/seed-doc.ts`) zawierającym wyłącznie fikcyjne dane (bez danych klienta).
+- Dodano mechanizm bezpieczeństwa blokujący uruchomienie seeda i zrzutów ekranu, gdy baza nie kończy się na `_docs` lub `DOCS_MODE!=true`.
+- Wdrożono Playwright-owy skrypt do wykonywania deterministycznych zrzutów ekranu (9 PNG) z ustawieniami: stały viewport, usunięcie animacji CSS, kontrolowana lokalizacja (`pl-PL`).
+- Dodano rejestr dokumentowanych komponentów (`docs/schema/registry.json`) i macierz zrzutów ekranu (`docs/schema/screenshot-matrix.json`).
+- Wdrożono automatyczne generowanie DOCX i PDF (Instrukcja Użytkownika + Instrukcja Administratora) z plików Markdown przy użyciu `docx` i `pdf-lib`.
+- Wdrożono generator Release Notes na podstawie `CHANGELOG.md`.
+- Wdrożono generator raportu kompletności i pliku `manifest.json` z hashami SHA-256 każdego artefaktu.
+- Wdrożono Privacy Audit skanujący pliki Markdown i konfigurację środowiska w poszukiwaniu wycieków danych produkcyjnych.
+- Wdrożono skaner komponentów React porównujący kod z rejestrem i zgłaszający nieznane komponenty jako kandydatów do klasyfikacji.
+- Dodano renderowanie diagramów Mermaid do PNG przy użyciu `@mermaid-js/mermaid-cli`.
+- Dodano atrybuty `data-testid` do komponentów: `Login`, `DashboardView`, `ReportingPanel`, `AbsenceRangeModal`, `OrdersView`, `UsersView`.
+- Wdrożono konfigurację Docker Compose dla bazy dokumentacyjnej (`docker-compose.docs.yml`) i przykładowy plik `.env.docs.example`.
+- Artefakty wersji generowane są w katalogu `docs/releases/v{VERSION}/`: DOCX, PDF, Release Notes, Manifest JSON, raport kompletności.
+
 ## [0.4.4] - 2026-08-02
 
 ### Added

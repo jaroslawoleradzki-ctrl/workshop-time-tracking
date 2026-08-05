@@ -639,7 +639,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
   const totalHoursToday = dayEntries.reduce((sum, entry) => sum + entry.hours, 0);
 
   return (
-    <div>
+    <div data-testid="reporting-panel">
       {/* Top Banner Success Notification */}
       {successNotification && (
         <div className="alert alert-success" style={{ 

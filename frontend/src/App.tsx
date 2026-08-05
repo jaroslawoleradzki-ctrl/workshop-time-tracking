@@ -219,7 +219,7 @@ function App() {
   // Render Login Page if not authenticated
   if (!token || !user) {
     return (
-      <div className="modal-overlay" style={{ background: 'var(--bg-primary)' }}>
+      <div className="modal-overlay" style={{ background: 'var(--bg-primary)' }} data-testid="login-container">
         <div className="modal-content" style={{ maxWidth: '400px', padding: '2.5rem' }}>
           <div style={{ textAlign: 'center', marginBottom: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <img src="/pv-logo.png" alt="P.V. Logo" className="login-logo" />
@@ -233,7 +233,7 @@ function App() {
 
           <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             {loginError && (
-              <div className="alert alert-danger" style={{ padding: '0.75rem', marginBottom: 0 }}>
+              <div className="alert alert-danger" style={{ padding: '0.75rem', marginBottom: 0 }} data-testid="login-alert-error">
                 {loginError}
               </div>
             )}
@@ -243,6 +243,7 @@ function App() {
               <input
                 type="text"
                 className="form-control"
+                data-testid="login-username"
                 value={loginUsername}
                 onChange={e => setLoginUsername(e.target.value)}
                 placeholder="np. admin"
@@ -255,6 +256,7 @@ function App() {
               <input
                 type="password"
                 className="form-control"
+                data-testid="login-password"
                 value={loginPassword}
                 onChange={e => setLoginPassword(e.target.value)}
                 placeholder="••••••••"
@@ -262,7 +264,7 @@ function App() {
               />
             </div>
 
-            <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={isLoggingIn}>
+            <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={isLoggingIn} data-testid="login-submit">
               <Lock size={16} />
               {isLoggingIn ? 'Logowanie...' : 'Zaloguj się'}
             </button>

@@ -1,0 +1,14 @@
+graph TD
+    A[Rozpoczęcie Raportowania] --> B[Wybór Daty Roboczej]
+    B --> C[Wybranie Pracownika z Listy]
+    C --> D[Określenie Rodzaju Czasu G / NDR / UW / L4]
+    D --> E{Czy kod wymaga zlecenia?}
+    E -- Tak --> F[Wybór Aktywnego Zlecenia ZL-2026-xxx]
+    E -- Nie --> G[Pominięcie wyboru zlecenia]
+    F --> H[Wpisanie Liczby Godzin np. 8.0]
+    G --> H
+    H --> I{Czy zgłoszono brak karty?}
+    I -- Tak --> J[Zaznaczenie flagi Brak Karty]
+    I -- Nie --> K[Zapisanie Wpisu w Bazie]
+    J --> K
+    K --> L[Aktualizacja Sumy Godzin i Budżetu Zlecenia]

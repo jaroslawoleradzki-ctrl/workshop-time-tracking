@@ -1,0 +1,101 @@
+[
+  {
+    "id": "login-form",
+    "filename": "01_login_form.png",
+    "description": "Formularz logowania do systemu WARSZTAT",
+    "capture": true,
+    "includeInUserManual": true,
+    "includeInAdminManual": true,
+    "validationOnly": false,
+    "targetSelector": "[data-testid='login-container']",
+    "roles": ["guest"]
+  },
+  {
+    "id": "login-validation-error",
+    "filename": "01b_login_validation_error.png",
+    "description": "Walidacja niepoprawnych danych logowania",
+    "capture": true,
+    "includeInUserManual": false,
+    "includeInAdminManual": false,
+    "validationOnly": true,
+    "targetSelector": "[data-testid='login-container']",
+    "roles": ["guest"]
+  },
+  {
+    "id": "dashboard-overview",
+    "filename": "02_dashboard_overview.png",
+    "description": "Pulpit nawigacyjny z podsumowaniem wskaźników",
+    "capture": true,
+    "includeInUserManual": true,
+    "includeInAdminManual": true,
+    "validationOnly": false,
+    "targetSelector": "[data-testid='dashboard-view']",
+    "roles": ["admin"]
+  },
+  {
+    "id": "reporting-panel",
+    "filename": "03_reporting_panel.png",
+    "description": "Panel dziennego raportowania czasu pracy",
+    "capture": true,
+    "includeInUserManual": true,
+    "includeInAdminManual": false,
+    "validationOnly": false,
+    "targetSelector": "[data-testid='reporting-panel']",
+    "roles": ["admin", "leader"]
+  },
+  {
+    "id": "reporting-missing-card",
+    "filename": "03b_reporting_missing_card.png",
+    "description": "Oznaczenie braku karty na formularzu wpisu",
+    "capture": true,
+    "includeInUserManual": true,
+    "includeInAdminManual": false,
+    "validationOnly": false,
+    "targetSelector": "[data-testid='reporting-panel']",
+    "roles": ["admin", "leader"]
+  },
+  {
+    "id": "absence-modal",
+    "filename": "04_absence_range_modal.png",
+    "description": "Modal wprowadzania nieobecności zakresem dat",
+    "capture": true,
+    "includeInUserManual": true,
+    "includeInAdminManual": false,
+    "validationOnly": false,
+    "targetSelector": "[data-testid='absence-modal']",
+    "roles": ["admin", "leader"]
+  },
+  {
+    "id": "orders-table",
+    "filename": "05_orders_table.png",
+    "description": "Baza Zleceń Produkcyjnych z filtrowaniem i sortowaniem",
+    "capture": true,
+    "includeInUserManual": true,
+    "includeInAdminManual": true,
+    "validationOnly": false,
+    "targetSelector": "[data-testid='orders-view']",
+    "roles": ["admin", "leader"]
+  },
+  {
+    "id": "orders-export-success",
+    "filename": "05b_orders_export_success.png",
+    "description": "Eksport Bazy Zleceń do pliku Excel XLSX",
+    "capture": true,
+    "includeInUserManual": true,
+    "includeInAdminManual": false,
+    "validationOnly": false,
+    "targetSelector": "[data-testid='orders-view']",
+    "roles": ["admin", "leader"]
+  },
+  {
+    "id": "admin-users-table",
+    "filename": "06_admin_users_table.png",
+    "description": "Lista kont użytkowników i zarzadzanie uprawnieniami",
+    "capture": true,
+    "includeInUserManual": false,
+    "includeInAdminManual": true,
+    "validationOnly": false,
+    "targetSelector": "[data-testid='users-view']",
+    "roles": ["admin"]
+  }
+]

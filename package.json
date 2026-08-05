@@ -1,0 +1,28 @@
+{
+  "name": "workshop-time-tracking-root",
+  "private": true,
+  "version": "0.4.4",
+  "description": "Root workspace orchestrator for Workshop Time Tracking documentation system",
+  "scripts": {
+    "docs:prepare": "tsx scripts/docs-generator/prepare.ts",
+    "docs:screenshots": "tsx scripts/docs-generator/capture-screenshots.ts",
+    "docs:diagrams": "tsx scripts/docs-generator/diagrams.ts",
+    "docs:validate": "tsx scripts/docs-generator/validate.ts",
+    "docs:build": "tsx scripts/docs-generator/build-docs.ts",
+    "docs:release-notes": "tsx scripts/docs-generator/build-release-notes.ts",
+    "docs:report": "tsx scripts/docs-generator/build-report.ts",
+    "docs:cleanup": "tsx scripts/docs-generator/cleanup.ts",
+    "docs": "tsx scripts/docs-generator/cli.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.0",
+    "docx": "^8.5.0",
+    "gray-matter": "^4.0.3",
+    "marked": "^12.0.0",
+    "playwright": "^1.44.0",
+    "sharp": "^0.33.0",
+    "tsx": "^4.10.0",
+    "wait-on": "^7.2.0",
+    "zod": "^3.23.8"
+  }
+}

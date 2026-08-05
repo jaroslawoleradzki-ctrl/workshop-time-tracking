@@ -1,0 +1,40 @@
+{
+  "appVersion": "0.4.4",
+  "generatorVersion": "1.0.0",
+  "generatedAt": "2026-08-02T12:00:00.000Z",
+  "commitHash": "dad9ea479bd7c0f35cc82ed99fd357afa3fde48a",
+  "seedUsed": "seed-doc",
+  "privacyAuditResult": "PASSED",
+  "files": [
+    {
+      "path": "admin-manual.docx",
+      "sizeBytes": 1033026,
+      "sha256": "cca7e600472fa17e3d760a00975ea74bb807aacf340e192561308096465b6a33"
+    },
+    {
+      "path": "admin-manual.pdf",
+      "sizeBytes": 342162,
+      "sha256": "bb3c909e5ee12030395a285841c1a0d878e5304e9b7710bb1447e8e841ebf0d5"
+    },
+    {
+      "path": "documentation-report.md",
+      "sizeBytes": 766,
+      "sha256": "3eaa851593ce9c23476d77d24a1d60d8b0dde03f677f74557c4fc8e7db8d1a42"
+    },
+    {
+      "path": "release-notes.md",
+      "sizeBytes": 2386,
+      "sha256": "70a098931992a33829b7c9669e918f5c7a95b4facfa759ab58bacda3033d390f"
+    },
+    {
+      "path": "user-manual.docx",
+      "sizeBytes": 1453216,
+      "sha256": "7daa350193ae6bfc7fe77e82cbaf96b751ce2aa1c6df4eb49a55d3708feef44b"
+    },
+    {
+      "path": "user-manual.pdf",
+      "sizeBytes": 397129,
+      "sha256": "8851cb986099e4bf7ccb9fc13886b7d7fd21be0e271a333d818fed541d9589f5"
+    }
+  ]
+}

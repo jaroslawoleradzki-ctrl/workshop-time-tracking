@@ -309,7 +309,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
+    <div data-testid="orders-view" style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
       {/* Create/Edit Form Modal (Admin only) */}
       {showFormModal && isAdmin && (
         <div
