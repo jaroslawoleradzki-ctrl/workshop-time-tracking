@@ -3,6 +3,14 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.4.5] - 2026-08-05
+
+### Fixed
+
+- Funkcja „Kopiuj ostatni dzień” przenosi teraz kompletny zestaw wpisów pomiędzy dniami roboczymi, w tym nieobecności takie jak UW i L4.
+- Kopiowanie całego dnia na sobotę lub niedzielę nadal jest blokowane bez tworzenia wpisów.
+- Zachowano pomijanie wpisów powiązanych z usuniętymi zleceniami oraz pozostałe zabezpieczenia operacji kopiowania.
+
 ## [0.4.4] - 2026-08-02
 
 ### Added

@@ -60,11 +60,8 @@ interface CopyLastDayParams {
   client?: PrismaClient;
 }
 
-export const ABSENCE_TIME_TYPE_CODES = ['UW', 'UOK', 'UŻ', 'L4', 'CH', 'NN', 'NNP', 'OP'];
-
 const eligibleCopyFilter = {
   OR: [{ orderId: null }, { order: { deletedAt: null } }],
-  workTimeTypeCode: { notIn: ABSENCE_TIME_TYPE_CODES },
 };
 
 export async function copyLastDayForEmployee({
