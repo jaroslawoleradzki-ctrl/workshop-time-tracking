@@ -4,24 +4,68 @@
 
 - Projekt: Workshop Time Tracking
 - Aktualna wersja produkcyjna: `0.3.8`
-- Aktualna wersja development: `0.4.5`
+- Aktualna wersja development: `0.4.6`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: v0.4.5 — zaimplementowana, oczekuje na test ręczny
+- Stan prac: v0.4.6 — zaimplementowana, oczekuje na test ręczny
 
-Zakres wersji `0.4.5`:
+Zakres wersji `0.4.6`:
 
-- Przywrócono kopiowanie wpisów nieobecności (m.in. UW i L4) pomiędzy dniami roboczymi w funkcji „Kopiuj ostatni dzień”.
-- Zachowano całkowitą blokadę kopiowania na docelową sobotę lub niedzielę (`400`, `WEEKEND_COPY_NOT_ALLOWED`).
-- Zachowano filtrowanie wpisów powiązanych z usuniętymi zleceniami oraz zabezpieczenia pustego celu, aktywnego pracownika, limitu, współbieżności i audytu.
+- Wprowadzono wymóg podania rzeczywistej daty zakończenia zlecenia (`Order.completionDate`) przy zamykaniu zlecenia (status `CLOSED`).
+- Dodano walidację braku daty, pustego ciągu znaków oraz nieprawidłowego formatu po stronie API z kodem błędu `COMPLETION_DATE_REQUIRED` (HTTP 400).
+- Rozbudowano formularz tworzenia i edycji zleceń (`OrdersView.tsx`) o wymagane pole „Rzeczywista data zakończenia” z automatyczną propozycją bieżącej daty po przełączeniu na status Zamknięte.
+- Zapewniono zachowanie istniejącej daty zakończenia przy ponownym otwarciu zlecenia (`CLOSED` -> `OPEN` / `SUSPENDED`).
+- Dodano prezentację daty zamknięcia w odznace statusu w tabeli Bazy Zleceń Produkcyjnych.
 
-## Weryfikacja wersji 0.4.5
+## Weryfikacja wersji 0.4.6
 
-- backend: 88 testów zakończonych powodzeniem,
+- backend: 97 testów zakończonych powodzeniem (w tym 13 nowych testów walidacji daty zakończenia zlecenia),
 - backend: build (`npm run build`) zakończony powodzeniem,
-- frontend: 45 testów zakończonych powodzeniem,
+- backend: walidacja schematu Prisma (`npx prisma validate`) zakończona powodzeniem,
+- frontend: 50 testów zakończonych powodzeniem (w tym 5 nowych testów walidacji i prezentacji formularza),
 - frontend: build (`npm run build`) zakończony powodzeniem,
-- frontend: lint (`npm run lint`) zakończony powodzeniem po uzupełnieniu brakującej deklaracji narzędzi i minimalnej konfiguracji ESLint.
+- frontend: lint (`npm run lint`) zakończony powodzeniem z wynikiem 0 ostrzeżeń.
+
+## Planowane funkcjonalności po wersji 0.4.6
+
+Poniższy uzgodniony backlog funkcjonalny obejmuje nowe wymagania zgłoszone przez klienta. Funkcjonalności nie zostały jeszcze zaimplementowane i oczekują na realizację w kolejnych cyklach rozwojowych.
+
+### Funkcjonalność 1 — Raport okresów nieobecności
+
+Nowy raport w Centrum raportów prezentujący zagregowane okresy nieobecności pracowników z następującymi kolumnami:
+- Imię i nazwisko
+- Rodzaj nieobecności
+- Od (data początkowa okresu)
+- Do (data końcowa okresu)
+- Liczba dni nieobecności
+
+Ustalenia biznesowe:
+- Kolejne dni robocze tego samego rodzaju nieobecności jednego pracownika mają być grupowane w jeden spójny okres.
+- Liczba dni w raporcie oznacza dni robocze, a nie dni kalendarzowe (soboty i niedziele nie są wliczane do sumy dni).
+- Raport musi umożliwiać filtrowanie co najmniej po: zakresie dat (od/do), konkretnym pracowniku oraz rodzaju nieobecności.
+- Raport musi posiadać funkcję eksportu do pliku Excel (.xlsx) zgodnego ze standardem wizualnym i strukturą nagłówków pozostałych raportów w systemie.
+- Sposób traktowania świąt oraz ewentualnych indywidualnych harmonogramów pracy pozostaje do osobnej decyzji biznesowej (aplikacja nie posiada obecnie kalendarza dni wolnych ani harmonogramów pracowników). Na tym etapie nie należy implementować własnego kalendarza świąt.
+
+### Funkcjonalność 2 — Pamiętanie filtrów raportów w ramach sesji
+
+Filtry w Centrum raportów mają zachowywać ostatnio wybrane przez użytkownika wartości w ramach bieżącej sesji przeglądarki.
+
+Zakres zapamiętywanych filtrów obejmuje:
+- datę od,
+- datę do,
+- pracownika,
+- zlecenie,
+- rodzaj czasu pracy lub nieobecności,
+- pozostałe filtry charakterystyczne dla konkretnego raportu.
+
+Ustalenia biznesowe:
+- Każdy raport w Centrum raportów przechowuje własny, niezależny zestaw filtrów.
+- Przejście do innego ekranu w aplikacji i powrót do Centrum raportów nie resetuje wybranych filtrów.
+- Odświeżenie strony w przeglądarce (`F5` / reload) nie resetuje filtrów.
+- Dane filtrów mają być przechowywane w pamięci podręcznej przeglądarki (`sessionStorage`).
+- Zamknięcie karty/okna przeglądarki lub zakończenie sesji użytkownika usuwa zapamiętane wartości filtrów.
+- Wartości filtrów jednego raportu są odizolowane i nie mogą nadpisywać filtrów innego raportu.
+
 
 Zakres wersji `0.4.4`:
 

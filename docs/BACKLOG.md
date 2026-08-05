@@ -23,3 +23,16 @@ Dokument zawiera historię wykonanych wersji oraz aktualne ustalenia projektu **
 ## Dokumentacja
 
 - Przygotowywanie i aktualizacja instrukcji użytkownika po wdrożeniu kolejnych zatwierdzonych wersji aplikacji.
+
+---
+
+## Planowane funkcjonalności po wersji 0.4.6
+
+Uzgodniony backlog nowych wymagań biznesowych zgłoszonych przez klienta (szczegółowy opis w [`PROJECT_STATUS.md`](../PROJECT_STATUS.md)):
+
+1. **Funkcjonalność 1 — Raport okresów nieobecności**
+   - Nowy raport w Centrum raportów grupujący dni robocze nieobecności z eksportem XLSX i filtrowaniem.
+2. **Funkcjonalność 2 — Pamiętanie filtrów raportów w ramach sesji**
+   - Przechowywanie filtrów poszczególnych raportów w `sessionStorage` w ramach bieżącej sesji przeglądarki.
+
+
