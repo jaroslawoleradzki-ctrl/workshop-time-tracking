@@ -4,10 +4,29 @@
 
 - Projekt: Workshop Time Tracking
 - Aktualna wersja produkcyjna: `0.3.8`
-- Aktualna wersja development: `0.4.8`
+- Aktualna wersja development: `0.4.9`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: v0.4.8 — zapamiętywanie filtrów raportów zaimplementowane, oczekuje na test ręczny
+- Stan prac: v0.4.9 — tryb „Raport zamknięcia” zaimplementowany i automatycznie zweryfikowany, oczekuje na test ręczny
+
+Zakres wersji `0.4.9`:
+
+- Dodano tryb „Raport zamknięcia” do raportu „Godziny wg zleceń”, bez tworzenia nowej zakładki.
+- Tryb pokazuje otwarte zlecenia z dodatnią sumą godzin oraz zlecenia zamknięte w inkluzywnym zakresie `completionDate`, również bez godzin w tym okresie.
+- Usunięte zlecenia, usunięte wpisy, zlecenia zawieszone i zamknięte poza zakresem są pomijane.
+- JSON i XLSX korzystają ze wspólnego generatora wierszy, zachowując identyczne sortowanie i rekordy zerowe.
+- Stan trybu jest elementem wersjonowanych filtrów `report.by-order` w `sessionStorage`; sprzeczne filtry statusu i „tylko z godzinami” są wyłączone oraz ignorowane w aktywnym trybie.
+- Zmiana nie wymaga migracji bazy danych.
+
+## Weryfikacja wersji 0.4.9
+
+- backend: 121 testów zakończonych powodzeniem, w tym 28 testów `analytics.test.ts`,
+- backend: build (`npm run build`) zakończony powodzeniem,
+- backend: walidacja schematu Prisma (`npx prisma validate`) zakończona powodzeniem,
+- frontend: 70 testów zakończonych powodzeniem, w tym 27 testów `ReportsView.test.tsx`,
+- frontend: build (`npm run build`) zakończony powodzeniem,
+- frontend: lint (`npm run lint`) zakończony powodzeniem z wynikiem 0 ostrzeżeń,
+- test ręczny interfejsu i akceptacja użytkownika pozostają do wykonania.
 
 Zakres wersji `0.4.8`:
 

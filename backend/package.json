@@ -1,6 +1,6 @@
 {
   "name": "worktime-reporting-backend",
-  "version": "0.4.8",
+  "version": "0.4.9",
   "description": "Backend for workshop worktime reporting system",
   "main": "dist/index.js",
   "scripts": {

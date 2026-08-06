@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ReportsView from '../components/ReportsView';
 
@@ -33,7 +33,7 @@ const orders = [
 ];
 
 const storedFilters = (filters: Record<string, string | boolean>) => JSON.stringify({
-  version: 1,
+  version: 2,
   filters: {
     dateFrom: '',
     dateTo: '',
@@ -44,6 +44,7 @@ const storedFilters = (filters: Record<string, string | boolean>) => JSON.string
     accountingAccount: '',
     absenceType: '',
     onlyWithHours: false,
+    closureReport: false,
     ...filters,
   },
 });
@@ -183,7 +184,7 @@ describe('ReportsView — miesięczny raport pracowników', () => {
     fireEvent.change(screen.getByLabelText('Data do'), { target: { value: '2026-08-31' } });
 
     expect(JSON.parse(window.sessionStorage.getItem('report.by-order')!)).toMatchObject({
-      version: 1,
+      version: 2,
       filters: { dateFrom: '2026-08-01', dateTo: '2026-08-31' },
     });
   });
@@ -442,5 +443,139 @@ describe('ReportsView — miesięczny raport pracowników', () => {
     ]);
     expect(screen.getByRole('columnheader', { name: 'Liczba dni nieobecności' })).toBeInTheDocument();
     expect(screen.getByText('L4 (Zwolnienie chorobowe)')).toBeInTheDocument();
+  });
+
+  describe('Raport zamknięcia', () => {
+    it('shows the toggle in the existing order report', () => {
+      renderReports();
+
+      expect(screen.getByRole('button', { name: 'Raport zamknięcia' })).toBeInTheDocument();
+    });
+
+    it('activates and deactivates the mode with a visually distinct state', () => {
+      renderReports();
+      const toggle = screen.getByRole('button', { name: 'Raport zamknięcia' });
+
+      fireEvent.click(toggle);
+      expect(toggle).toHaveAttribute('aria-pressed', 'true');
+      expect(toggle).toHaveClass('btn-primary');
+      expect(screen.getByLabelText('Status zlecenia')).toBeDisabled();
+      expect(screen.getByRole('checkbox')).toBeDisabled();
+
+      fireEvent.click(toggle);
+      expect(toggle).toHaveAttribute('aria-pressed', 'false');
+      expect(toggle).toHaveClass('btn-secondary');
+    });
+
+    it('passes active mode to the JSON endpoint and ignores conflicting filters', async () => {
+      const requestedUrls: string[] = [];
+      const originalFetch = global.fetch;
+      vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        requestedUrls.push(String(input));
+        return originalFetch(input, init);
+      }));
+      renderReports();
+
+      fireEvent.change(screen.getByLabelText('Status zlecenia'), { target: { value: 'SUSPENDED' } });
+      fireEvent.click(screen.getByRole('checkbox'));
+      fireEvent.click(screen.getByRole('button', { name: 'Raport zamknięcia' }));
+
+      await waitFor(() => expect(requestedUrls.some(url =>
+        url.includes('/api/analytics/report-by-order') &&
+        url.includes('closureReport=true') &&
+        !url.includes('status=') &&
+        !url.includes('onlyWithHours='),
+      )).toBe(true));
+    });
+
+    it('passes active mode to XLSX export', async () => {
+      const requestedUrls: string[] = [];
+      vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        requestedUrls.push(url);
+        if (url === '/api/employees') return response(employees);
+        if (url === '/api/orders') return response(orders);
+        if (url === '/api/work-time-types') return response(workTimeTypes);
+        if (url.startsWith('/api/analytics/report-by-order')) return response([{
+          orderNumber: 'ZL-ZERO', productName: 'Zamknięte', productCode: 'P-0', quantity: 1,
+          quantityUnit: 'szt.', plannedHours: 10, actualHours: 0, deviation: 10, percent: 0,
+          status: 'CLOSED', completionDate: '2026-08-10',
+        }]);
+        if (url.startsWith('/api/analytics/export/by-order')) {
+          return { ok: true, blob: async () => new Blob(['xlsx']) } as Response;
+        }
+        return response([]);
+      }));
+      vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:closure-report');
+      vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+      renderReports();
+
+      fireEvent.change(screen.getByLabelText('Data od'), { target: { value: '2026-08-01' } });
+      fireEvent.change(screen.getByLabelText('Data do'), { target: { value: '2026-08-31' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Raport zamknięcia' }));
+      await screen.findByText('ZL-ZERO');
+      fireEvent.click(screen.getByRole('button', { name: 'Pobierz Excel (XLSX)' }));
+
+      await waitFor(() => expect(requestedUrls).toContain(
+        '/api/analytics/export/by-order?dateFrom=2026-08-01&dateTo=2026-08-31&closureReport=true',
+      ));
+    });
+
+    it('renders a closed order with zero hours and its completion date', async () => {
+      vi.spyOn(global, 'fetch').mockImplementation(async (input) => {
+        if (String(input).startsWith('/api/analytics/report-by-order')) return response([{
+          orderNumber: 'ZL-ZERO', productName: 'Zamknięte', productCode: 'P-0', quantity: 1,
+          quantityUnit: 'szt.', plannedHours: 10, actualHours: 0, deviation: 10, percent: 0,
+          status: 'CLOSED', completionDate: '2026-08-10',
+        }]) as any;
+        return response([]) as any;
+      });
+      renderReports();
+
+      await screen.findByText('ZL-ZERO');
+      expect(screen.getByText('0.0 h')).toBeInTheDocument();
+      expect(screen.getByText('2026-08-10')).toBeInTheDocument();
+    });
+
+    it('restores active mode from the shared session filter mechanism', () => {
+      window.sessionStorage.setItem('report.by-order', storedFilters({ closureReport: true }));
+      renderReports();
+
+      expect(screen.getByRole('button', { name: 'Raport zamknięcia' })).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('reset disables the mode and removes its session entry', () => {
+      window.sessionStorage.setItem('report.by-order', storedFilters({ closureReport: true }));
+      renderReports();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Wyczyść filtry' }));
+
+      expect(screen.getByRole('button', { name: 'Raport zamknięcia' })).toHaveAttribute('aria-pressed', 'false');
+      expect(window.sessionStorage.getItem('report.by-order')).toBeNull();
+    });
+
+    it('keeps active mode after switching to another report and back', () => {
+      renderReports();
+      fireEvent.click(screen.getByRole('button', { name: 'Raport zamknięcia' }));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Wg Kont Księgowych' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Godziny wg Zleceń' }));
+
+      expect(screen.getByRole('button', { name: 'Raport zamknięcia' })).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('keeps the standard JSON request unchanged while mode is inactive', async () => {
+      const requestedUrls: string[] = [];
+      const originalFetch = global.fetch;
+      vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        requestedUrls.push(String(input));
+        return originalFetch(input, init);
+      }));
+      renderReports();
+
+      await waitFor(() => expect(requestedUrls.some(url =>
+        url.startsWith('/api/analytics/report-by-order?') && !url.includes('closureReport='),
+      )).toBe(true));
+    });
   });
 });

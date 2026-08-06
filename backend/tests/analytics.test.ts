@@ -32,6 +32,57 @@ const binaryParser = (
   response.on('error', callback);
 };
 
+const closureRange = 'dateFrom=2026-08-01&dateTo=2026-08-31&closureReport=true';
+
+const closureOrders = [
+  { id: 'open-hours', orderNumber: 'ZL-001', status: 'OPEN', completionDate: null, deletedAt: null, reports: [{ hours: 5, date: new Date('2026-08-10T00:00:00.000Z'), deletedAt: null }] },
+  { id: 'open-zero', orderNumber: 'ZL-002', status: 'OPEN', completionDate: null, deletedAt: null, reports: [] },
+  { id: 'closed-hours', orderNumber: 'ZL-003', status: 'CLOSED', completionDate: new Date('2026-08-15T00:00:00.000Z'), deletedAt: null, reports: [{ hours: 4, date: new Date('2026-08-12T00:00:00.000Z'), deletedAt: null }] },
+  { id: 'closed-zero', orderNumber: 'ZL-004', status: 'CLOSED', completionDate: new Date('2026-08-16T00:00:00.000Z'), deletedAt: null, reports: [] },
+  { id: 'closed-before', orderNumber: 'ZL-005', status: 'CLOSED', completionDate: new Date('2026-07-31T00:00:00.000Z'), deletedAt: null, reports: [] },
+  { id: 'closed-after', orderNumber: 'ZL-006', status: 'CLOSED', completionDate: new Date('2026-09-01T00:00:00.000Z'), deletedAt: null, reports: [] },
+  { id: 'closed-outside-hours', orderNumber: 'ZL-007', status: 'CLOSED', completionDate: new Date('2026-08-17T00:00:00.000Z'), deletedAt: null, reports: [{ hours: 7, date: new Date('2026-07-20T00:00:00.000Z'), deletedAt: null }] },
+  { id: 'closed-deleted-report', orderNumber: 'ZL-008', status: 'CLOSED', completionDate: new Date('2026-08-18T00:00:00.000Z'), deletedAt: null, reports: [{ hours: 8, date: new Date('2026-08-18T00:00:00.000Z'), deletedAt: new Date('2026-08-19T00:00:00.000Z') }] },
+  { id: 'deleted-order', orderNumber: 'ZL-009', status: 'CLOSED', completionDate: new Date('2026-08-19T00:00:00.000Z'), deletedAt: new Date('2026-08-20T00:00:00.000Z'), reports: [] },
+  { id: 'suspended', orderNumber: 'ZL-010', status: 'SUSPENDED', completionDate: null, deletedAt: null, reports: [{ hours: 3, date: new Date('2026-08-20T00:00:00.000Z'), deletedAt: null }] },
+  { id: 'boundary-from', orderNumber: 'ZL-011', status: 'CLOSED', completionDate: new Date('2026-08-01T00:00:00.000Z'), deletedAt: null, reports: [] },
+  { id: 'boundary-to', orderNumber: 'ZL-012', status: 'CLOSED', completionDate: new Date('2026-08-31T00:00:00.000Z'), deletedAt: null, reports: [] },
+].map(order => ({
+  productName: `Produkt ${order.orderNumber}`,
+  productCode: `P-${order.orderNumber}`,
+  accountingAccount: 'K-001',
+  plannedHours: 10,
+  quantity: 1,
+  quantityUnit: 'szt.',
+  ...order,
+}));
+
+const mockOrderReportQuery = () => vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+  const reportRange = args.include.reports.where.date;
+  const closureBranches = args.where.OR as any[] | undefined;
+  const completionRange = closureBranches?.[1]?.completionDate;
+
+  return closureOrders
+    .filter(order => order.deletedAt === null)
+    .filter(order => {
+      if (!closureBranches) return !args.where.status || order.status === args.where.status;
+      return order.status === 'OPEN' || (
+        order.status === 'CLOSED' &&
+        order.completionDate &&
+        order.completionDate >= completionRange.gte &&
+        order.completionDate <= completionRange.lte
+      );
+    })
+    .map(order => ({
+      ...order,
+      reports: order.reports.filter(report =>
+        report.deletedAt === null &&
+        (!reportRange.gte || report.date >= reportRange.gte) &&
+        (!reportRange.lte || report.date <= reportRange.lte),
+      ),
+    })) as any;
+});
+
 describe('Analytics reports', () => {
   beforeEach(() => {
     vi.spyOn(prisma.user, 'findUnique').mockResolvedValue({
@@ -336,6 +387,83 @@ describe('Analytics reports', () => {
     const filteredRes = await authenticatedGet('/api/analytics/report-by-order?onlyWithHours=true').expect(200);
     expect(filteredRes.body.length).toBe(1);
     expect(filteredRes.body[0].orderNumber).toBe('ZL-001');
+  });
+
+  describe('closure report by order', () => {
+    it.each([
+      ['OPEN with hours in range is visible', 'ZL-001', true, 5],
+      ['OPEN without hours in range is hidden', 'ZL-002', false, undefined],
+      ['CLOSED completed in range with hours is visible', 'ZL-003', true, 4],
+      ['CLOSED completed in range without hours is visible with zero', 'ZL-004', true, 0],
+      ['CLOSED completed before range is hidden', 'ZL-005', false, undefined],
+      ['CLOSED completed after range is hidden', 'ZL-006', false, undefined],
+      ['CLOSED with hours only outside range is visible with zero', 'ZL-007', true, 0],
+      ['deleted work-time entries do not increase the total', 'ZL-008', true, 0],
+      ['deleted order is hidden', 'ZL-009', false, undefined],
+      ['SUSPENDED order is hidden', 'ZL-010', false, undefined],
+      ['completionDate equal to dateFrom is included', 'ZL-011', true, 0],
+      ['completionDate equal to dateTo is included', 'ZL-012', true, 0],
+    ])('%s', async (_name, orderNumber, visible, expectedHours) => {
+      mockOrderReportQuery();
+
+      const response = await authenticatedGet(`/api/analytics/report-by-order?${closureRange}`).expect(200);
+      const row = response.body.find((item: any) => item.orderNumber === orderNumber);
+
+      expect(Boolean(row)).toBe(visible);
+      if (visible) expect(row.actualHours).toBe(expectedHours);
+    });
+
+    it('keeps the standard report behavior when closureReport is absent', async () => {
+      const querySpy = mockOrderReportQuery();
+
+      const response = await authenticatedGet('/api/analytics/report-by-order?dateFrom=2026-08-01&dateTo=2026-08-31').expect(200);
+
+      expect(response.body.some((row: any) => row.orderNumber === 'ZL-002')).toBe(true);
+      expect(response.body.some((row: any) => row.orderNumber === 'ZL-010')).toBe(true);
+      expect(querySpy).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ OR: undefined }),
+      }));
+    });
+
+    it('exports exactly the JSON rows, including zero-hour closed orders', async () => {
+      mockOrderReportQuery();
+
+      const jsonResponse = await authenticatedGet(`/api/analytics/report-by-order?${closureRange}`).expect(200);
+      const xlsxResponse = await authenticatedGet(`/api/analytics/export/by-order?${closureRange}`)
+        .buffer(true)
+        .parse(binaryParser)
+        .expect(200)
+        .expect('Content-Type', /spreadsheetml/);
+
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(xlsxResponse.body);
+      const worksheet = workbook.getWorksheet('Zlecenia')!;
+      const headerRowNumber = worksheet.getColumn(1).values.findIndex(value => value === 'Numer zlecenia');
+      const exportedRows = worksheet.getRows(headerRowNumber + 1, jsonResponse.body.length) || [];
+
+      expect(exportedRows.map(row => ({
+        orderNumber: row.getCell(1).value,
+        actualHours: row.getCell(7).value,
+        completionDate: row.getCell(11).value,
+      }))).toEqual(jsonResponse.body.map((row: any) => ({
+        orderNumber: row.orderNumber,
+        actualHours: row.actualHours,
+        completionDate: row.completionDate || '-',
+      })));
+      expect(jsonResponse.body.find((row: any) => row.orderNumber === 'ZL-004').actualHours).toBe(0);
+    });
+
+    it('rejects an invalid closureReport value', async () => {
+      await authenticatedGet('/api/analytics/report-by-order?closureReport=yes&dateFrom=2026-08-01&dateTo=2026-08-31')
+        .expect(400)
+        .expect(({ body }) => expect(body.code).toBe('INVALID_CLOSURE_REPORT_PARAMS'));
+    });
+
+    it('requires a valid inclusive date range in closure mode', async () => {
+      await authenticatedGet('/api/analytics/report-by-order?closureReport=true&dateFrom=2026-08-31&dateTo=2026-08-01')
+        .expect(400)
+        .expect(({ body }) => expect(body.code).toBe('INVALID_CLOSURE_REPORT_PARAMS'));
+    });
   });
 
   it('calculates sumaBezNadgodzin and sorts employees by last name', async () => {

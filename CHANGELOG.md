@@ -3,6 +3,16 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.4.9] - 2026-08-06
+
+### Added
+
+- Dodano przełącznik „Raport zamknięcia” do istniejącego raportu „Godziny wg zleceń”.
+- Tryb łączy otwarte zlecenia z godzinami w okresie oraz zlecenia zamknięte w okresie, również bez godzin.
+- Rozszerzono JSON, XLSX i CSV o rzeczywistą datę zakończenia oraz wspólną logikę danych JSON/XLSX.
+- Stan trybu jest zapamiętywany w `sessionStorage` razem z filtrami raportu zleceń.
+- Dodano walidację parametru `closureReport`, inkluzywnego zakresu dat oraz testy granic, soft delete, zerowych godzin i zgodności eksportu.
+
 ## [0.4.8] - 2026-08-06
 
 ### Added

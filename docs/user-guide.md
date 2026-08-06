@@ -29,6 +29,8 @@ Zakładka Raporty udostępnia zestawienia według zleceń, pracowników, kont ks
 
 Każda zakładka raportu zapamiętuje własny zakres dat i pozostałe filtry w bieżącej sesji karty. Filtry pozostają ustawione po przejściu do innego raportu lub modułu i po odświeżeniu strony. Przycisk **Wyczyść filtry** przywraca wartości domyślne tylko w aktywnym raporcie. Zamknięcie karty przeglądarki kończy sesję i usuwa zapamiętane filtry.
 
+W raporcie **Godziny wg zleceń** ustaw obie daty i wybierz **Raport zamknięcia**, aby zobaczyć otwarte zlecenia z godzinami w okresie oraz wszystkie zlecenia zamknięte w tym okresie — także te z wartością `0,0 h`. Aktywny przycisk jest wyróżniony i zapamiętywany w bieżącej sesji. Filtry statusu oraz „Pokaż tylko zlecenia z zaraportowanymi godzinami” są wtedy wyłączone, ponieważ wynik celowo łączy statusy i zawiera zlecenia bez godzin. Ponowne kliknięcie przywraca zwykły raport.
+
 Raport **Okresy Nieobecności** uwzględnia wyłącznie typy oznaczone w słowniku jako „Nieobecność”. Filtry obejmują zakres dat, pracownika i rodzaj nieobecności. Kolejne dni robocze są łączone w okres, weekendy nie przerywają okresu ani nie zwiększają liczby dni, a brakujący dzień roboczy rozpoczyna kolejny okres. Wynik można pobrać w formacie XLSX.
 
 > **Zrzut ekranu do wstawienia:** zakładka Raporty z wybranym raportem szczegółowym, zakresem dat, wynikami oraz przyciskami eksportu.

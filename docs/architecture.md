@@ -18,6 +18,7 @@ flowchart LR
 - Nginx serwuje build SPA i przekazuje `/api` do backendu.
 - Express składa middleware CORS/JSON/logowania, uwierzytelnianie JWT, kontrolę ról i routery: auth, users, employees, orders, work-time-types, reports, analytics, imports.
 - Routery zawierają większość walidacji i logiki biznesowej oraz bezpośrednio wywołują Prisma. Krytyczna operacja kopiowania czasu ma wydzielony serwis transakcyjny; ogólnej warstwy repozytoriów nie ma.
+- Endpoint JSON i eksport XLSX raportu zleceń korzystają ze wspólnego generatora `getOrderReportRows`. W trybie zamknięcia zapytanie rozpoczyna się od nieusuniętych zleceń `OPEN` lub `CLOSED` w zakresie `completionDate`, a filtrowane wpisy czasu są opcjonalnie dołączane, dzięki czemu zachowane są również zlecenia z sumą zero.
 - Prisma mapuje modele i migracje na PostgreSQL. Logger Pino zapisuje żądania i błędy na stdout/stderr.
 
 ## Model danych
