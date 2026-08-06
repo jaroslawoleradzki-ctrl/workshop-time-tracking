@@ -8,7 +8,8 @@ import {
   Lock,
   User,
   FolderOpen,
-  DollarSign
+  DollarSign,
+  CalendarOff
 } from 'lucide-react';
 import { UserSession } from '../App';
 import ScrollableTable from './ScrollableTable';
@@ -22,11 +23,13 @@ interface WorkTimeType {
   code: string;
   name: string;
   createdAt: string;
+  requiresOrder: boolean;
+  isAbsence: boolean;
 }
 
 export default function ReportsView({ token, user }: ReportsViewProps) {
   const isAdmin = user.role === 'admin';
-  const [activeReportTab, setActiveReportTab] = useState<'by-order' | 'by-employee' | 'by-account' | 'detailed'>('by-order');
+  const [activeReportTab, setActiveReportTab] = useState<'by-order' | 'by-employee' | 'by-account' | 'detailed' | 'absence-periods'>('by-order');
   
   // Dictionaries for filters
   const [employees, setEmployees] = useState<any[]>([]);
@@ -41,6 +44,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
   const [filterOrderNum, setFilterOrderNum] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterAccount, setFilterAccount] = useState('');
+  const [filterAbsenceType, setFilterAbsenceType] = useState('');
   const [filterOnlyWithHours, setFilterOnlyWithHours] = useState(false);
 
   // Report Data
@@ -84,7 +88,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
   // Trigger data fetch when tab or filters change
   useEffect(() => {
     fetchReportData();
-  }, [activeReportTab, dateFrom, dateTo, filterEmployeeId, filterOrderId, filterOrderNum, filterStatus, filterAccount, filterOnlyWithHours]);
+  }, [activeReportTab, dateFrom, dateTo, filterEmployeeId, filterOrderId, filterOrderNum, filterStatus, filterAccount, filterAbsenceType, filterOnlyWithHours]);
 
   const fetchReportData = async () => {
     setReportData([]); // Clear previous data to prevent rendering crashes
@@ -116,6 +120,11 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
           url = '/api/analytics/report-detailed';
           if (filterEmployeeId) params.append('employeeId', filterEmployeeId);
           if (filterOrderId) params.append('orderId', filterOrderId);
+          break;
+        case 'absence-periods':
+          url = '/api/analytics/report-absence-periods';
+          if (filterEmployeeId) params.append('employeeId', filterEmployeeId);
+          if (filterAbsenceType) params.append('workTimeTypeCode', filterAbsenceType);
           break;
       }
 
@@ -158,6 +167,11 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
         if (filterEmployeeId) params.append('employeeId', filterEmployeeId);
         if (filterOrderId) params.append('orderId', filterOrderId);
         break;
+      case 'absence-periods':
+        path = '/api/analytics/export/absence-periods';
+        if (filterEmployeeId) params.append('employeeId', filterEmployeeId);
+        if (filterAbsenceType) params.append('workTimeTypeCode', filterAbsenceType);
+        break;
     }
 
     const downloadUrl = `${path}?${params.toString()}`;
@@ -171,7 +185,8 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
       const blobUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = blobUrl;
-      a.download = path.includes('by-order') ? 'Raport_zlecen.xlsx' :
+      a.download = path.includes('absence-periods') ? 'Raport_okresow_nieobecnosci.xlsx' :
+                 path.includes('by-order') ? 'Raport_zlecen.xlsx' :
                  path.includes('by-employee') ? 'Raport_miesieczny_pracownicy.xlsx' :
                  path.includes('by-account') ? 'Raport_kont_ksiegowych.xlsx' : 'Raport_szczegolowy.xlsx';
       document.body.appendChild(a);
@@ -284,6 +299,25 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
         headers = ['Data', 'Pracownik', 'Zlecenie', 'Kod produktu', 'Nazwa produktu', 'Konto księgowe', 'Godziny', 'Typ czasu', 'Wprowadził', 'Data wpisu'];
         rows = safeReportData.map(r => [r.date, r.employeeName, r.orderNumber, r.productCode, r.productName, r.accountingAccount, r.hours, r.workTimeTypeCode, r.creatorName, r.createdAt]);
         break;
+      case 'absence-periods':
+        filename = 'Raport_okresow_nieobecnosci.csv';
+        reportTitle = 'Raport okresów nieobecności';
+        const absenceEmployeeName = filterEmployeeId
+          ? (employees.find(e => e.id === filterEmployeeId)?.fullName || filterEmployeeId)
+          : 'Wszyscy pracownicy';
+        const absenceTypeName = filterAbsenceType
+          ? (() => {
+              const type = workTimeTypes.find(t => t.code === filterAbsenceType);
+              return type ? `${type.code} (${type.name})` : filterAbsenceType;
+            })()
+          : 'Wszystkie rodzaje nieobecności';
+        filterItems = [
+          { label: 'Pracownik', value: absenceEmployeeName },
+          { label: 'Rodzaj nieobecności', value: absenceTypeName },
+        ];
+        headers = ['Imię i nazwisko', 'Rodzaj nieobecności', 'Od', 'Do', 'Liczba dni nieobecności'];
+        rows = safeReportData.map(r => [r.employeeName, r.absenceType, r.dateFrom, r.dateTo, r.workingDays]);
+        break;
     }
 
     const metadataLines = [
@@ -335,6 +369,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
     setFilterOrderNum('');
     setFilterStatus('');
     setFilterAccount('');
+    setFilterAbsenceType('');
     setFilterOnlyWithHours(false);
   };
 
@@ -388,6 +423,14 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
         >
           <Search size={16} />
           Raport Szczegółowy
+        </button>
+        <button
+          onClick={() => { setActiveReportTab('absence-periods'); handleClearFilters(); }}
+          className={`nav-item ${activeReportTab === 'absence-periods' ? 'active' : ''}`}
+          style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
+        >
+          <CalendarOff size={16} />
+          Okresy Nieobecności
         </button>
       </div>
 
@@ -444,7 +487,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
             </>
           )}
 
-          {(activeReportTab === 'by-employee' || activeReportTab === 'detailed') && (
+          {(activeReportTab === 'by-employee' || activeReportTab === 'detailed' || activeReportTab === 'absence-periods') && (
             <div className="form-group">
               <label className="form-label">Pracownik</label>
               <select className="form-control" value={filterEmployeeId} onChange={e => setFilterEmployeeId(e.target.value)}>
@@ -473,6 +516,18 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
               <select className="form-control" value={filterOrderId} onChange={e => setFilterOrderId(e.target.value)}>
                 <option value="">Wszystkie zlecenia</option>
                 {orders.map(o => <option key={o.id} value={o.id}>{o.orderNumber} - {o.productName}</option>)}
+              </select>
+            </div>
+          )}
+
+          {activeReportTab === 'absence-periods' && (
+            <div className="form-group">
+              <label className="form-label" htmlFor="absence-type-filter">Rodzaj nieobecności</label>
+              <select id="absence-type-filter" className="form-control" value={filterAbsenceType} onChange={e => setFilterAbsenceType(e.target.value)}>
+                <option value="">Wszystkie rodzaje nieobecności</option>
+                {workTimeTypes
+                  .filter(type => type.isAbsence)
+                  .map(type => <option key={type.code} value={type.code}>{type.code} — {type.name}</option>)}
               </select>
             </div>
           )}
@@ -685,6 +740,31 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                     </tr>
                   ))}
                 </tbody>
+            </ScrollableTable>
+          )}
+
+          {activeReportTab === 'absence-periods' && (
+            <ScrollableTable ariaLabel="Raport okresów nieobecności" containerStyle={{ margin: 0, border: 'none' }}>
+              <thead>
+                <tr>
+                  <th>Imię i nazwisko</th>
+                  <th>Rodzaj nieobecności</th>
+                  <th>Od</th>
+                  <th>Do</th>
+                  <th style={{ textAlign: 'right' }}>Liczba dni nieobecności</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.isArray(reportData) && reportData.map((row, idx) => (
+                  <tr key={`${row.employeeId}-${row.workTimeTypeCode}-${row.dateFrom}-${idx}`}>
+                    <td style={{ fontWeight: 600 }}>{row.employeeName}</td>
+                    <td>{row.absenceType}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{row.dateFrom}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{row.dateTo}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 700 }}>{row.workingDays}</td>
+                  </tr>
+                ))}
+              </tbody>
             </ScrollableTable>
           )}
         </div>

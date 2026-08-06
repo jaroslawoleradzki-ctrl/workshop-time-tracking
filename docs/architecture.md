@@ -33,7 +33,7 @@ erDiagram
   WORK_TIME_TYPE ||--o{ WORK_TIME_REPORT : classifies
 ```
 
-`User` nie jest powiązany z `Employee`. `WorkTimeReport` łączy pracownika, opcjonalne zlecenie, typ czasu i użytkowników tworzącego/modyfikującego. `Order` ma status, aktywność i plan godzin. `ImportHistory` przechowuje wynik importu, a `AuditLog` migawkę zmiany.
+`User` nie jest powiązany z `Employee`. `WorkTimeReport` łączy pracownika, opcjonalne zlecenie, typ czasu i użytkowników tworzącego/modyfikującego. `WorkTimeType.isAbsence` klasyfikuje typ jako nieobecność niezależnie od `requiresOrder`; raport okresów nieobecności korzysta z relacji do tego słownika i nie przechowuje dodatkowego znacznika w samym wpisie. `Order` ma status, aktywność i plan godzin. `ImportHistory` przechowuje wynik importu, a `AuditLog` migawkę zmiany.
 
 ## Przepływy
 

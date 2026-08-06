@@ -3,6 +3,16 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.4.7] - 2026-08-06
+
+### Added
+
+- Dodano jawną, niezależną właściwość `WorkTimeType.isAbsence` wraz z bezpieczną migracją klasyfikującą standardowe kody `UW`, `UOK`, `UŻ` i `L4`.
+- Rozbudowano słownik rodzajów czasu o administracyjną edycję właściwości „Nieobecność”, niezależną od „Wymaga zlecenia”.
+- Dodano raport okresów nieobecności z filtrowaniem po zakresie dat, pracowniku i rodzaju nieobecności oraz eksportem XLSX.
+- Grupowanie raportu pomija weekendy, rozdziela okres po brakującym dniu roboczym i nie nalicza wielokrotnie duplikatów tego samego dnia.
+- Dodano testy backendu, frontendu i treści migracji dla klasyfikacji oraz raportowania nieobecności.
+
 ## [0.4.6] - 2026-08-05
 
 ### Added

@@ -23,10 +23,16 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 
 // Admin-only paths below
 router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response) => {
-  const { code, name, requiresOrder } = req.body;
+  const { code, name, requiresOrder, isAbsence } = req.body;
 
   if (!code || !name) {
     return res.status(400).json({ message: 'Kod i nazwa są wymagane' });
+  }
+  if (requiresOrder !== undefined && typeof requiresOrder !== 'boolean') {
+    return res.status(400).json({ message: 'Pole requiresOrder musi być wartością logiczną' });
+  }
+  if (isAbsence !== undefined && typeof isAbsence !== 'boolean') {
+    return res.status(400).json({ message: 'Pole isAbsence musi być wartością logiczną' });
   }
 
   // UpperCase code
@@ -45,7 +51,8 @@ router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response)
       data: {
         code: formattedCode,
         name: name.trim(),
-        requiresOrder: requiresOrder || false,
+        requiresOrder: requiresOrder ?? false,
+        isAbsence: isAbsence ?? false,
         isSystem: false, // Custom types are not system types
       },
     });
@@ -59,10 +66,16 @@ router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response)
 
 router.put('/:code', requireRole(['admin']), async (req: AuthRequest, res: Response) => {
   const { code } = req.params;
-  const { name, requiresOrder } = req.body;
+  const { name, requiresOrder, isAbsence } = req.body;
 
   if (!name) {
     return res.status(400).json({ message: 'Nazwa słownika jest wymagana' });
+  }
+  if (requiresOrder !== undefined && typeof requiresOrder !== 'boolean') {
+    return res.status(400).json({ message: 'Pole requiresOrder musi być wartością logiczną' });
+  }
+  if (isAbsence !== undefined && typeof isAbsence !== 'boolean') {
+    return res.status(400).json({ message: 'Pole isAbsence musi być wartością logiczną' });
   }
 
   try {
@@ -81,6 +94,7 @@ router.put('/:code', requireRole(['admin']), async (req: AuthRequest, res: Respo
         name: name.trim(),
         // Only allow changing requiresOrder if NOT system type
         ...(!type.isSystem ? { requiresOrder } : {}),
+        ...(isAbsence !== undefined ? { isAbsence } : {}),
       },
     });
 

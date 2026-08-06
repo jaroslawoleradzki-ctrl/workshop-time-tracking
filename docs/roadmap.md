@@ -7,6 +7,12 @@ Dokument przedstawia zrealizowane etapy rozwoju i kamienie milowe aplikacji Work
 
 ---
 
+## Wersja 0.4.7 — Raport okresów nieobecności
+
+- [x] ✔ Dodano niezależną klasyfikację typów czasu `isAbsence` i bezpieczną migrację standardowych kodów nieobecności.
+- [x] ✔ Dodano administracyjną obsługę właściwości „Nieobecność”.
+- [x] ✔ Dodano raport okresów nieobecności z filtrami, grupowaniem dni roboczych i eksportem XLSX.
+
 ## Sprint A
 *Status: Zakończony*
 - [x] ✔ Wdrożenie podstawowego systemu logowania liderów i administratorów (autoryzacja JWT, hash bcrypt).

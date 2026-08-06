@@ -35,6 +35,7 @@ interface WorkTimeType {
   code: string;
   name: string;
   requiresOrder: boolean;
+  isAbsence: boolean;
 }
 
 interface ReportEntry {

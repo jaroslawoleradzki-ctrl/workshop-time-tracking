@@ -26,13 +26,16 @@ Dokument zawiera historię wykonanych wersji oraz aktualne ustalenia projektu **
 
 ---
 
-## Planowane funkcjonalności po wersji 0.4.6
+## Wersja 0.4.7 — Raport okresów nieobecności
+
+- [x] Jawna klasyfikacja `WorkTimeType.isAbsence` niezależna od wymagania zlecenia.
+- [x] Agregacja kolejnych dni roboczych nieobecności z pomijaniem weekendów i duplikatów.
+- [x] Filtry zakresu dat, pracownika i rodzaju nieobecności oraz eksport XLSX.
+
+## Planowane funkcjonalności po wersji 0.4.7
 
 Uzgodniony backlog nowych wymagań biznesowych zgłoszonych przez klienta (szczegółowy opis w [`PROJECT_STATUS.md`](../PROJECT_STATUS.md)):
 
-1. **Funkcjonalność 1 — Raport okresów nieobecności**
-   - Nowy raport w Centrum raportów grupujący dni robocze nieobecności z eksportem XLSX i filtrowaniem.
-2. **Funkcjonalność 2 — Pamiętanie filtrów raportów w ramach sesji**
+1. **Pamiętanie filtrów raportów w ramach sesji**
    - Przechowywanie filtrów poszczególnych raportów w `sessionStorage` w ramach bieżącej sesji przeglądarki.
-
 

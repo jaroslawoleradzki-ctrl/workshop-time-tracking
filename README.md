@@ -74,6 +74,7 @@ Zapewnia administratorom syntetyczne spojrzenie na statusy produkcyjne:
 
 ### 4. Centrum Raportów (Raporty)
 * Generowanie okresowych zestawień i rozliczeń zleceniowych dla liderów oraz administracji.
+* Raport okresów nieobecności grupuje kolejne dni robocze tego samego pracownika i rodzaju nieobecności, pozwala filtrować wyniki oraz eksportować je do XLSX.
 * Eksport raportów do arkuszy Excel z automatycznym formatowaniem szerokości kolumn, autofiltrami i zamrożonym pierwszym wierszem nagłówkowym w celu wygodnej pracy w arkuszu.
 
 ### 5. Administracja i Konfiguracja
@@ -319,7 +320,7 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 
 ## Status projektu
 
-* **Aktualna wersja**: `0.4.6`
+* **Aktualna wersja**: `0.4.7`
 * **Docelowa gałąź integracyjna**: `development`
 * **Status prac**: Aktywny rozwój (Active development)
 

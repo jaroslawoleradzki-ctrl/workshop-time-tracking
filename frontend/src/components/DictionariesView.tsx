@@ -12,6 +12,7 @@ interface WorkTimeType {
   code: string;
   name: string;
   requiresOrder: boolean;
+  isAbsence: boolean;
   isSystem: boolean;
 }
 
@@ -30,6 +31,7 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [requiresOrder, setRequiresOrder] = useState(false);
+  const [isAbsence, setIsAbsence] = useState(false);
   const [formValidationError, setFormValidationError] = useState('');
 
   useEffect(() => {
@@ -56,6 +58,7 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
     setCode('');
     setName('');
     setRequiresOrder(false);
+    setIsAbsence(false);
     setFormValidationError('');
     setShowFormModal(true);
   };
@@ -65,6 +68,7 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
     setCode(t.code);
     setName(t.name);
     setRequiresOrder(t.requiresOrder);
+    setIsAbsence(t.isAbsence);
     setFormValidationError('');
     setShowFormModal(true);
   };
@@ -91,7 +95,8 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
         body: JSON.stringify({
           code: code.trim().toUpperCase(),
           name: name.trim(),
-          requiresOrder
+          requiresOrder,
+          isAbsence
         })
       });
 
@@ -151,9 +156,23 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
                 </div>
               )}
 
-              <div className="form-group">
-                <label className="form-label">Kod rodzaju czasu pracy</label>
+              <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
                 <input
+                  type="checkbox"
+                  id="isAbsence"
+                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  checked={isAbsence}
+                  onChange={e => setIsAbsence(e.target.checked)}
+                />
+                <label htmlFor="isAbsence" className="form-label" style={{ margin: 0, cursor: 'pointer' }}>
+                  Nieobecność
+                </label>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="work-time-type-code">Kod rodzaju czasu pracy</label>
+                <input
+                  id="work-time-type-code"
                   type="text"
                   className="form-control"
                   placeholder="np. NDR2"
@@ -166,8 +185,9 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Pełna nazwa</label>
+                <label className="form-label" htmlFor="work-time-type-name">Pełna nazwa</label>
                 <input
+                  id="work-time-type-name"
                   type="text"
                   className="form-control"
                   placeholder="np. Nadgodziny nocne"
@@ -250,6 +270,7 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
                 <th>Kod</th>
                 <th>Pełna nazwa</th>
                 <th>Zlecenie produkcyjne</th>
+                <th>Nieobecność</th>
                 <th>Typ słownika</th>
                 <th style={{ textAlign: 'center' }}>Akcje</th>
               </tr>
@@ -266,6 +287,15 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
                     }}>
                       {t.code}
                     </code>
+                  </td>
+                  <td>
+                    {t.isAbsence ? (
+                      <span className="badge badge-suspended">Tak</span>
+                    ) : (
+                      <span className="badge badge-open" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}>
+                        Nie
+                      </span>
+                    )}
                   </td>
                   <td style={{ fontWeight: 500 }}>{t.name}</td>
                   <td>

@@ -21,9 +21,9 @@ describe('AbsenceRangeModal & ReportingPanel integration', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
   const workTimeTypes = [
-    { code: 'G', name: 'Godziny standardowe', requiresOrder: true },
-    { code: 'L4', name: 'Chorobowe L4', requiresOrder: false },
-    { code: 'UW', name: 'Urlop wypoczynkowy', requiresOrder: false },
+    { code: 'G', name: 'Godziny standardowe', requiresOrder: true, isAbsence: false },
+    { code: 'L4', name: 'Chorobowe L4', requiresOrder: false, isAbsence: true },
+    { code: 'UW', name: 'Urlop wypoczynkowy', requiresOrder: false, isAbsence: true },
   ];
 
   beforeEach(() => {

@@ -2,9 +2,9 @@
 
 ## Testy istniejące
 
-Backend używa Vitest i Supertest. `backend/tests/version.test.ts` sprawdza `/api/version`; `integration.test.ts` osobno sprawdza odpowiedź 200 healthchecka przy działającym połączeniu Prisma, odpowiedź 503 przy błędzie bazy, format obu odpowiedzi, ograniczenie powtarzanych logów awarii, odrzucenie błędnego logowania oraz ochronę tras bez tokenu. `copy-last-day.test.ts` sprawdza kontrakt i walidację kopiowania, kopiowanie UW i L4 pomiędzy dniami roboczymi, kompletność dnia mieszanego, blokadę soboty i niedzieli bez tworzenia rekordów, wybór pracownika i źródła, soft delete, limit, role, rollback audytu oraz serializację 2 i 20 równoległych żądań na deterministycznym modelu transakcji. `analytics.test.ts` sprawdza dynamiczne agregowanie kodów czasu w miesięcznym raporcie pracowników oraz prezentację braku konta księgowego.
+Backend używa Vitest i Supertest. `backend/tests/version.test.ts` sprawdza `/api/version`; `integration.test.ts` osobno sprawdza odpowiedź 200 healthchecka przy działającym połączeniu Prisma, odpowiedź 503 przy błędzie bazy, format obu odpowiedzi, ograniczenie powtarzanych logów awarii, odrzucenie błędnego logowania oraz ochronę tras bez tokenu. `copy-last-day.test.ts` sprawdza kontrakt i walidację kopiowania, kopiowanie UW i L4 pomiędzy dniami roboczymi, kompletność dnia mieszanego, blokadę soboty i niedzieli bez tworzenia rekordów, wybór pracownika i źródła, soft delete, limit, role, rollback audytu oraz serializację 2 i 20 równoległych żądań na deterministycznym modelu transakcji. `analytics.test.ts` sprawdza również raport okresów nieobecności: konfigurację `isAbsence`, niestandardowy kod, deduplikację dni, przejście przez weekend, rozdzielanie okresów, filtry i XLSX. `work-time-types.test.ts` weryfikuje niezależność `isAbsence` i `requiresOrder`, a `is-absence-migration.test.ts` deterministyczną i niedestrukcyjną treść migracji.
 
-Frontend używa Vitest, Happy DOM i React Testing Library. `frontend/src/test/App.test.tsx` sprawdza renderowanie logowania oraz pobranie i błąd pobrania wersji. `ReportingPanel.test.tsx` sprawdza `employeeId`, blokadę przycisku, wieloklik/klawiaturę, odblokowanie po błędzie i komunikat `409`. `ReportsView.test.tsx` sprawdza generowanie oraz kolejność kolumn miesięcznego raportu pracowników na podstawie bieżącego słownika. `OrdersView.test.tsx` sprawdza częściowe wyszukiwanie bez rozróżniania wielkości liter po zamawiającym, numerze księgowym, numerze produktu i dotychczasowym numerze zlecenia. `frontend/src/test/setup.ts` zapewnia asercje DOM i pamięci webowe.
+Frontend używa Vitest, Happy DOM i React Testing Library. `frontend/src/test/App.test.tsx` sprawdza renderowanie logowania oraz pobranie i błąd pobrania wersji. `ReportingPanel.test.tsx` sprawdza `employeeId`, blokadę przycisku, wieloklik/klawiaturę, odblokowanie po błędzie i komunikat `409`. `ReportsView.test.tsx` sprawdza generowanie oraz kolejność kolumn miesięcznego raportu pracowników na podstawie bieżącego słownika, a także zakładkę, filtr typów i tabelę okresów nieobecności. `DictionariesView.test.tsx` weryfikuje niezależny zapis obu flag. `OrdersView.test.tsx` sprawdza częściowe wyszukiwanie bez rozróżniania wielkości liter po zamawiającym, numerze księgowym, numerze produktu i dotychczasowym numerze zlecenia. `frontend/src/test/setup.ts` zapewnia asercje DOM i pamięci webowe.
 
 ## Polecenia
 
@@ -25,7 +25,7 @@ Backend nie definiuje skryptu lint. Oba skrypty testowe wykonują `vitest run`.
 - wymaganie zlecenia według rodzaju czasu i ostrzeżenia 8/12/24 godzin;
 - kopiowanie ostatniej wcześniejszej daty wyłącznie wybranego pracownika: pojedynczo, dwuklikiem, z dwóch kart, przez dwóch liderów i przy niepustym celu;
 - import poprawny, częściowy, błędny, duplikat i przywrócenie soft delete;
-- wszystkie cztery raporty, filtry, XLSX i CSV;
+- wszystkie pięć raportów, filtry, XLSX i CSV;
 - migracja na kopii produkcyjnej, health check, logi i responsywność laptop/tablet.
 
 ## Braki pokrycia
