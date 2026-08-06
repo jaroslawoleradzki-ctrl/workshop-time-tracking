@@ -4,10 +4,26 @@
 
 - Projekt: Workshop Time Tracking
 - Aktualna wersja produkcyjna: `0.3.8`
-- Aktualna wersja development: `0.4.7`
+- Aktualna wersja development: `0.4.8`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: v0.4.7 — zaimplementowana, oczekuje na test ręczny i zastosowanie migracji w środowisku docelowym
+- Stan prac: v0.4.8 — zapamiętywanie filtrów raportów zaimplementowane, oczekuje na test ręczny
+
+Zakres wersji `0.4.8`:
+
+- Dodano wspólny hook `useReportFilters` obsługujący wersjonowany odczyt, zapis i usuwanie filtrów z `sessionStorage`.
+- Wszystkie pięć raportów przechowuje niezależne zestawy filtrów pod osobnymi kluczami `report.*`.
+- Filtry są odtwarzane po zmianie zakładki, powrocie do modułu i ponownym zamontowaniu widoku; reset usuwa wyłącznie zapis aktywnego raportu.
+- Nie wprowadzono zmian backendu, API, bazy danych ani innych funkcjonalności.
+
+## Weryfikacja wersji 0.4.8
+
+- backend: 105 testów zakończonych powodzeniem,
+- backend: build (`npm run build`) zakończony powodzeniem,
+- frontend: 61 testów zakończonych powodzeniem, w tym 18 testów `ReportsView`,
+- frontend: lint (`npm run lint`) zakończony powodzeniem z wynikiem 0 ostrzeżeń,
+- frontend: build (`npm run build`) zakończony powodzeniem,
+- test ręczny interfejsu i akceptacja użytkownika pozostają do wykonania.
 
 Zakres wersji `0.4.7`:
 
@@ -46,31 +62,6 @@ Zakres wersji `0.4.6`:
 - frontend: 50 testów zakończonych powodzeniem (w tym 5 nowych testów walidacji i prezentacji formularza),
 - frontend: build (`npm run build`) zakończony powodzeniem,
 - frontend: lint (`npm run lint`) zakończony powodzeniem z wynikiem 0 ostrzeżeń.
-
-## Planowane funkcjonalności po wersji 0.4.7
-
-Poniższy uzgodniony backlog funkcjonalny obejmuje nowe wymagania zgłoszone przez klienta. Funkcjonalności nie zostały jeszcze zaimplementowane i oczekują na realizację w kolejnych cyklach rozwojowych.
-
-### Funkcjonalność — Pamiętanie filtrów raportów w ramach sesji
-
-Filtry w Centrum raportów mają zachowywać ostatnio wybrane przez użytkownika wartości w ramach bieżącej sesji przeglądarki.
-
-Zakres zapamiętywanych filtrów obejmuje:
-- datę od,
-- datę do,
-- pracownika,
-- zlecenie,
-- rodzaj czasu pracy lub nieobecności,
-- pozostałe filtry charakterystyczne dla konkretnego raportu.
-
-Ustalenia biznesowe:
-- Każdy raport w Centrum raportów przechowuje własny, niezależny zestaw filtrów.
-- Przejście do innego ekranu w aplikacji i powrót do Centrum raportów nie resetuje wybranych filtrów.
-- Odświeżenie strony w przeglądarce (`F5` / reload) nie resetuje filtrów.
-- Dane filtrów mają być przechowywane w pamięci podręcznej przeglądarki (`sessionStorage`).
-- Zamknięcie karty/okna przeglądarki lub zakończenie sesji użytkownika usuwa zapamiętane wartości filtrów.
-- Wartości filtrów jednego raportu są odizolowane i nie mogą nadpisywać filtrów innego raportu.
-
 
 Zakres wersji `0.4.4`:
 

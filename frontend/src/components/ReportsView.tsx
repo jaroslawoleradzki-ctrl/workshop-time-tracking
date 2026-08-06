@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { UserSession } from '../App';
 import ScrollableTable from './ScrollableTable';
+import { useReportFilters } from '../hooks/useReportFilters';
 
 interface ReportsViewProps {
   token: string;
@@ -27,25 +28,67 @@ interface WorkTimeType {
   isAbsence: boolean;
 }
 
+type ReportTab = 'by-order' | 'by-employee' | 'by-account' | 'detailed' | 'absence-periods';
+
+interface ReportFilters extends Record<string, string | boolean> {
+  dateFrom: string;
+  dateTo: string;
+  employeeId: string;
+  orderId: string;
+  orderNumber: string;
+  status: string;
+  accountingAccount: string;
+  absenceType: string;
+  onlyWithHours: boolean;
+}
+
+const DEFAULT_REPORT_FILTERS: ReportFilters = {
+  dateFrom: '',
+  dateTo: '',
+  employeeId: '',
+  orderId: '',
+  orderNumber: '',
+  status: '',
+  accountingAccount: '',
+  absenceType: '',
+  onlyWithHours: false,
+};
+
 export default function ReportsView({ token, user }: ReportsViewProps) {
   const isAdmin = user.role === 'admin';
-  const [activeReportTab, setActiveReportTab] = useState<'by-order' | 'by-employee' | 'by-account' | 'detailed' | 'absence-periods'>('by-order');
+  const [activeReportTab, setActiveReportTab] = useState<ReportTab>('by-order');
   
   // Dictionaries for filters
   const [employees, setEmployees] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [workTimeTypes, setWorkTimeTypes] = useState<WorkTimeType[]>([]);
 
-  // Shared Filter States
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [filterEmployeeId, setFilterEmployeeId] = useState('');
-  const [filterOrderId, setFilterOrderId] = useState('');
-  const [filterOrderNum, setFilterOrderNum] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterAccount, setFilterAccount] = useState('');
-  const [filterAbsenceType, setFilterAbsenceType] = useState('');
-  const [filterOnlyWithHours, setFilterOnlyWithHours] = useState(false);
+  const byOrderFilters = useReportFilters('report.by-order', DEFAULT_REPORT_FILTERS);
+  const byEmployeeFilters = useReportFilters('report.by-employee', DEFAULT_REPORT_FILTERS);
+  const byAccountFilters = useReportFilters('report.by-account', DEFAULT_REPORT_FILTERS);
+  const detailedFilters = useReportFilters('report.detailed', DEFAULT_REPORT_FILTERS);
+  const absenceFilters = useReportFilters('report.absence', DEFAULT_REPORT_FILTERS);
+
+  const filtersByTab = {
+    'by-order': byOrderFilters,
+    'by-employee': byEmployeeFilters,
+    'by-account': byAccountFilters,
+    detailed: detailedFilters,
+    'absence-periods': absenceFilters,
+  } satisfies Record<ReportTab, typeof byOrderFilters>;
+  const activeFilters = filtersByTab[activeReportTab];
+  const {
+    dateFrom,
+    dateTo,
+    employeeId: filterEmployeeId,
+    orderId: filterOrderId,
+    orderNumber: filterOrderNum,
+    status: filterStatus,
+    accountingAccount: filterAccount,
+    absenceType: filterAbsenceType,
+    onlyWithHours: filterOnlyWithHours,
+  } = activeFilters.filters;
+  const updateFilters = activeFilters.setFilters;
 
   // Report Data
   const [reportData, setReportData] = useState<any[]>([]);
@@ -362,15 +405,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
   };
 
   const handleClearFilters = () => {
-    setDateFrom('');
-    setDateTo('');
-    setFilterEmployeeId('');
-    setFilterOrderId('');
-    setFilterOrderNum('');
-    setFilterStatus('');
-    setFilterAccount('');
-    setFilterAbsenceType('');
-    setFilterOnlyWithHours(false);
+    activeFilters.resetFilters();
   };
 
   return (
@@ -393,7 +428,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
         paddingBottom: '2px'
       }}>
         <button 
-          onClick={() => { setActiveReportTab('by-order'); handleClearFilters(); }}
+          onClick={() => setActiveReportTab('by-order')}
           className={`nav-item ${activeReportTab === 'by-order' ? 'active' : ''}`}
           style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
         >
@@ -401,7 +436,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
           Godziny wg Zleceń
         </button>
         <button 
-          onClick={() => { setActiveReportTab('by-employee'); handleClearFilters(); }}
+          onClick={() => setActiveReportTab('by-employee')}
           className={`nav-item ${activeReportTab === 'by-employee' ? 'active' : ''}`}
           style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
         >
@@ -409,7 +444,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
           Wg Pracowników (Miesięczny)
         </button>
         <button 
-          onClick={() => { setActiveReportTab('by-account'); handleClearFilters(); }}
+          onClick={() => setActiveReportTab('by-account')}
           className={`nav-item ${activeReportTab === 'by-account' ? 'active' : ''}`}
           style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
         >
@@ -417,7 +452,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
           Wg Kont Księgowych
         </button>
         <button 
-          onClick={() => { setActiveReportTab('detailed'); handleClearFilters(); }}
+          onClick={() => setActiveReportTab('detailed')}
           className={`nav-item ${activeReportTab === 'detailed' ? 'active' : ''}`}
           style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
         >
@@ -425,7 +460,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
           Raport Szczegółowy
         </button>
         <button
-          onClick={() => { setActiveReportTab('absence-periods'); handleClearFilters(); }}
+          onClick={() => setActiveReportTab('absence-periods')}
           className={`nav-item ${activeReportTab === 'absence-periods' ? 'active' : ''}`}
           style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
         >
@@ -444,30 +479,31 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
         <div className="form-row">
           {/* Always show Date Range */}
           <div className="form-group">
-            <label className="form-label">Data od</label>
-            <input type="date" className="form-control" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+            <label className="form-label" htmlFor="report-date-from">Data od</label>
+            <input id="report-date-from" type="date" className="form-control" value={dateFrom} onChange={e => updateFilters({ dateFrom: e.target.value })} />
           </div>
           <div className="form-group">
-            <label className="form-label">Data do</label>
-            <input type="date" className="form-control" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+            <label className="form-label" htmlFor="report-date-to">Data do</label>
+            <input id="report-date-to" type="date" className="form-control" value={dateTo} onChange={e => updateFilters({ dateTo: e.target.value })} />
           </div>
 
           {/* Conditional Filters depending on tab */}
           {activeReportTab === 'by-order' && (
             <>
               <div className="form-group">
-                <label className="form-label">Numer zlecenia</label>
+                <label className="form-label" htmlFor="report-order-number">Numer zlecenia</label>
                 <input 
+                  id="report-order-number"
                   type="text" 
                   className="form-control" 
                   placeholder="np. ZL-2026" 
                   value={filterOrderNum} 
-                  onChange={e => setFilterOrderNum(e.target.value)} 
+                  onChange={e => updateFilters({ orderNumber: e.target.value })}
                 />
               </div>
               <div className="form-group">
-                <label className="form-label">Status zlecenia</label>
-                <select className="form-control" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                <label className="form-label" htmlFor="report-order-status">Status zlecenia</label>
+                <select id="report-order-status" className="form-control" value={filterStatus} onChange={e => updateFilters({ status: e.target.value })}>
                   <option value="">Wszystkie statusy</option>
                   <option value="OPEN">Otwarte</option>
                   <option value="SUSPENDED">Wstrzymane</option>
@@ -479,7 +515,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                   <input 
                     type="checkbox" 
                     checked={filterOnlyWithHours} 
-                    onChange={e => setFilterOnlyWithHours(e.target.checked)} 
+                    onChange={e => updateFilters({ onlyWithHours: e.target.checked })}
                   />
                   Pokaż tylko zlecenia z zaraportowanymi godzinami
                 </label>
@@ -489,8 +525,8 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
 
           {(activeReportTab === 'by-employee' || activeReportTab === 'detailed' || activeReportTab === 'absence-periods') && (
             <div className="form-group">
-              <label className="form-label">Pracownik</label>
-              <select className="form-control" value={filterEmployeeId} onChange={e => setFilterEmployeeId(e.target.value)}>
+              <label className="form-label" htmlFor="report-employee">Pracownik</label>
+              <select id="report-employee" className="form-control" value={filterEmployeeId} onChange={e => updateFilters({ employeeId: e.target.value })}>
                 <option value="">Wszyscy pracownicy</option>
                 {employees.map(e => <option key={e.id} value={e.id}>{e.fullName}</option>)}
               </select>
@@ -499,21 +535,22 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
 
           {activeReportTab === 'by-account' && (
             <div className="form-group">
-              <label className="form-label">Konto księgowe</label>
+              <label className="form-label" htmlFor="report-account">Konto księgowe</label>
               <input 
+                id="report-account"
                 type="text" 
                 className="form-control" 
                 placeholder="np. KK-902" 
                 value={filterAccount} 
-                onChange={e => setFilterAccount(e.target.value)} 
+                onChange={e => updateFilters({ accountingAccount: e.target.value })}
               />
             </div>
           )}
 
           {activeReportTab === 'detailed' && (
             <div className="form-group">
-              <label className="form-label">Zlecenie</label>
-              <select className="form-control" value={filterOrderId} onChange={e => setFilterOrderId(e.target.value)}>
+              <label className="form-label" htmlFor="report-order">Zlecenie</label>
+              <select id="report-order" className="form-control" value={filterOrderId} onChange={e => updateFilters({ orderId: e.target.value })}>
                 <option value="">Wszystkie zlecenia</option>
                 {orders.map(o => <option key={o.id} value={o.id}>{o.orderNumber} - {o.productName}</option>)}
               </select>
@@ -523,7 +560,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
           {activeReportTab === 'absence-periods' && (
             <div className="form-group">
               <label className="form-label" htmlFor="absence-type-filter">Rodzaj nieobecności</label>
-              <select id="absence-type-filter" className="form-control" value={filterAbsenceType} onChange={e => setFilterAbsenceType(e.target.value)}>
+              <select id="absence-type-filter" className="form-control" value={filterAbsenceType} onChange={e => updateFilters({ absenceType: e.target.value })}>
                 <option value="">Wszystkie rodzaje nieobecności</option>
                 {workTimeTypes
                   .filter(type => type.isAbsence)

@@ -3,6 +3,15 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.4.8] - 2026-08-06
+
+### Added
+
+- Dodano wspólny, wersjonowany mechanizm zapamiętywania filtrów Centrum Raportów w `sessionStorage`.
+- Każdy z pięciu raportów przechowuje niezależnie wszystkie własne filtry i odtwarza je po zmianie zakładki, powrocie do modułu oraz odświeżeniu strony.
+- Wyczyszczenie filtrów przywraca wartości domyślne i usuwa wyłącznie zapis aktywnego raportu.
+- Dodano testy frontendu dla inicjalizacji, odtwarzania, natychmiastowego zapisu, izolacji raportów, resetu i ponownego montowania widoku.
+
 ## [0.4.7] - 2026-08-06
 
 ### Added

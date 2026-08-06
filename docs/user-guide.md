@@ -27,6 +27,8 @@ Jeśli kod `G` przekroczy 8 godzin lub suma przekroczy 12/24 godziny, pojawi si�
 
 Zakładka Raporty udostępnia zestawienia według zleceń, pracowników, kont księgowych, szczegółowe oraz okresów nieobecności. Ustaw zakres dat i filtry właściwe dla zakładki, wygeneruj raport, a następnie pobierz XLSX lub CSV. Szerokie tabele można przewijać poziomo za pomocą zsynchronizowanych pasków nad i pod tabelą; układ nie rozszerza strony poza szerokość ekranu. W miesięcznym raporcie według pracowników tabela oraz oba eksporty zawierają ten sam zestaw rekordów, a kolumny rodzajów czasu odpowiadają aktualnej zawartości słownika i zachowują kolejność jego pozycji. Szczegółowy raport umożliwia również usunięcie wpisu.
 
+Każda zakładka raportu zapamiętuje własny zakres dat i pozostałe filtry w bieżącej sesji karty. Filtry pozostają ustawione po przejściu do innego raportu lub modułu i po odświeżeniu strony. Przycisk **Wyczyść filtry** przywraca wartości domyślne tylko w aktywnym raporcie. Zamknięcie karty przeglądarki kończy sesję i usuwa zapamiętane filtry.
+
 Raport **Okresy Nieobecności** uwzględnia wyłącznie typy oznaczone w słowniku jako „Nieobecność”. Filtry obejmują zakres dat, pracownika i rodzaj nieobecności. Kolejne dni robocze są łączone w okres, weekendy nie przerywają okresu ani nie zwiększają liczby dni, a brakujący dzień roboczy rozpoczyna kolejny okres. Wynik można pobrać w formacie XLSX.
 
 > **Zrzut ekranu do wstawienia:** zakładka Raporty z wybranym raportem szczegółowym, zakresem dat, wynikami oraz przyciskami eksportu.
