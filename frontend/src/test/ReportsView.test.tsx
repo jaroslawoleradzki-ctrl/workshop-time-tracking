@@ -13,14 +13,14 @@ const response = (body: unknown): JsonResponse => ({
 });
 
 const workTimeTypes = [
-  { code: 'L4', name: 'Zwolnienie chorobowe', createdAt: '2026-01-07T00:00:00.000Z' },
-  { code: 'G', name: 'Standardowe godziny pracy', createdAt: '2026-01-01T00:00:00.000Z' },
-  { code: 'NOC', name: 'Zmiana nocna', createdAt: '2026-01-08T00:00:00.000Z' },
-  { code: 'UOK', name: 'Urlop okolicznościowy', createdAt: '2026-01-05T00:00:00.000Z' },
-  { code: 'NS', name: 'Nadgodziny sobota/niedziela', createdAt: '2026-01-03T00:00:00.000Z' },
-  { code: 'UW', name: 'Urlop wypoczynkowy', createdAt: '2026-01-04T00:00:00.000Z' },
-  { code: 'NDR', name: 'Nadgodziny', createdAt: '2026-01-02T00:00:00.000Z' },
-  { code: 'UŻ', name: 'Urlop na żądanie', createdAt: '2026-01-06T00:00:00.000Z' },
+  { code: 'L4', name: 'Zwolnienie chorobowe', createdAt: '2026-01-07T00:00:00.000Z', requiresOrder: false, isAbsence: true },
+  { code: 'G', name: 'Standardowe godziny pracy', createdAt: '2026-01-01T00:00:00.000Z', requiresOrder: true, isAbsence: false },
+  { code: 'NOC', name: 'Zmiana nocna', createdAt: '2026-01-08T00:00:00.000Z', requiresOrder: false, isAbsence: false },
+  { code: 'UOK', name: 'Urlop okolicznościowy', createdAt: '2026-01-05T00:00:00.000Z', requiresOrder: false, isAbsence: true },
+  { code: 'NS', name: 'Nadgodziny sobota/niedziela', createdAt: '2026-01-03T00:00:00.000Z', requiresOrder: true, isAbsence: false },
+  { code: 'UW', name: 'Urlop wypoczynkowy', createdAt: '2026-01-04T00:00:00.000Z', requiresOrder: false, isAbsence: true },
+  { code: 'NDR', name: 'Nadgodziny', createdAt: '2026-01-02T00:00:00.000Z', requiresOrder: true, isAbsence: false },
+  { code: 'UŻ', name: 'Urlop na żądanie', createdAt: '2026-01-06T00:00:00.000Z', requiresOrder: false, isAbsence: true },
 ];
 
 describe('ReportsView — miesięczny raport pracowników', () => {
@@ -82,6 +82,17 @@ describe('ReportsView — miesięczny raport pracowników', () => {
           workTimeTypeCode: 'G',
           creatorName: 'Administrator',
           createdAt: '2026-07-01T08:00:00.000Z',
+        }]);
+      }
+      if (url.startsWith('/api/analytics/report-absence-periods')) {
+        return response([{
+          employeeId: '20000000-0000-4000-8000-000000000001',
+          employeeName: 'Kowalski Jan',
+          workTimeTypeCode: 'L4',
+          absenceType: 'L4 (Zwolnienie chorobowe)',
+          dateFrom: '2026-07-03',
+          dateTo: '2026-07-06',
+          workingDays: 2,
         }]);
       }
 
@@ -221,6 +232,7 @@ describe('ReportsView — miesięczny raport pracowników', () => {
     ['Wg Pracowników (Miesięczny)', 'Raport według pracowników'],
     ['Wg Kont Księgowych', 'Raport kont księgowych'],
     ['Raport Szczegółowy', 'Raport szczegółowy'],
+    ['Okresy Nieobecności', 'Raport okresów nieobecności'],
   ])('uses the shared synchronized horizontal scrollbars for %s', async (tabName, tableLabel) => {
     render(
       <ReportsView
@@ -272,5 +284,24 @@ describe('ReportsView — miesięczny raport pracowników', () => {
     fireEvent.change(statusSelect, { target: { value: 'OPEN' } });
 
     expect(lastUrl).toContain('status=OPEN');
+  });
+
+  it('shows only isAbsence types in the absence filter and renders period columns', async () => {
+    render(
+      <ReportsView
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Okresy Nieobecności' }));
+    await screen.findByRole('table', { name: 'Raport okresów nieobecności' });
+
+    const absenceSelect = screen.getByLabelText('Rodzaj nieobecności');
+    expect(Array.from((absenceSelect as HTMLSelectElement).options).map(option => option.value)).toEqual([
+      '', 'UW', 'UOK', 'UŻ', 'L4',
+    ]);
+    expect(screen.getByRole('columnheader', { name: 'Liczba dni nieobecności' })).toBeInTheDocument();
+    expect(screen.getByText('L4 (Zwolnienie chorobowe)')).toBeInTheDocument();
   });
 });

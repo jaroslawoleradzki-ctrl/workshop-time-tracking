@@ -42,7 +42,7 @@ Importy są częściowe, wykonywane wiersz po wierszu, bez jednej transakcji obe
 
 ## Eksporty XLSX i CSV dla użytkownika
 
-Od wersji `0.3.7` wszystkie pliki raportowe dla użytkownika (Zlecenia, Miesięczny pracowników, Konta księgowe, Szczegółowy) w formatach XLSX oraz CSV posiadają zunifikowany nagłówek metadanych umieszczony przed tabelą danych:
+Od wersji `0.3.7` wszystkie pliki raportowe dla użytkownika (Zlecenia, Miesięczny pracowników, Konta księgowe, Szczegółowy, Okresy nieobecności) w formatach XLSX oraz CSV posiadają zunifikowany nagłówek metadanych umieszczony przed tabelą danych:
 
 1. **Wiersz 1**: `Raport: <Nazwa raportu>` (W XLSX: czcionka 14pt, pogrubiona, scalona na szerokość tabeli).
 2. **Wiersz 2**: `Zakres dat: <Zakres>` (Wartość `DD.MM.YYYY–DD.MM.YYYY` lub `Wszystkie`).
@@ -57,6 +57,7 @@ Od wersji `0.3.7` wszystkie pliki raportowe dla użytkownika (Zlecenia, Miesięc
 | Według pracowników | `dateFrom`, `dateTo`, `employeeId` | Pracownik; Suma godzin z nadgodzinami; Suma godzin bez nadgodzin; dynamiczne kolumny rodzajów czasu |
 | Według kont | `dateFrom`, `dateTo`, `accountingAccount` | Data; Konto księgowe; Pracownik; Zlecenie; Produkt; Liczba godzin; Rodzaj czasu pracy |
 | Szczegółowy | `dateFrom`, `dateTo`, `employeeId`, `orderId` | Data; Pracownik; Numer zlecenia; Numer produktu; Nazwa produktu; Konto księgowe; Liczba godzin; Typ czasu pracy; Wprowadził użytkownik; Data wpisu w bazie |
+| Okresy nieobecności | `dateFrom`, `dateTo`, `employeeId`, `workTimeTypeCode` | Imię i nazwisko; Rodzaj nieobecności; Od; Do; Liczba dni nieobecności |
 
 W plikach XLSX zamrożenie okien (`ySplit`) oraz zakreślenie `autoFilter` odnoszą się wyłącznie do właściwego wiersza nagłówka tabeli danych. Pliki CSV raportowe posiadają kodowanie UTF-8 z BOM (`\uFEFF`), separator `;`, poprawnie escapowane znaki specjalne i cudzysłowy oraz wiersze metadanych przed tabelą.
 

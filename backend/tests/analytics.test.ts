@@ -169,6 +169,110 @@ describe('Analytics reports', () => {
     expect(response.body[0].accountingAccount).toBe('brak');
   });
 
+  it('builds absence periods from configured types, bridges weekends, splits on missing workdays and deduplicates dates', async () => {
+    const employee = {
+      fullName: 'Jan Kowalski',
+      firstName: 'Jan',
+      lastName: 'Kowalski',
+    };
+    const workTimeType = {
+      code: 'NIEST',
+      name: 'Niestandardowa nieobecność',
+      isAbsence: true,
+      requiresOrder: true,
+    };
+    const reportSpy = vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([
+      { employeeId: EMPLOYEE_ID, employee, workTimeTypeCode: 'NIEST', workTimeType, date: new Date('2026-07-03T00:00:00.000Z') },
+      { employeeId: EMPLOYEE_ID, employee, workTimeTypeCode: 'NIEST', workTimeType, date: new Date('2026-07-03T00:00:00.000Z') },
+      { employeeId: EMPLOYEE_ID, employee, workTimeTypeCode: 'NIEST', workTimeType, date: new Date('2026-07-06T00:00:00.000Z') },
+      { employeeId: EMPLOYEE_ID, employee, workTimeTypeCode: 'NIEST', workTimeType, date: new Date('2026-07-08T00:00:00.000Z') },
+      {
+        employeeId: EMPLOYEE_ID,
+        employee,
+        workTimeTypeCode: 'SZK',
+        workTimeType: { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+        date: new Date('2026-07-07T00:00:00.000Z'),
+      },
+    ] as any);
+
+    const response = await authenticatedGet(
+      `/api/analytics/report-absence-periods?dateFrom=2026-07-03&dateTo=2026-07-08&employeeId=${EMPLOYEE_ID}&workTimeTypeCode=NIEST`,
+    ).expect(200);
+
+    expect(reportSpy).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        deletedAt: null,
+        employeeId: EMPLOYEE_ID,
+        workTimeTypeCode: 'NIEST',
+        workTimeType: { isAbsence: true },
+        date: {
+          gte: new Date('2026-07-03T00:00:00.000Z'),
+          lte: new Date('2026-07-08T00:00:00.000Z'),
+        },
+      }),
+    }));
+    expect(response.body).toEqual([
+      {
+        employeeId: EMPLOYEE_ID,
+        employeeName: 'Kowalski Jan',
+        workTimeTypeCode: 'NIEST',
+        absenceType: 'NIEST (Niestandardowa nieobecność)',
+        dateFrom: '2026-07-03',
+        dateTo: '2026-07-06',
+        workingDays: 2,
+      },
+      {
+        employeeId: EMPLOYEE_ID,
+        employeeName: 'Kowalski Jan',
+        workTimeTypeCode: 'NIEST',
+        absenceType: 'NIEST (Niestandardowa nieobecność)',
+        dateFrom: '2026-07-08',
+        dateTo: '2026-07-08',
+        workingDays: 1,
+      },
+    ]);
+  });
+
+  it('exports the same clipped absence periods to XLSX with report metadata', async () => {
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([{
+      employeeId: EMPLOYEE_ID,
+      employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+      workTimeTypeCode: 'L4',
+      workTimeType: { code: 'L4', name: 'Zwolnienie chorobowe', isAbsence: true },
+      date: new Date('2026-07-06T00:00:00.000Z'),
+    }] as any);
+    vi.spyOn(prisma.employee, 'findUnique').mockResolvedValue({
+      id: EMPLOYEE_ID,
+      fullName: 'Jan Kowalski',
+      firstName: 'Jan',
+      lastName: 'Kowalski',
+    } as any);
+    vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue({
+      code: 'L4', name: 'Zwolnienie chorobowe', isAbsence: true,
+    } as any);
+
+    const filters = `dateFrom=2026-07-06&dateTo=2026-07-06&employeeId=${EMPLOYEE_ID}&workTimeTypeCode=L4`;
+    const response = await authenticatedGet(`/api/analytics/export/absence-periods?${filters}`)
+      .buffer(true)
+      .parse(binaryParser)
+      .expect(200)
+      .expect('Content-Type', /spreadsheetml/);
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(response.body);
+    const worksheet = workbook.getWorksheet('Okresy nieobecności');
+    expect(worksheet?.getRow(1).getCell(1).value).toBe('Raport: Raport okresów nieobecności');
+    expect(worksheet?.getRow(7).values).toEqual([
+      undefined,
+      'Imię i nazwisko',
+      'Rodzaj nieobecności',
+      'Od',
+      'Do',
+      'Liczba dni nieobecności',
+    ]);
+    expect(worksheet?.getRow(8).getCell(5).value).toBe(1);
+  });
+
   it('filters report-by-order by status case-insensitively', async () => {
     const orderSpy = vi.spyOn(prisma.order, 'findMany').mockResolvedValue([]);
 

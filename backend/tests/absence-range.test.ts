@@ -46,13 +46,16 @@ describe('Absence Range API (/api/reports/absence-range)', () => {
 
     vi.spyOn(prisma.workTimeType, 'findUnique').mockImplementation(async ({ where }: any) => {
       if (where.code === 'L4') {
-        return { code: 'L4', name: 'Chorobowe L4', requiresOrder: false } as any;
+        return { code: 'L4', name: 'Chorobowe L4', requiresOrder: false, isAbsence: true } as any;
       }
       if (where.code === 'UW') {
-        return { code: 'UW', name: 'Urlop wypoczynkowy', requiresOrder: false } as any;
+        return { code: 'UW', name: 'Urlop wypoczynkowy', requiresOrder: false, isAbsence: true } as any;
+      }
+      if (where.code === 'ORDABS') {
+        return { code: 'ORDABS', name: 'Nieobecność ze zleceniem', requiresOrder: true, isAbsence: true } as any;
       }
       if (where.code === 'G') {
-        return { code: 'G', name: 'Godziny standardowe', requiresOrder: true } as any;
+        return { code: 'G', name: 'Godziny standardowe', requiresOrder: true, isAbsence: false } as any;
       }
       return null;
     });
@@ -201,13 +204,25 @@ describe('Absence Range API (/api/reports/absence-range)', () => {
     it('returns 400 when workTimeTypeCode requires an order (requiresOrder = true)', async () => {
       const res = await authenticatedPost('/api/reports/absence-range/preview', {
         employeeId: EMPLOYEE_ID,
-        workTimeTypeCode: 'G',
+        workTimeTypeCode: 'ORDABS',
         dateFrom: '2026-08-03',
         dateTo: '2026-08-07',
         hoursPerDay: 8,
       }).expect(400);
 
       expect(res.body.code).toBe('ORDER_REQUIRED_NOT_ALLOWED');
+    });
+
+    it('returns 400 when the type is not classified as an absence', async () => {
+      const res = await authenticatedPost('/api/reports/absence-range/preview', {
+        employeeId: EMPLOYEE_ID,
+        workTimeTypeCode: 'G',
+        dateFrom: '2026-08-03',
+        dateTo: '2026-08-07',
+        hoursPerDay: 8,
+      }).expect(400);
+
+      expect(res.body.code).toBe('WORK_TIME_TYPE_IS_NOT_ABSENCE');
     });
 
     it('returns 400 when dateFrom > dateTo', async () => {
@@ -295,6 +310,7 @@ describe('Absence Range API (/api/reports/absence-range)', () => {
               code: 'L4',
               name: 'Chorobowe L4',
               requiresOrder: false,
+              isAbsence: true,
             }),
           },
           workTimeReport: {
@@ -357,6 +373,7 @@ describe('Absence Range API (/api/reports/absence-range)', () => {
               code: 'UW',
               name: 'Urlop',
               requiresOrder: false,
+              isAbsence: true,
             }),
           },
           workTimeReport: {
@@ -404,6 +421,7 @@ describe('Absence Range API (/api/reports/absence-range)', () => {
               code: 'L4',
               name: 'Chorobowe L4',
               requiresOrder: false,
+              isAbsence: true,
             }),
           },
           workTimeReport: {
@@ -445,6 +463,7 @@ describe('Absence Range API (/api/reports/absence-range)', () => {
               code: 'L4',
               name: 'Chorobowe L4',
               requiresOrder: false,
+              isAbsence: true,
             }),
           },
           workTimeReport: {

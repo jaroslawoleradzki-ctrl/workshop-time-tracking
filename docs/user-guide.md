@@ -25,7 +25,9 @@ Jeśli kod `G` przekroczy 8 godzin lub suma przekroczy 12/24 godziny, pojawi si�
 
 ### Raporty i eksport
 
-Zakładka Raporty udostępnia zestawienia według zleceń, pracowników, kont księgowych i szczegółowe. Ustaw zakres dat i filtry właściwe dla zakładki, wygeneruj raport, a następnie pobierz XLSX lub CSV. Szerokie tabele można przewijać poziomo za pomocą zsynchronizowanych pasków nad i pod tabelą; układ nie rozszerza strony poza szerokość ekranu. W miesięcznym raporcie według pracowników tabela oraz oba eksporty zawierają ten sam zestaw rekordów, a kolumny rodzajów czasu odpowiadają aktualnej zawartości słownika i zachowują kolejność jego pozycji. Szczegółowy raport umożliwia również usunięcie wpisu.
+Zakładka Raporty udostępnia zestawienia według zleceń, pracowników, kont księgowych, szczegółowe oraz okresów nieobecności. Ustaw zakres dat i filtry właściwe dla zakładki, wygeneruj raport, a następnie pobierz XLSX lub CSV. Szerokie tabele można przewijać poziomo za pomocą zsynchronizowanych pasków nad i pod tabelą; układ nie rozszerza strony poza szerokość ekranu. W miesięcznym raporcie według pracowników tabela oraz oba eksporty zawierają ten sam zestaw rekordów, a kolumny rodzajów czasu odpowiadają aktualnej zawartości słownika i zachowują kolejność jego pozycji. Szczegółowy raport umożliwia również usunięcie wpisu.
+
+Raport **Okresy Nieobecności** uwzględnia wyłącznie typy oznaczone w słowniku jako „Nieobecność”. Filtry obejmują zakres dat, pracownika i rodzaj nieobecności. Kolejne dni robocze są łączone w okres, weekendy nie przerywają okresu ani nie zwiększają liczby dni, a brakujący dzień roboczy rozpoczyna kolejny okres. Wynik można pobrać w formacie XLSX.
 
 > **Zrzut ekranu do wstawienia:** zakładka Raporty z wybranym raportem szczegółowym, zakresem dat, wynikami oraz przyciskami eksportu.
 
@@ -37,7 +39,10 @@ Administrator ma wszystkie funkcje lidera oraz poniższe ekrany.
 - **Zlecenia**: dodawanie, edycja, zmiana statusu/aktywności i miękkie usuwanie; plan godzin wylicza się z ilości i godzin na jednostkę. Opcjonalne pole „Uwagi” można uzupełnić w formularzu dodawania lub edycji, a jego wartość jest widoczna w kolumnie listy zleceń. Wyszukiwarka Bazy Zleceń obsługuje częściowe dopasowanie bez rozróżniania wielkości liter, między innymi po numerze zlecenia, zamawiającym, numerze produktu i koncie księgowym.
 - **Pracownicy**: dodawanie, edycja, aktywacja/dezaktywacja i miękkie usuwanie.
 - **Użytkownicy**: tworzenie kont `admin`/`leader`, edycja roli i aktywności oraz reset hasła. Nie można dezaktywować własnego konta ani odebrać sobie roli administratora.
-- **Rodzaje czasu pracy**: tworzenie i edycja kodów oraz flagi wymagania zlecenia. Typów systemowych nie można usunąć ani zmienić im tej flagi; używanego typu nie można usunąć.
+- **Rodzaje czasu pracy**: tworzenie i edycja kodów oraz niezależnych właściwości „Wymaga zlecenia” i „Nieobecność”. Typów systemowych nie można usunąć ani zmienić im flagi wymagania zlecenia; klasyfikację nieobecności można korygować administracyjnie. Używanego typu nie można usunąć.
+
+> [!IMPORTANT]
+> Po aktualizacji należy sprawdzić, czy wszystkie niestandardowe typy nieobecności mają włączoną właściwość „Nieobecność”. Automatyczna migracja oznacza jako nieobecności wyłącznie standardowe kody UW, UOK, UŻ i L4.
 - **Importy**: pobranie szablonu i wgranie pracowników albo zleceń. Wynik pokazuje rekordy poprawne i błędne; historia zawiera wykonawcę, czas, status i log błędów. Szczegóły formatów zawiera [specyfikacja importów i eksportów](import-export-specification.md).
 
 > **Zrzut ekranu do wstawienia:** Dashboard administratora z czterema licznikami i tabelami wykorzystania planu.

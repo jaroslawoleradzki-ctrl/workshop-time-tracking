@@ -5,6 +5,7 @@ export interface WorkTimeType {
   code: string;
   name: string;
   requiresOrder: boolean;
+  isAbsence: boolean;
 }
 
 export interface AbsenceRangeModalProps {
@@ -43,7 +44,9 @@ export default function AbsenceRangeModal({
   workTimeTypes,
   onSuccess,
 }: AbsenceRangeModalProps) {
-  const absenceTypes = workTimeTypes.filter((t) => !t.requiresOrder);
+  // This workflow has no order selector, so it can only save configured absence
+  // types that do not require an order. The flags remain independent in the dictionary.
+  const absenceTypes = workTimeTypes.filter((t) => t.isAbsence && !t.requiresOrder);
 
   const defaultDate = initialDate || new Date().toISOString().split('T')[0];
 

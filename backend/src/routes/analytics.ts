@@ -28,6 +28,23 @@ type EmployeeReportType = {
   name: string;
 };
 
+type AbsencePeriodFilters = {
+  dateFrom?: string;
+  dateTo?: string;
+  employeeId?: string;
+  workTimeTypeCode?: string;
+};
+
+export type AbsencePeriodRow = {
+  employeeId: string;
+  employeeName: string;
+  workTimeTypeCode: string;
+  absenceType: string;
+  dateFrom: string;
+  dateTo: string;
+  workingDays: number;
+};
+
 export const OVERTIME_CODES = ['NDR', 'NS'];
 
 type InternalPivotRow = {
@@ -61,6 +78,120 @@ export function formatEmployeeName(emp: {
     return fullName;
   }
   return 'Brak danych';
+}
+
+function formatDateKey(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function nextWorkingDate(dateKey: string): string {
+  const date = new Date(`${dateKey}T00:00:00.000Z`);
+  do {
+    date.setUTCDate(date.getUTCDate() + 1);
+  } while (date.getUTCDay() === 0 || date.getUTCDay() === 6);
+  return formatDateKey(date);
+}
+
+export async function getAbsencePeriodRows(
+  filters: AbsencePeriodFilters,
+): Promise<AbsencePeriodRow[]> {
+  const reports = await prisma.workTimeReport.findMany({
+    where: {
+      deletedAt: null,
+      employeeId: filters.employeeId || undefined,
+      workTimeTypeCode: filters.workTimeTypeCode || undefined,
+      date: {
+        gte: filters.dateFrom ? new Date(`${filters.dateFrom}T00:00:00.000Z`) : undefined,
+        lte: filters.dateTo ? new Date(`${filters.dateTo}T00:00:00.000Z`) : undefined,
+      },
+      workTimeType: {
+        isAbsence: true,
+      },
+    },
+    include: {
+      employee: true,
+      workTimeType: true,
+    },
+    orderBy: [
+      { employeeId: 'asc' },
+      { workTimeTypeCode: 'asc' },
+      { date: 'asc' },
+    ],
+  });
+
+  const groupedDays = new Map<string, {
+    employeeId: string;
+    employeeName: string;
+    employeeSortKey: string;
+    workTimeTypeCode: string;
+    absenceType: string;
+    dates: Set<string>;
+  }>();
+
+  for (const report of reports) {
+    if (!report.workTimeType.isAbsence) continue;
+    if (report.date.getUTCDay() === 0 || report.date.getUTCDay() === 6) continue;
+    const employeeName = formatEmployeeName(report.employee);
+    const employeeSortKey = `${report.employee.lastName || ''} ${report.employee.firstName || ''} ${employeeName}`.trim();
+    const key = `${report.employeeId}\u0000${report.workTimeTypeCode}`;
+    const group = groupedDays.get(key) || {
+      employeeId: report.employeeId,
+      employeeName,
+      employeeSortKey,
+      workTimeTypeCode: report.workTimeTypeCode,
+      absenceType: `${report.workTimeType.code} (${report.workTimeType.name})`,
+      dates: new Set<string>(),
+    };
+    group.dates.add(formatDateKey(report.date));
+    groupedDays.set(key, group);
+  }
+
+  const periods: Array<AbsencePeriodRow & { employeeSortKey: string }> = [];
+  for (const group of groupedDays.values()) {
+    const dates = [...group.dates].sort();
+    let periodStart = '';
+    let periodEnd = '';
+    let workingDays = 0;
+
+    const flush = () => {
+      if (!periodStart) return;
+      periods.push({
+        employeeId: group.employeeId,
+        employeeName: group.employeeName,
+        employeeSortKey: group.employeeSortKey,
+        workTimeTypeCode: group.workTimeTypeCode,
+        absenceType: group.absenceType,
+        dateFrom: periodStart,
+        dateTo: periodEnd,
+        workingDays,
+      });
+    };
+
+    for (const date of dates) {
+      if (!periodStart) {
+        periodStart = date;
+        periodEnd = date;
+        workingDays = 1;
+      } else if (date === nextWorkingDate(periodEnd)) {
+        periodEnd = date;
+        workingDays += 1;
+      } else {
+        flush();
+        periodStart = date;
+        periodEnd = date;
+        workingDays = 1;
+      }
+    }
+    flush();
+  }
+
+  return periods
+    .sort((a, b) =>
+      a.employeeSortKey.localeCompare(b.employeeSortKey, 'pl') ||
+      a.absenceType.localeCompare(b.absenceType, 'pl') ||
+      a.dateFrom.localeCompare(b.dateFrom),
+    )
+    .map(({ employeeSortKey: _employeeSortKey, ...row }) => row);
 }
 
 async function getEmployeeReportRows(filters: EmployeeReportFilters): Promise<EmployeeReportRow[]> {
@@ -424,6 +555,24 @@ router.get('/report-detailed', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// 6. Absence Period Report
+router.get('/report-absence-periods', async (req: AuthRequest, res: Response) => {
+  const { dateFrom, dateTo, employeeId, workTimeTypeCode } = req.query;
+
+  try {
+    const result = await getAbsencePeriodRows({
+      dateFrom: dateFrom as string | undefined,
+      dateTo: dateTo as string | undefined,
+      employeeId: employeeId as string | undefined,
+      workTimeTypeCode: workTimeTypeCode as string | undefined,
+    });
+    return res.json(result);
+  } catch (error) {
+    logger.error(error, 'Błąd podczas pobierania raportu okresów nieobecności');
+    return res.status(500).json({ message: 'Błąd podczas pobierania raportu okresów nieobecności' });
+  }
+});
+
 // ================= EXPORTS =================
 
 // Export: Order Report
@@ -751,6 +900,69 @@ router.get('/export/detailed', async (req: AuthRequest, res: Response) => {
     });
   } catch (error) {
     logger.error(error, 'Błąd eksportu XLSX (detailed)');
+    return res.status(500).json({ message: 'Błąd eksportu XLSX' });
+  }
+});
+
+// Export: Absence Period Report
+router.get('/export/absence-periods', async (req: AuthRequest, res: Response) => {
+  const { dateFrom, dateTo, employeeId, workTimeTypeCode } = req.query;
+
+  try {
+    const filters: AbsencePeriodFilters = {
+      dateFrom: dateFrom as string | undefined,
+      dateTo: dateTo as string | undefined,
+      employeeId: employeeId as string | undefined,
+      workTimeTypeCode: workTimeTypeCode as string | undefined,
+    };
+    const rows = await getAbsencePeriodRows(filters);
+
+    let employeeValue = 'Wszyscy pracownicy';
+    if (employeeId) {
+      const employee = await prisma.employee.findUnique({ where: { id: employeeId as string } });
+      employeeValue = employee ? formatEmployeeName(employee) : employeeId as string;
+    }
+
+    let absenceTypeValue = 'Wszystkie rodzaje nieobecności';
+    if (workTimeTypeCode) {
+      const type = await prisma.workTimeType.findUnique({
+        where: { code: workTimeTypeCode as string },
+      });
+      absenceTypeValue = type ? `${type.code} (${type.name})` : workTimeTypeCode as string;
+    }
+
+    await generateExcelResponse({
+      res,
+      filename: 'Raport_okresow_nieobecnosci.xlsx',
+      sheetName: 'Okresy nieobecności',
+      headers: [
+        'Imię i nazwisko',
+        'Rodzaj nieobecności',
+        'Od',
+        'Do',
+        'Liczba dni nieobecności',
+      ],
+      data: rows.map((row) => [
+        row.employeeName,
+        row.absenceType,
+        row.dateFrom,
+        row.dateTo,
+        row.workingDays,
+      ]),
+      metadata: {
+        reportTitle: 'Raport okresów nieobecności',
+        dateFrom: filters.dateFrom,
+        dateTo: filters.dateTo,
+        filters: [
+          { label: 'Pracownik', value: employeeValue },
+          { label: 'Rodzaj nieobecności', value: absenceTypeValue },
+        ],
+      },
+      numberColumns: [5],
+      dateColumns: [3, 4],
+    });
+  } catch (error) {
+    logger.error(error, 'Błąd eksportu XLSX raportu okresów nieobecności');
     return res.status(500).json({ message: 'Błąd eksportu XLSX' });
   }
 });

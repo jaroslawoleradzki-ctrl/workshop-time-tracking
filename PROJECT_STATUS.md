@@ -4,10 +4,31 @@
 
 - Projekt: Workshop Time Tracking
 - Aktualna wersja produkcyjna: `0.3.8`
-- Aktualna wersja development: `0.4.6`
+- Aktualna wersja development: `0.4.7`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: v0.4.6 — zaimplementowana, oczekuje na test ręczny
+- Stan prac: v0.4.7 — zaimplementowana, oczekuje na test ręczny i zastosowanie migracji w środowisku docelowym
+
+Zakres wersji `0.4.7`:
+
+- Dodano niezależną klasyfikację `WorkTimeType.isAbsence` wraz z bezpieczną migracją standardowych kodów `UW`, `UOK`, `UŻ` i `L4`.
+- Dodano administracyjną obsługę właściwości „Nieobecność” w słowniku rodzajów czasu.
+- Dodano raport okresów nieobecności, filtry dat/pracownika/rodzaju oraz eksport XLSX.
+- Okresy łączą kolejne dni robocze przez weekend, pomijają weekendy i duplikaty dni oraz rozdzielają się po brakującym dniu roboczym.
+- Kalendarz świąt, indywidualne harmonogramy i pamiętanie filtrów nie należą do zakresu tej wersji.
+
+> Po aktualizacji administrator powinien zweryfikować niestandardowe typy nieobecności. Automatycznie sklasyfikowano wyłącznie `UW`, `UOK`, `UŻ` i `L4`.
+
+## Weryfikacja wersji 0.4.7
+
+- backend: 105 testów zakończonych powodzeniem,
+- backend: build (`npm run build`) zakończony powodzeniem,
+- backend: walidacja schematu Prisma (`npx prisma validate`) zakończona powodzeniem,
+- migracja: pełny łańcuch ośmiu migracji zastosowany na efemerycznej lokalnej bazie PostgreSQL; `prisma migrate status` potwierdził aktualny schemat, a test danych historycznych oznaczył wyłącznie `UW`, `UOK`, `UŻ` i `L4`, pozostawiając pozostałe kody jako `false`,
+- frontend: 53 testy zakończone powodzeniem,
+- frontend: lint (`npm run lint`) zakończony powodzeniem z wynikiem 0 ostrzeżeń,
+- frontend: build (`npm run build`) zakończony powodzeniem,
+- test ręczny interfejsu i akceptacja użytkownika pozostają do wykonania.
 
 Zakres wersji `0.4.6`:
 
@@ -26,27 +47,11 @@ Zakres wersji `0.4.6`:
 - frontend: build (`npm run build`) zakończony powodzeniem,
 - frontend: lint (`npm run lint`) zakończony powodzeniem z wynikiem 0 ostrzeżeń.
 
-## Planowane funkcjonalności po wersji 0.4.6
+## Planowane funkcjonalności po wersji 0.4.7
 
 Poniższy uzgodniony backlog funkcjonalny obejmuje nowe wymagania zgłoszone przez klienta. Funkcjonalności nie zostały jeszcze zaimplementowane i oczekują na realizację w kolejnych cyklach rozwojowych.
 
-### Funkcjonalność 1 — Raport okresów nieobecności
-
-Nowy raport w Centrum raportów prezentujący zagregowane okresy nieobecności pracowników z następującymi kolumnami:
-- Imię i nazwisko
-- Rodzaj nieobecności
-- Od (data początkowa okresu)
-- Do (data końcowa okresu)
-- Liczba dni nieobecności
-
-Ustalenia biznesowe:
-- Kolejne dni robocze tego samego rodzaju nieobecności jednego pracownika mają być grupowane w jeden spójny okres.
-- Liczba dni w raporcie oznacza dni robocze, a nie dni kalendarzowe (soboty i niedziele nie są wliczane do sumy dni).
-- Raport musi umożliwiać filtrowanie co najmniej po: zakresie dat (od/do), konkretnym pracowniku oraz rodzaju nieobecności.
-- Raport musi posiadać funkcję eksportu do pliku Excel (.xlsx) zgodnego ze standardem wizualnym i strukturą nagłówków pozostałych raportów w systemie.
-- Sposób traktowania świąt oraz ewentualnych indywidualnych harmonogramów pracy pozostaje do osobnej decyzji biznesowej (aplikacja nie posiada obecnie kalendarza dni wolnych ani harmonogramów pracowników). Na tym etapie nie należy implementować własnego kalendarza świąt.
-
-### Funkcjonalność 2 — Pamiętanie filtrów raportów w ramach sesji
+### Funkcjonalność — Pamiętanie filtrów raportów w ramach sesji
 
 Filtry w Centrum raportów mają zachowywać ostatnio wybrane przez użytkownika wartości w ramach bieżącej sesji przeglądarki.
 

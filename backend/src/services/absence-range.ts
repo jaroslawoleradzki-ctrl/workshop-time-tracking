@@ -125,6 +125,14 @@ export async function validateAndAnalyzeRange(
     throw new AbsenceRangeError(400, 'INVALID_WORK_TIME_TYPE', 'Kod czasu pracy nie istnieje');
   }
 
+  if (!type.isAbsence) {
+    throw new AbsenceRangeError(
+      400,
+      'WORK_TIME_TYPE_IS_NOT_ABSENCE',
+      `Typ czasu pracy '${workTimeTypeCode}' nie jest oznaczony jako nieobecność`,
+    );
+  }
+
   if (type.requiresOrder) {
     throw new AbsenceRangeError(
       400,

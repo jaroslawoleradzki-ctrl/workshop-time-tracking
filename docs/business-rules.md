@@ -1,6 +1,6 @@
 # Reguły biznesowe
 
-Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.4.6.
+Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.4.7.
 
 ## Role i dostęp
 
@@ -26,6 +26,7 @@ Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.4.6.
 - Wpis wymaga daty, pracownika, liczby godzin większej od zera i istniejącego kodu rodzaju czasu pracy.
 - Wpis raportu czasu może zostać oznaczony jako „Brak karty” (`missingCard`) w sytuacji, gdy pracownik nie posiadał lub nie użył karty podczas rejestracji czasu pracy. Wartość ta jest przechowywana w bazie danych jako pole logiczne (domyślnie `false`).
 - Zlecenie jest wymagane tylko wtedy, gdy `WorkTimeType.requiresOrder=true`. Dla pozostałych typów API zapisuje `orderId=null`.
+- `WorkTimeType.isAbsence` niezależnie klasyfikuje typ jako nieobecność. Flagi `isAbsence` i `requiresOrder` mogą przyjmować dowolną kombinację i zmiana jednej nie modyfikuje drugiej.
 - Nowy wpis można utworzyć tylko dla aktywnego, nieusuniętego pracownika. Jeżeli typ wymaga zlecenia, API sprawdza istnienie nieusuniętego zlecenia; nie sprawdza jednak jego `status` ani `isActive` przy bezpośrednim wywołaniu API.
 - Schemat bazy ogranicza godziny do `Decimal(4,2)`. Kod sprawdza jedynie wartość `> 0`; maksymalna wartość i liczba miejsc po przecinku przychodząca z API są **do potwierdzenia** na poziomie zachowania PostgreSQL/Prisma.
 - Ostrzeżenia są miękkie: ponad 8 godzin kodu `G`, ponad 12 godzin łącznie i ponad 24 godziny łącznie. Interfejs pozwala wybrać „Ignoruj i zapisz”.
@@ -56,6 +57,13 @@ Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.4.6.
 ```
 
 Odpowiedź sukcesu (`201`) zawiera co najmniej `employeeId`, `sourceDate`, `targetDate` i `createdCount`. Nieprawidłowe dane zwracają `400`, niedostępny pracownik lub brak źródła `404`, niepusty cel `409`, a przekroczenie limitu `422`.
+
+## Raport okresów nieobecności
+
+- Raport uwzględnia wyłącznie aktywne wpisy (`deletedAt=null`) powiązane z typem czasu, dla którego `isAbsence=true`.
+- Kolejne dni robocze jednego pracownika i jednego typu są łączone w okres; sobota i niedziela nie przerywają okresu i nie zwiększają liczby dni.
+- Brak wpisu w dniu roboczym rozdziela okres, a wielokrotne wpisy tego samego typu w tym samym dniu są liczone jako jeden dzień.
+- Filtr dat przycina dane przed grupowaniem. Wersja nie uwzględnia świąt ani indywidualnych harmonogramów pracowników.
 
 ## Audyt i daty
 
