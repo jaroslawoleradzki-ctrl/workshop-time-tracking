@@ -67,6 +67,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
   const [hoursPerUnit, setHoursPerUnit] = useState('0.00');
   const [orderStatus, setOrderStatus] = useState<'OPEN' | 'SUSPENDED' | 'CLOSED'>('OPEN');
   const [isActive, setIsActive] = useState(true);
+  const [completionDate, setCompletionDate] = useState('');
   const [formValidationError, setFormValidationError] = useState('');
 
   const derivedPlannedHours = useMemo(() => {
@@ -121,6 +122,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
     setHoursPerUnit('0.00');
     setOrderStatus('OPEN');
     setIsActive(true);
+    setCompletionDate('');
     setFormValidationError('');
     setShowFormModal(true);
   };
@@ -140,6 +142,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
     setHoursPerUnit(order.hoursPerUnit !== null ? order.hoursPerUnit.toString() : '0.00');
     setOrderStatus(order.status);
     setIsActive(order.isActive);
+    setCompletionDate(order.completionDate ? new Date(order.completionDate).toISOString().split('T')[0] : '');
     setFormValidationError('');
     setShowFormModal(true);
   };
@@ -157,6 +160,11 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
     const hrsPerUnit = parseFloat(hoursPerUnit);
     if (isNaN(qty) || qty <= 0 || isNaN(hrsPerUnit) || hrsPerUnit < 0) {
       setFormValidationError('Ilość musi być liczbą większą od 0, a godziny/szt. musi być liczbą większą lub równą 0.');
+      return;
+    }
+
+    if (orderStatus === 'CLOSED' && (!completionDate || completionDate.trim() === '')) {
+      setFormValidationError('Podaj rzeczywistą datę zakończenia zlecenia.');
       return;
     }
 
@@ -183,7 +191,8 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
           quantityUnit: quantityUnit.trim() || 'szt.',
           hoursPerUnit: hrsPerUnit,
           status: orderStatus,
-          isActive
+          isActive,
+          completionDate: completionDate || null,
         })
       });
 
@@ -536,10 +545,11 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                   </div>
                 </div>
 
-                <div className="form-row" style={{ marginTop: '0.75rem', alignItems: 'center' }}>
+                <div className="form-row" style={{ marginTop: '0.75rem' }}>
                   <div className="form-group">
-                    <label className="form-label">Status zlecenia</label>
+                    <label className="form-label" htmlFor="orderStatusSelect">Status zlecenia</label>
                     <select
+                      id="orderStatusSelect"
                       className="form-control"
                       value={orderStatus}
                       onChange={e => setOrderStatus(e.target.value as any)}
@@ -550,18 +560,34 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                     </select>
                   </div>
 
-                  <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1.2rem' }}>
-                    <input
-                      type="checkbox"
-                      id="isActiveCheckbox"
-                      checked={isActive}
-                      onChange={e => setIsActive(e.target.checked)}
-                      style={{ cursor: 'pointer', width: '18px', height: '18px' }}
-                    />
-                    <label htmlFor="isActiveCheckbox" style={{ cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }}>
-                      Zlecenie aktywne
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="completionDateInput">
+                      Rzeczywista data zakończenia {orderStatus === 'CLOSED' && <span style={{ color: 'var(--danger-color)' }}>*</span>}
                     </label>
+                    <input
+                      id="completionDateInput"
+                      type="date"
+                      className="form-control"
+                      value={completionDate}
+                      onChange={e => setCompletionDate(e.target.value)}
+                      disabled={orderStatus !== 'CLOSED'}
+                      required={orderStatus === 'CLOSED'}
+                      placeholder="Wybierz datę zakończenia"
+                    />
                   </div>
+                </div>
+
+                <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <input
+                    type="checkbox"
+                    id="isActiveCheckbox"
+                    checked={isActive}
+                    onChange={e => setIsActive(e.target.checked)}
+                    style={{ cursor: 'pointer', width: '18px', height: '18px' }}
+                  />
+                  <label htmlFor="isActiveCheckbox" style={{ cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }}>
+                    Zlecenie aktywne
+                  </label>
                 </div>
               </div>
 
@@ -720,7 +746,9 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
                 const statusBadge = 
                   order.status === 'OPEN' ? <span className="badge badge-open">Otwarte</span> :
                   order.status === 'SUSPENDED' ? <span className="badge badge-suspended">Wstrzymane</span> :
-                  <span className="badge badge-closed">Zamknięte</span>;
+                  <span className="badge badge-closed" title={order.completionDate ? `Data zamknięcia: ${new Date(order.completionDate).toLocaleDateString('pl-PL')}` : undefined}>
+                    Zamknięte {order.completionDate ? `(${new Date(order.completionDate).toLocaleDateString('pl-PL')})` : ''}
+                  </span>;
 
                 const orderNumberDisplay = order.isActive ? (
                   order.orderNumber

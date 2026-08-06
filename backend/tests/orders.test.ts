@@ -188,13 +188,13 @@ describe('Orders notes', () => {
       .expect(403);
   });
 
-  describe('completionDate status transitions', () => {
-    it('sets completionDate when status changes from OPEN to CLOSED', async () => {
+  describe('completionDate status transitions and validations (v0.4.6)', () => {
+    it('1. Closing order with valid completionDate succeeds', async () => {
       vi.spyOn(prisma.order, 'findFirst').mockResolvedValue(order as any);
       const updateSpy = vi.spyOn(prisma.order, 'update').mockResolvedValue({
         ...order,
         status: 'CLOSED',
-        completionDate: new Date(),
+        completionDate: new Date('2026-08-05T00:00:00.000Z'),
       } as any);
 
       await request(app)
@@ -209,6 +209,7 @@ describe('Orders notes', () => {
           hoursPerUnit: 2,
           status: 'CLOSED',
           isActive: true,
+          completionDate: '2026-08-05',
         })
         .expect(200);
 
@@ -221,17 +222,176 @@ describe('Orders notes', () => {
       });
     });
 
-    it('clears completionDate to null when status changes from CLOSED to OPEN', async () => {
+    it('2. Closing without completionDate returns 400 COMPLETION_DATE_REQUIRED', async () => {
+      vi.spyOn(prisma.order, 'findFirst').mockResolvedValue(order as any);
+
+      const res = await request(app)
+        .put(`/api/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          orderNumber: order.orderNumber,
+          orderDate: '2026-07-27',
+          productName: order.productName,
+          quantity: 2,
+          quantityUnit: 'szt.',
+          hoursPerUnit: 2,
+          status: 'CLOSED',
+          isActive: true,
+        })
+        .expect(400);
+
+      expect(res.body).toEqual({
+        message: 'Rzeczywista data zakończenia jest wymagana przy zamykaniu zlecenia.',
+        code: 'COMPLETION_DATE_REQUIRED',
+      });
+    });
+
+    it('3. Closing with completionDate: null returns 400 COMPLETION_DATE_REQUIRED', async () => {
+      vi.spyOn(prisma.order, 'findFirst').mockResolvedValue(order as any);
+
+      const res = await request(app)
+        .put(`/api/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          orderNumber: order.orderNumber,
+          orderDate: '2026-07-27',
+          productName: order.productName,
+          quantity: 2,
+          quantityUnit: 'szt.',
+          hoursPerUnit: 2,
+          status: 'CLOSED',
+          isActive: true,
+          completionDate: null,
+        })
+        .expect(400);
+
+      expect(res.body.code).toBe('COMPLETION_DATE_REQUIRED');
+    });
+
+    it('4. Closing with empty string completionDate returns 400 COMPLETION_DATE_REQUIRED', async () => {
+      vi.spyOn(prisma.order, 'findFirst').mockResolvedValue(order as any);
+
+      const res = await request(app)
+        .put(`/api/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          orderNumber: order.orderNumber,
+          orderDate: '2026-07-27',
+          productName: order.productName,
+          quantity: 2,
+          quantityUnit: 'szt.',
+          hoursPerUnit: 2,
+          status: 'CLOSED',
+          isActive: true,
+          completionDate: '   ',
+        })
+        .expect(400);
+
+      expect(res.body.code).toBe('COMPLETION_DATE_REQUIRED');
+    });
+
+    it('5. Closing with invalid completionDate string returns 400', async () => {
+      vi.spyOn(prisma.order, 'findFirst').mockResolvedValue(order as any);
+
+      const res = await request(app)
+        .put(`/api/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          orderNumber: order.orderNumber,
+          orderDate: '2026-07-27',
+          productName: order.productName,
+          quantity: 2,
+          quantityUnit: 'szt.',
+          hoursPerUnit: 2,
+          status: 'CLOSED',
+          isActive: true,
+          completionDate: 'not-a-valid-date',
+        })
+        .expect(400);
+
+      expect(res.body.code).toBe('COMPLETION_DATE_REQUIRED');
+    });
+
+    it('6. Creating CLOSED order without completionDate is rejected with 400', async () => {
+      vi.spyOn(prisma.order, 'findFirst').mockResolvedValue(null);
+
+      const res = await authenticatedRequest()
+        .send({
+          orderNumber: 'ZL-CLOSED-NEW',
+          orderDate: '2026-07-27',
+          productName: 'Produkt',
+          quantity: 1,
+          hoursPerUnit: 1,
+          status: 'CLOSED',
+          isActive: true,
+        })
+        .expect(400);
+
+      expect(res.body.code).toBe('COMPLETION_DATE_REQUIRED');
+    });
+
+    it('7. Creating OPEN order without completionDate succeeds', async () => {
+      vi.spyOn(prisma.order, 'findFirst').mockResolvedValue(null);
+      const createSpy = vi.spyOn(prisma.order, 'create').mockResolvedValue(order as any);
+
+      await authenticatedRequest()
+        .send({
+          orderNumber: 'ZL-OPEN-NEW',
+          orderDate: '2026-07-27',
+          productName: 'Produkt',
+          quantity: 1,
+          hoursPerUnit: 1,
+          status: 'OPEN',
+          isActive: true,
+        })
+        .expect(201);
+
+      expect(createSpy).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          status: 'OPEN',
+          completionDate: null,
+        }),
+      });
+    });
+
+    it('8. Creating SUSPENDED order without completionDate succeeds', async () => {
+      vi.spyOn(prisma.order, 'findFirst').mockResolvedValue(null);
+      const createSpy = vi.spyOn(prisma.order, 'create').mockResolvedValue({
+        ...order,
+        status: 'SUSPENDED',
+      } as any);
+
+      await authenticatedRequest()
+        .send({
+          orderNumber: 'ZL-SUSP-NEW',
+          orderDate: '2026-07-27',
+          productName: 'Produkt',
+          quantity: 1,
+          hoursPerUnit: 1,
+          status: 'SUSPENDED',
+          isActive: true,
+        })
+        .expect(201);
+
+      expect(createSpy).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          status: 'SUSPENDED',
+          completionDate: null,
+        }),
+      });
+    });
+
+    it('9. Reopening closed order preserves completionDate instead of deleting it', async () => {
+      const existingCompletionDate = new Date('2026-07-28T00:00:00.000Z');
       const closedOrder = {
         ...order,
         status: 'CLOSED',
-        completionDate: new Date('2026-07-28T12:00:00.000Z'),
+        completionDate: existingCompletionDate,
       };
       vi.spyOn(prisma.order, 'findFirst').mockResolvedValue(closedOrder as any);
       const updateSpy = vi.spyOn(prisma.order, 'update').mockResolvedValue({
-        ...order,
+        ...closedOrder,
         status: 'OPEN',
-        completionDate: null,
       } as any);
 
       await request(app)
@@ -253,20 +413,23 @@ describe('Orders notes', () => {
         where: { id: ORDER_ID },
         data: expect.objectContaining({
           status: 'OPEN',
-          completionDate: null,
+          completionDate: existingCompletionDate,
         }),
       });
     });
 
-    it('preserves existing completionDate when updating an already CLOSED order', async () => {
-      const originalCompletionDate = new Date('2026-07-28T12:00:00.000Z');
+    it('10. Updating completionDate of a closed order saves the new value', async () => {
+      const originalCompletionDate = new Date('2026-07-28T00:00:00.000Z');
       const closedOrder = {
         ...order,
         status: 'CLOSED',
         completionDate: originalCompletionDate,
       };
       vi.spyOn(prisma.order, 'findFirst').mockResolvedValue(closedOrder as any);
-      const updateSpy = vi.spyOn(prisma.order, 'update').mockResolvedValue(closedOrder as any);
+      const updateSpy = vi.spyOn(prisma.order, 'update').mockResolvedValue({
+        ...closedOrder,
+        completionDate: new Date('2026-08-01T00:00:00.000Z'),
+      } as any);
 
       await request(app)
         .put(`/api/orders/${ORDER_ID}`)
@@ -280,6 +443,7 @@ describe('Orders notes', () => {
           hoursPerUnit: 2,
           status: 'CLOSED',
           isActive: true,
+          completionDate: '2026-08-01',
         })
         .expect(200);
 
@@ -287,7 +451,74 @@ describe('Orders notes', () => {
         where: { id: ORDER_ID },
         data: expect.objectContaining({
           status: 'CLOSED',
-          completionDate: originalCompletionDate,
+          completionDate: expect.any(Date),
+        }),
+      });
+    });
+
+    it('11. Date value does not shift by 1 day when saving and retrieving', async () => {
+      const targetDateStr = '2026-08-05';
+      vi.spyOn(prisma.order, 'findFirst').mockResolvedValue(order as any);
+      vi.spyOn(prisma.order, 'update').mockImplementation(async ({ data }: any) => {
+        return {
+          ...order,
+          status: 'CLOSED',
+          completionDate: data.completionDate,
+        } as any;
+      });
+
+      const res = await request(app)
+        .put(`/api/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          orderNumber: order.orderNumber,
+          orderDate: '2026-07-27',
+          productName: order.productName,
+          quantity: 2,
+          quantityUnit: 'szt.',
+          hoursPerUnit: 2,
+          status: 'CLOSED',
+          isActive: true,
+          completionDate: targetDateStr,
+        })
+        .expect(200);
+
+      const returnedDate = new Date(res.body.completionDate).toISOString().split('T')[0];
+      expect(returnedDate).toBe(targetDateStr);
+    });
+
+    it('12. Audit log contains status and completionDate changes', async () => {
+      const auditLogSpy = vi.spyOn(prisma.auditLog, 'create').mockResolvedValue({} as any);
+      vi.spyOn(prisma.order, 'findFirst').mockResolvedValue(order as any);
+      vi.spyOn(prisma.order, 'update').mockResolvedValue({
+        ...order,
+        status: 'CLOSED',
+        completionDate: new Date('2026-08-05T00:00:00.000Z'),
+      } as any);
+
+      await request(app)
+        .put(`/api/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          orderNumber: order.orderNumber,
+          orderDate: '2026-07-27',
+          productName: order.productName,
+          quantity: 2,
+          quantityUnit: 'szt.',
+          hoursPerUnit: 2,
+          status: 'CLOSED',
+          isActive: true,
+          completionDate: '2026-08-05',
+        })
+        .expect(200);
+
+      expect(auditLogSpy).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          tableName: 'orders',
+          recordId: ORDER_ID,
+          action: 'UPDATE',
+          oldValues: expect.objectContaining({ status: 'OPEN', completionDate: null }),
+          newValues: expect.objectContaining({ status: 'CLOSED' }),
         }),
       });
     });

@@ -3,6 +3,16 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.4.6] - 2026-08-05
+
+### Added
+
+- Wprowadzono wymóg podania rzeczywistej daty zakończenia zlecenia (`completionDate`) przy zamykaniu zlecenia (status `CLOSED`).
+- Dodano walidację braku daty, pustego ciągu znaków oraz niepoprawnego formatu daty po stronie API (kod błędu `COMPLETION_DATE_REQUIRED`, HTTP 400).
+- Rozbudowano formularz edycji i tworzenia zleceń w interfejsie użytkownika (`OrdersView.tsx`) o pole „Rzeczywista data zakończenia” z oznaczeniem wymogu i walidacją.
+- Zapewniono zachowanie istniejącej daty zakończenia przy ponownym otwarciu zlecenia (przejście ze statusu `CLOSED` na `OPEN` lub `SUSPENDED`).
+- Dodano prezentację daty zamknięcia w odznace statusu w tabeli zleceń.
+
 ## [0.4.5] - 2026-08-05
 
 ### Fixed
