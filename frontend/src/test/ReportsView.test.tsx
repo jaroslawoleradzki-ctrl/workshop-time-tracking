@@ -23,8 +23,41 @@ const workTimeTypes = [
   { code: 'UŻ', name: 'Urlop na żądanie', createdAt: '2026-01-06T00:00:00.000Z', requiresOrder: false, isAbsence: true },
 ];
 
+const employees = [
+  { id: 'employee-1', fullName: 'Kowalski Jan' },
+  { id: 'employee-2', fullName: 'Nowak Anna' },
+];
+
+const orders = [
+  { id: 'order-1', orderNumber: 'ZL-001', productName: 'Produkt testowy' },
+];
+
+const storedFilters = (filters: Record<string, string | boolean>) => JSON.stringify({
+  version: 1,
+  filters: {
+    dateFrom: '',
+    dateTo: '',
+    employeeId: '',
+    orderId: '',
+    orderNumber: '',
+    status: '',
+    accountingAccount: '',
+    absenceType: '',
+    onlyWithHours: false,
+    ...filters,
+  },
+});
+
+const renderReports = () => render(
+  <ReportsView
+    token="test-token"
+    user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+  />,
+);
+
 describe('ReportsView — miesięczny raport pracowników', () => {
   beforeEach(() => {
+    window.sessionStorage.clear();
     vi.stubGlobal('ResizeObserver', class {
       observe() {}
       unobserve() {}
@@ -33,8 +66,8 @@ describe('ReportsView — miesięczny raport pracowników', () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
 
-      if (url === '/api/employees') return response([]);
-      if (url === '/api/orders') return response([]);
+      if (url === '/api/employees') return response(employees);
+      if (url === '/api/orders') return response(orders);
       if (url === '/api/work-time-types') return response(workTimeTypes);
       if (url.startsWith('/api/analytics/report-by-order')) {
         return response([{
@@ -103,6 +136,112 @@ describe('ReportsView — miesięczny raport pracowników', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+  });
+
+  it('uses current defaults on the first opening when sessionStorage has no entry', () => {
+    renderReports();
+
+    expect(screen.getByLabelText('Data od')).toHaveValue('');
+    expect(screen.getByLabelText('Data do')).toHaveValue('');
+    expect(window.sessionStorage.getItem('report.by-order')).toBeNull();
+  });
+
+  it('restores saved filters during the first render', () => {
+    window.sessionStorage.setItem('report.by-order', storedFilters({
+      dateFrom: '2026-07-01',
+      dateTo: '2026-07-31',
+      orderNumber: 'ZL-2026',
+      status: 'OPEN',
+      onlyWithHours: true,
+    }));
+
+    renderReports();
+
+    expect(screen.getByLabelText('Data od')).toHaveValue('2026-07-01');
+    expect(screen.getByLabelText('Data do')).toHaveValue('2026-07-31');
+    expect(screen.getByLabelText('Numer zlecenia')).toHaveValue('ZL-2026');
+    expect(screen.getByLabelText('Status zlecenia')).toHaveValue('OPEN');
+    expect(screen.getByRole('checkbox')).toBeChecked();
+  });
+
+  it('rejects data saved with an unsupported storage version', () => {
+    window.sessionStorage.setItem('report.by-order', JSON.stringify({
+      version: 999,
+      filters: { dateFrom: '2020-01-01' },
+    }));
+
+    renderReports();
+
+    expect(screen.getByLabelText('Data od')).toHaveValue('');
+    expect(window.sessionStorage.getItem('report.by-order')).toBeNull();
+  });
+
+  it('immediately stores date changes using the versioned structure', () => {
+    renderReports();
+
+    fireEvent.change(screen.getByLabelText('Data od'), { target: { value: '2026-08-01' } });
+    fireEvent.change(screen.getByLabelText('Data do'), { target: { value: '2026-08-31' } });
+
+    expect(JSON.parse(window.sessionStorage.getItem('report.by-order')!)).toMatchObject({
+      version: 1,
+      filters: { dateFrom: '2026-08-01', dateTo: '2026-08-31' },
+    });
+  });
+
+  it('stores employee and report-specific type filters', async () => {
+    renderReports();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Wg Pracowników (Miesięczny)' }));
+    await screen.findByRole('option', { name: 'Nowak Anna' });
+    fireEvent.change(screen.getByLabelText('Pracownik'), { target: { value: 'employee-2' } });
+    expect(JSON.parse(window.sessionStorage.getItem('report.by-employee')!).filters.employeeId).toBe('employee-2');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Okresy Nieobecności' }));
+    await screen.findByRole('option', { name: 'L4 — Zwolnienie chorobowe' });
+    fireEvent.change(screen.getByLabelText('Rodzaj nieobecności'), { target: { value: 'L4' } });
+    expect(JSON.parse(window.sessionStorage.getItem('report.absence')!).filters.absenceType).toBe('L4');
+  });
+
+  it('keeps independent filter sets when switching reports and returning', () => {
+    renderReports();
+
+    fireEvent.change(screen.getByLabelText('Data od'), { target: { value: '2026-01-01' } });
+    fireEvent.change(screen.getByLabelText('Numer zlecenia'), { target: { value: 'ZL-A' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Wg Kont Księgowych' }));
+    expect(screen.getByLabelText('Data od')).toHaveValue('');
+    fireEvent.change(screen.getByLabelText('Data od'), { target: { value: '2026-02-01' } });
+    fireEvent.change(screen.getByLabelText('Konto księgowe'), { target: { value: 'K-200' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Godziny wg Zleceń' }));
+    expect(screen.getByLabelText('Data od')).toHaveValue('2026-01-01');
+    expect(screen.getByLabelText('Numer zlecenia')).toHaveValue('ZL-A');
+    expect(JSON.parse(window.sessionStorage.getItem('report.by-account')!).filters).toMatchObject({
+      dateFrom: '2026-02-01',
+      accountingAccount: 'K-200',
+    });
+  });
+
+  it('removes only the active report entry and restores defaults on reset', () => {
+    window.sessionStorage.setItem('report.by-order', storedFilters({ dateFrom: '2026-03-01' }));
+    window.sessionStorage.setItem('report.by-employee', storedFilters({ employeeId: 'employee-1' }));
+    renderReports();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Wyczyść filtry' }));
+
+    expect(screen.getByLabelText('Data od')).toHaveValue('');
+    expect(window.sessionStorage.getItem('report.by-order')).toBeNull();
+    expect(window.sessionStorage.getItem('report.by-employee')).not.toBeNull();
+  });
+
+  it('restores persisted filters after the view is mounted again', () => {
+    const firstRender = renderReports();
+    fireEvent.change(screen.getByLabelText('Data od'), { target: { value: '2026-04-01' } });
+    firstRender.unmount();
+
+    renderReports();
+
+    expect(screen.getByLabelText('Data od')).toHaveValue('2026-04-01');
   });
 
   it('generates ordered columns exclusively from the current dictionary', async () => {

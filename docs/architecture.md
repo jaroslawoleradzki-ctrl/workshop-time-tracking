@@ -14,7 +14,7 @@ flowchart LR
 
 ## Odpowiedzialności i warstwy
 
-- React renderuje UI, przechowuje token i użytkownika w `localStorage`, stan nawigacji w `sessionStorage`, waliduje formularze i wywołuje względne `/api`.
+- React renderuje UI, przechowuje token i użytkownika w `localStorage`, stan nawigacji oraz niezależne, wersjonowane filtry raportów w `sessionStorage`, waliduje formularze i wywołuje względne `/api`. Wspólny hook `useReportFilters` odpowiada za inicjalny odczyt, natychmiastowy zapis i reset; każdy raport korzysta z osobnego klucza `report.*`.
 - Nginx serwuje build SPA i przekazuje `/api` do backendu.
 - Express składa middleware CORS/JSON/logowania, uwierzytelnianie JWT, kontrolę ról i routery: auth, users, employees, orders, work-time-types, reports, analytics, imports.
 - Routery zawierają większość walidacji i logiki biznesowej oraz bezpośrednio wywołują Prisma. Krytyczna operacja kopiowania czasu ma wydzielony serwis transakcyjny; ogólnej warstwy repozytoriów nie ma.

@@ -32,10 +32,8 @@ Dokument zawiera historię wykonanych wersji oraz aktualne ustalenia projektu **
 - [x] Agregacja kolejnych dni roboczych nieobecności z pomijaniem weekendów i duplikatów.
 - [x] Filtry zakresu dat, pracownika i rodzaju nieobecności oraz eksport XLSX.
 
-## Planowane funkcjonalności po wersji 0.4.7
+## Wersja 0.4.8 — Pamiętanie filtrów raportów w ramach sesji
 
-Uzgodniony backlog nowych wymagań biznesowych zgłoszonych przez klienta (szczegółowy opis w [`PROJECT_STATUS.md`](../PROJECT_STATUS.md)):
-
-1. **Pamiętanie filtrów raportów w ramach sesji**
-   - Przechowywanie filtrów poszczególnych raportów w `sessionStorage` w ramach bieżącej sesji przeglądarki.
-
+- [x] Wspólny, wersjonowany mechanizm przechowywania filtrów w `sessionStorage`.
+- [x] Osobny zestaw wszystkich istniejących filtrów dla każdego raportu.
+- [x] Odtwarzanie po zmianie widoku i odświeżeniu strony oraz reset aktywnego raportu.

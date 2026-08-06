@@ -13,6 +13,12 @@ Dokument przedstawia zrealizowane etapy rozwoju i kamienie milowe aplikacji Work
 - [x] ✔ Dodano administracyjną obsługę właściwości „Nieobecność”.
 - [x] ✔ Dodano raport okresów nieobecności z filtrami, grupowaniem dni roboczych i eksportem XLSX.
 
+## Wersja 0.4.8 — Pamiętanie filtrów raportów w ramach sesji
+
+- [x] ✔ Dodano wspólny hook z wersjonowaną strukturą danych w `sessionStorage`.
+- [x] ✔ Odizolowano zestawy filtrów wszystkich pięciu raportów pod osobnymi kluczami.
+- [x] ✔ Dodano natychmiastowy zapis, odtwarzanie i reset filtrów wraz z testami regresyjnymi.
+
 ## Sprint A
 *Status: Zakończony*
 - [x] ✔ Wdrożenie podstawowego systemu logowania liderów i administratorów (autoryzacja JWT, hash bcrypt).
