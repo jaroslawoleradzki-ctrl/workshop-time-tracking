@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-const STORAGE_VERSION = 1;
+const STORAGE_VERSION = 2;
 
 interface StoredReportFilters<T> {
   version: number;

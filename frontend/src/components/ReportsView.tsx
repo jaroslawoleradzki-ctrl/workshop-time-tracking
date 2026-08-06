@@ -9,7 +9,8 @@ import {
   User,
   FolderOpen,
   DollarSign,
-  CalendarOff
+  CalendarOff,
+  CheckCircle
 } from 'lucide-react';
 import { UserSession } from '../App';
 import ScrollableTable from './ScrollableTable';
@@ -40,6 +41,7 @@ interface ReportFilters extends Record<string, string | boolean> {
   accountingAccount: string;
   absenceType: string;
   onlyWithHours: boolean;
+  closureReport: boolean;
 }
 
 const DEFAULT_REPORT_FILTERS: ReportFilters = {
@@ -52,6 +54,7 @@ const DEFAULT_REPORT_FILTERS: ReportFilters = {
   accountingAccount: '',
   absenceType: '',
   onlyWithHours: false,
+  closureReport: false,
 };
 
 export default function ReportsView({ token, user }: ReportsViewProps) {
@@ -87,6 +90,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
     accountingAccount: filterAccount,
     absenceType: filterAbsenceType,
     onlyWithHours: filterOnlyWithHours,
+    closureReport: filterClosureReport,
   } = activeFilters.filters;
   const updateFilters = activeFilters.setFilters;
 
@@ -131,7 +135,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
   // Trigger data fetch when tab or filters change
   useEffect(() => {
     fetchReportData();
-  }, [activeReportTab, dateFrom, dateTo, filterEmployeeId, filterOrderId, filterOrderNum, filterStatus, filterAccount, filterAbsenceType, filterOnlyWithHours]);
+  }, [activeReportTab, dateFrom, dateTo, filterEmployeeId, filterOrderId, filterOrderNum, filterStatus, filterAccount, filterAbsenceType, filterOnlyWithHours, filterClosureReport]);
 
   const fetchReportData = async () => {
     setReportData([]); // Clear previous data to prevent rendering crashes
@@ -147,9 +151,10 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
       switch (activeReportTab) {
         case 'by-order':
           url = '/api/analytics/report-by-order';
-          if (filterStatus) params.append('status', filterStatus);
+          if (!filterClosureReport && filterStatus) params.append('status', filterStatus);
           if (filterOrderNum) params.append('orderNumber', filterOrderNum);
-          if (filterOnlyWithHours) params.append('onlyWithHours', 'true');
+          if (!filterClosureReport && filterOnlyWithHours) params.append('onlyWithHours', 'true');
+          if (filterClosureReport) params.append('closureReport', 'true');
           break;
         case 'by-employee':
           url = '/api/analytics/report-by-employee';
@@ -193,9 +198,10 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
     switch (activeReportTab) {
       case 'by-order':
         path = '/api/analytics/export/by-order';
-        if (filterStatus) params.append('status', filterStatus);
+        if (!filterClosureReport && filterStatus) params.append('status', filterStatus);
         if (filterOrderNum) params.append('orderNumber', filterOrderNum);
-        if (filterOnlyWithHours) params.append('onlyWithHours', 'true');
+        if (!filterClosureReport && filterOnlyWithHours) params.append('onlyWithHours', 'true');
+        if (filterClosureReport) params.append('closureReport', 'true');
         break;
       case 'by-employee':
         path = '/api/analytics/export/by-employee';
@@ -283,11 +289,12 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
         filename = 'Raport_godzin_wg_zlecen.csv';
         reportTitle = 'Raport godzin według zleceń';
         filterItems = [
-          { label: 'Status zlecenia', value: filterStatus === 'OPEN' ? 'Otwarte' : filterStatus === 'SUSPENDED' ? 'Wstrzymane' : filterStatus === 'CLOSED' ? 'Zamknięte' : 'Wszystkie' },
+          { label: 'Status zlecenia', value: filterClosureReport ? 'Nie dotyczy (raport zamknięcia)' : filterStatus === 'OPEN' ? 'Otwarte' : filterStatus === 'SUSPENDED' ? 'Wstrzymane' : filterStatus === 'CLOSED' ? 'Zamknięte' : 'Wszystkie' },
           { label: 'Szukany numer zlecenia', value: filterOrderNum.trim() ? filterOrderNum.trim() : 'Wszystkie' },
-          { label: 'Tylko z wypracowanymi godzinami', value: filterOnlyWithHours ? 'Tak' : 'Nie' },
+          { label: 'Tylko z wypracowanymi godzinami', value: filterClosureReport ? 'Nie dotyczy (raport zamknięcia)' : filterOnlyWithHours ? 'Tak' : 'Nie' },
+          { label: 'Raport zamknięcia', value: filterClosureReport ? 'Tak' : 'Nie' },
         ];
-        headers = ['Numer zlecenia', 'Nazwa produktu', 'Kod produktu', 'Ilość', 'Plan (h)', 'Rzeczywiste (h)', 'Odchylenie (h)', 'Wykorzystanie (%)', 'Status'];
+        headers = ['Numer zlecenia', 'Nazwa produktu', 'Kod produktu', 'Ilość', 'Plan (h)', 'Rzeczywiste (h)', 'Odchylenie (h)', 'Wykorzystanie (%)', 'Status', 'Rzeczywista data zakończenia'];
         rows = safeReportData.map(o => [
           o.orderNumber,
           o.productName,
@@ -297,7 +304,8 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
           o.actualHours,
           o.deviation,
           o.percent,
-          o.status === 'OPEN' ? 'Otwarte' : o.status === 'SUSPENDED' ? 'Wstrzymane' : 'Zamknięte'
+          o.status === 'OPEN' ? 'Otwarte' : o.status === 'SUSPENDED' ? 'Wstrzymane' : 'Zamknięte',
+          o.completionDate || '-'
         ]);
         break;
       case 'by-employee':
@@ -503,7 +511,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="report-order-status">Status zlecenia</label>
-                <select id="report-order-status" className="form-control" value={filterStatus} onChange={e => updateFilters({ status: e.target.value })}>
+                <select id="report-order-status" className="form-control" value={filterStatus} disabled={filterClosureReport} onChange={e => updateFilters({ status: e.target.value })}>
                   <option value="">Wszystkie statusy</option>
                   <option value="OPEN">Otwarte</option>
                   <option value="SUSPENDED">Wstrzymane</option>
@@ -515,10 +523,23 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                   <input 
                     type="checkbox" 
                     checked={filterOnlyWithHours} 
+                    disabled={filterClosureReport}
                     onChange={e => updateFilters({ onlyWithHours: e.target.checked })}
                   />
                   Pokaż tylko zlecenia z zaraportowanymi godzinami
                 </label>
+              </div>
+              <div className="form-group" style={{ display: 'flex', alignItems: 'center', marginTop: '1.5rem' }}>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${filterClosureReport ? 'btn-primary' : 'btn-secondary'}`}
+                  aria-pressed={filterClosureReport}
+                  onClick={() => updateFilters({ closureReport: !filterClosureReport })}
+                  title="Pokaż otwarte zlecenia z godzinami oraz zlecenia zamknięte w wybranym okresie"
+                >
+                  {filterClosureReport && <CheckCircle size={14} />}
+                  Raport zamknięcia
+                </button>
               </div>
             </>
           )}
@@ -618,6 +639,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                     <th style={{ textAlign: 'right' }}>Odchylenie</th>
                     <th style={{ textAlign: 'right' }}>Wykorzystanie</th>
                     <th>Status</th>
+                    <th>Rzeczywista data zakończenia</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -648,6 +670,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                            row.status === 'SUSPENDED' ? <span className="badge badge-suspended">Wstrzymane</span> :
                            <span className="badge badge-closed">Zamknięte</span>}
                         </td>
+                        <td style={{ whiteSpace: 'nowrap' }}>{row.completionDate || '-'}</td>
                       </tr>
                     );
                   })}

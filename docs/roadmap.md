@@ -19,6 +19,12 @@ Dokument przedstawia zrealizowane etapy rozwoju i kamienie milowe aplikacji Work
 - [x] ✔ Odizolowano zestawy filtrów wszystkich pięciu raportów pod osobnymi kluczami.
 - [x] ✔ Dodano natychmiastowy zapis, odtwarzanie i reset filtrów wraz z testami regresyjnymi.
 
+## Wersja 0.4.9 — Raport zamknięcia
+
+- [x] ✔ Rozszerzono raport „Godziny wg zleceń” o tryb zamknięcia bez nowej zakładki.
+- [x] ✔ Uwzględniono zamknięte zlecenia bez wpisów czasu dzięki zapytaniu rozpoczynającemu od zleceń.
+- [x] ✔ Ujednolicono dane JSON/XLSX i dodano pamiętanie trybu oraz testy regresyjne.
+
 ## Sprint A
 *Status: Zakończony*
 - [x] ✔ Wdrożenie podstawowego systemu logowania liderów i administratorów (autoryzacja JWT, hash bcrypt).

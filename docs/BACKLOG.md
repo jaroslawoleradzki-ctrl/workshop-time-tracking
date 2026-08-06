@@ -37,3 +37,9 @@ Dokument zawiera historię wykonanych wersji oraz aktualne ustalenia projektu **
 - [x] Wspólny, wersjonowany mechanizm przechowywania filtrów w `sessionStorage`.
 - [x] Osobny zestaw wszystkich istniejących filtrów dla każdego raportu.
 - [x] Odtwarzanie po zmianie widoku i odświeżeniu strony oraz reset aktywnego raportu.
+
+## Wersja 0.4.9 — Raport zamknięcia
+
+- [x] Przełącznik trybu w istniejącym raporcie „Godziny wg zleceń”.
+- [x] Zlecenia otwarte z godzinami oraz zamknięte w okresie, również z sumą zero.
+- [x] Wspólne dane JSON/XLSX, walidacja zakresu i pamiętanie trybu w sesji.

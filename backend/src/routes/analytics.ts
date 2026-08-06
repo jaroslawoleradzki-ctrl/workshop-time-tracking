@@ -35,6 +35,30 @@ type AbsencePeriodFilters = {
   workTimeTypeCode?: string;
 };
 
+type OrderReportFilters = {
+  dateFrom?: string;
+  dateTo?: string;
+  status?: unknown;
+  orderNumber?: string;
+  onlyWithHours: boolean;
+  closureReport: boolean;
+};
+
+export type OrderReportRow = {
+  orderNumber: string;
+  productName: string;
+  productCode: string | null;
+  accountingAccount: string | null;
+  quantity: number | null;
+  quantityUnit: string;
+  plannedHours: number;
+  actualHours: number;
+  deviation: number;
+  percent: number;
+  status: OrderStatus;
+  completionDate: string | null;
+};
+
 export type AbsencePeriodRow = {
   employeeId: string;
   employeeName: string;
@@ -392,57 +416,116 @@ const parseOrderStatus = (statusParam: unknown): OrderStatus | undefined => {
   return VALID_ORDER_STATUSES.includes(upper) ? upper : undefined;
 };
 
+const parseBooleanQuery = (value: unknown): boolean | null => {
+  if (value === undefined) return false;
+  if (value === 'true' || value === '1') return true;
+  if (value === 'false' || value === '0') return false;
+  return null;
+};
+
+const isValidDateKey = (value: unknown): value is string => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && formatDateKey(parsed) === value;
+};
+
+const validateClosureDateRange = (closureReport: boolean, dateFrom: unknown, dateTo: unknown) => {
+  if (!closureReport) return null;
+  if (!isValidDateKey(dateFrom) || !isValidDateKey(dateTo) || dateFrom > dateTo) {
+    return {
+      code: 'INVALID_CLOSURE_REPORT_PARAMS',
+      message: 'Raport zamknięcia wymaga prawidłowego zakresu dat YYYY-MM-DD.',
+    };
+  }
+  return null;
+};
+
+export async function getOrderReportRows(filters: OrderReportFilters): Promise<OrderReportRow[]> {
+  const reportDateRange = {
+    gte: filters.dateFrom ? new Date(`${filters.dateFrom}T00:00:00.000Z`) : undefined,
+    lte: filters.dateTo ? new Date(`${filters.dateTo}T00:00:00.000Z`) : undefined,
+  };
+  const completionDateRange = filters.closureReport ? {
+    gte: new Date(`${filters.dateFrom}T00:00:00.000Z`),
+    lte: new Date(`${filters.dateTo}T23:59:59.999Z`),
+  } : undefined;
+
+  const orders = await prisma.order.findMany({
+    where: {
+      deletedAt: null,
+      orderNumber: filters.orderNumber
+        ? { contains: filters.orderNumber, mode: 'insensitive' }
+        : undefined,
+      status: filters.closureReport ? undefined : parseOrderStatus(filters.status),
+      OR: filters.closureReport
+        ? [
+            { status: OrderStatus.OPEN },
+            { status: OrderStatus.CLOSED, completionDate: completionDateRange },
+          ]
+        : undefined,
+    },
+    include: {
+      reports: {
+        where: {
+          deletedAt: null,
+          date: reportDateRange,
+        },
+        select: { hours: true },
+      },
+    },
+    orderBy: { orderNumber: 'asc' },
+  });
+
+  let rows = orders.map((order): OrderReportRow => {
+    const plannedHours = Number(order.plannedHours);
+    const actualHours = order.reports.reduce((sum, report) => sum + Number(report.hours), 0);
+    const deviation = plannedHours - actualHours;
+    const percent = plannedHours > 0 ? (actualHours / plannedHours) * 100 : 0;
+
+    return {
+      orderNumber: order.orderNumber,
+      productName: order.productName,
+      productCode: order.productCode,
+      accountingAccount: order.accountingAccount,
+      quantity: order.quantity !== null ? Number(order.quantity) : null,
+      quantityUnit: order.quantityUnit || 'szt.',
+      plannedHours,
+      actualHours: Math.round(actualHours * 100) / 100,
+      deviation: Math.round(deviation * 100) / 100,
+      percent: Math.round(percent * 100) / 100,
+      status: order.status,
+      completionDate: order.completionDate ? formatDateKey(order.completionDate) : null,
+    };
+  });
+
+  if (filters.closureReport) {
+    rows = rows.filter(row => row.status === OrderStatus.CLOSED || row.actualHours > 0);
+  } else if (filters.onlyWithHours) {
+    rows = rows.filter(row => row.actualHours > 0);
+  }
+
+  return rows;
+}
+
 // 2. Report by Order
 router.get('/report-by-order', async (req: AuthRequest, res: Response) => {
   const { dateFrom, dateTo, status, orderNumber, onlyWithHours } = req.query;
+  const closureReport = parseBooleanQuery(req.query.closureReport);
+  if (closureReport === null) {
+    return res.status(400).json({ code: 'INVALID_CLOSURE_REPORT_PARAMS', message: 'Nieprawidłowa wartość closureReport.' });
+  }
+  const dateError = validateClosureDateRange(closureReport, dateFrom, dateTo);
+  if (dateError) return res.status(400).json(dateError);
 
   try {
-    const orders = await prisma.order.findMany({
-      where: {
-        deletedAt: null,
-        status: parseOrderStatus(status),
-        orderNumber: orderNumber ? { contains: orderNumber as string, mode: 'insensitive' } : undefined,
-      },
-      include: {
-        reports: {
-          where: {
-            deletedAt: null,
-            date: {
-              gte: dateFrom ? new Date(dateFrom as string) : undefined,
-              lte: dateTo ? new Date(dateTo as string) : undefined,
-            },
-          },
-          select: { hours: true },
-        },
-      },
-      orderBy: { orderNumber: 'asc' },
-    });
-
-    let reportData = orders.map((o) => {
-      const est = Number(o.plannedHours);
-      const actual = o.reports.reduce((sum: number, r: any) => sum + Number(r.hours), 0);
-      const deviation = est - actual;
-      const percent = est > 0 ? (actual / est) * 100 : 0;
-
-      return {
-        orderNumber: o.orderNumber,
-        productName: o.productName,
-        productCode: o.productCode,
-        quantity: o.quantity !== null ? Number(o.quantity) : null,
-        quantityUnit: o.quantityUnit || 'szt.',
-        plannedHours: est,
-        actualHours: Math.round(actual * 100) / 100,
-        deviation: Math.round(deviation * 100) / 100,
-        percent: Math.round(percent * 100) / 100,
-        status: o.status,
-      };
-    });
-
-    if (onlyWithHours === 'true' || onlyWithHours === '1') {
-      reportData = reportData.filter((r) => r.actualHours > 0);
-    }
-
-    return res.json(reportData);
+    return res.json(await getOrderReportRows({
+      dateFrom: dateFrom as string | undefined,
+      dateTo: dateTo as string | undefined,
+      status,
+      orderNumber: orderNumber as string | undefined,
+      onlyWithHours: onlyWithHours === 'true' || onlyWithHours === '1',
+      closureReport,
+    }));
   } catch (error) {
     logger.error(error, 'Błąd podczas pobierania raportu wg zleceń');
     return res.status(500).json({ message: 'Błąd podczas pobierania raportu wg zleceń' });
@@ -578,54 +661,22 @@ router.get('/report-absence-periods', async (req: AuthRequest, res: Response) =>
 // Export: Order Report
 router.get('/export/by-order', async (req: AuthRequest, res: Response) => {
   const { dateFrom, dateTo, status, orderNumber, onlyWithHours } = req.query;
+  const closureReport = parseBooleanQuery(req.query.closureReport);
+  if (closureReport === null) {
+    return res.status(400).json({ code: 'INVALID_CLOSURE_REPORT_PARAMS', message: 'Nieprawidłowa wartość closureReport.' });
+  }
+  const dateError = validateClosureDateRange(closureReport, dateFrom, dateTo);
+  if (dateError) return res.status(400).json(dateError);
 
   try {
-    const orders = await prisma.order.findMany({
-      where: {
-        deletedAt: null,
-        status: parseOrderStatus(status),
-        orderNumber: orderNumber ? { contains: orderNumber as string, mode: 'insensitive' } : undefined,
-      },
-      include: {
-        reports: {
-          where: {
-            deletedAt: null,
-            date: {
-              gte: dateFrom ? new Date(dateFrom as string) : undefined,
-              lte: dateTo ? new Date(dateTo as string) : undefined,
-            },
-          },
-          select: { hours: true },
-        },
-      },
-      orderBy: { orderNumber: 'asc' },
+    const filteredOrders = await getOrderReportRows({
+      dateFrom: dateFrom as string | undefined,
+      dateTo: dateTo as string | undefined,
+      status,
+      orderNumber: orderNumber as string | undefined,
+      onlyWithHours: onlyWithHours === 'true' || onlyWithHours === '1',
+      closureReport,
     });
-
-    let filteredOrders = orders.map((o) => {
-      const est = Number(o.plannedHours);
-      const actual = o.reports.reduce((sum: number, r: any) => sum + Number(r.hours), 0);
-      const deviation = est - actual;
-      const percent = est > 0 ? (actual / est) * 100 : 0;
-      const statusPolish = o.status === 'OPEN' ? 'Otwarte' : o.status === 'SUSPENDED' ? 'Wstrzymane' : 'Zamknięte';
-      const quantityDisplay = o.quantity !== null ? `${Number(o.quantity)} ${o.quantityUnit || 'szt.'}` : '-';
-
-      return {
-        orderNumber: o.orderNumber,
-        productCode: o.productCode || '-',
-        productName: o.productName,
-        accountingAccount: o.accountingAccount || '-',
-        quantityDisplay,
-        est,
-        actual: Math.round(actual * 100) / 100,
-        deviation: Math.round(deviation * 100) / 100,
-        percent: Math.round(percent * 100) / 100,
-        statusPolish,
-      };
-    });
-
-    if (onlyWithHours === 'true' || onlyWithHours === '1') {
-      filteredOrders = filteredOrders.filter((o) => o.actual > 0);
-    }
 
     const headers = [
       'Numer zlecenia',
@@ -638,24 +689,26 @@ router.get('/export/by-order', async (req: AuthRequest, res: Response) => {
       'Odchylenie (plan - rzecz.)',
       'Procent realizacji (%)',
       'Status zlecenia',
+      'Rzeczywista data zakończenia',
     ];
 
     const data = filteredOrders.map((o) => [
       o.orderNumber,
-      o.productCode,
+      o.productCode || '-',
       o.productName,
-      o.accountingAccount,
-      o.quantityDisplay,
-      o.est,
-      o.actual,
+      o.accountingAccount || '-',
+      o.quantity !== null ? `${o.quantity} ${o.quantityUnit}` : '-',
+      o.plannedHours,
+      o.actualHours,
       o.deviation,
       o.percent,
-      o.statusPolish,
+      o.status === 'OPEN' ? 'Otwarte' : o.status === 'SUSPENDED' ? 'Wstrzymane' : 'Zamknięte',
+      o.completionDate || '-',
     ]);
 
-    const statusVal = status === 'OPEN' ? 'Otwarte' : status === 'SUSPENDED' ? 'Wstrzymane' : status === 'CLOSED' ? 'Zamknięte' : 'Wszystkie';
+    const statusVal = closureReport ? 'Nie dotyczy (raport zamknięcia)' : status === 'OPEN' ? 'Otwarte' : status === 'SUSPENDED' ? 'Wstrzymane' : status === 'CLOSED' ? 'Zamknięte' : 'Wszystkie';
     const orderNumVal = orderNumber && (orderNumber as string).trim() ? (orderNumber as string).trim() : 'Wszystkie';
-    const onlyHoursVal = onlyWithHours === 'true' || onlyWithHours === '1' ? 'Tak' : 'Nie';
+    const onlyHoursVal = closureReport ? 'Nie dotyczy (raport zamknięcia)' : onlyWithHours === 'true' || onlyWithHours === '1' ? 'Tak' : 'Nie';
 
     await generateExcelResponse({
       res,
@@ -671,6 +724,7 @@ router.get('/export/by-order', async (req: AuthRequest, res: Response) => {
           { label: 'Status zlecenia', value: statusVal },
           { label: 'Szukany numer zlecenia', value: orderNumVal },
           { label: 'Tylko z wypracowanymi godzinami', value: onlyHoursVal },
+          { label: 'Raport zamknięcia', value: closureReport ? 'Tak' : 'Nie' },
         ],
       },
       numberColumns: [6, 7, 8, 9],

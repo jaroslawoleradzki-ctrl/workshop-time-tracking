@@ -1,6 +1,6 @@
 # Reguły biznesowe
 
-Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.4.7.
+Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.4.9.
 
 ## Role i dostęp
 
@@ -64,6 +64,14 @@ Odpowiedź sukcesu (`201`) zawiera co najmniej `employeeId`, `sourceDate`, `targ
 - Kolejne dni robocze jednego pracownika i jednego typu są łączone w okres; sobota i niedziela nie przerywają okresu i nie zwiększają liczby dni.
 - Brak wpisu w dniu roboczym rozdziela okres, a wielokrotne wpisy tego samego typu w tym samym dniu są liczone jako jeden dzień.
 - Filtr dat przycina dane przed grupowaniem. Wersja nie uwzględnia świąt ani indywidualnych harmonogramów pracowników.
+
+## Raport zamknięcia zleceń
+
+- Przełącznik „Raport zamknięcia” działa wewnątrz istniejącego raportu „Godziny wg zleceń” i wymaga prawidłowego, inkluzywnego zakresu dat.
+- Wynik obejmuje zlecenia `OPEN` z dodatnią sumą aktywnych wpisów w okresie oraz zlecenia `CLOSED`, których `completionDate` mieści się w okresie — również wtedy, gdy suma godzin w okresie wynosi zero.
+- Godziny sprzed lub po zakresie nie są uwzględniane. Usunięte wpisy nie zwiększają sumy, a usunięte zlecenia, zlecenia `SUSPENDED` i zlecenia zamknięte poza zakresem są wykluczone.
+- W trybie zamknięcia wyszukiwanie numeru zlecenia pozostaje aktywne. Filtry statusu oraz „tylko z godzinami” są sprzeczne z definicją trybu, dlatego interfejs je wyłącza, a API ignoruje.
+- `completionDate` jest porównywana jako data biznesowa w UTC, od początku `dateFrom` do końca `dateTo`, bez konwersji przez lokalną strefę czasową.
 
 ## Audyt i daty
 
