@@ -4,19 +4,19 @@
 
 - Projekt: Workshop Time Tracking
 - Aktualna wersja produkcyjna: `0.3.8`
-- Aktualna wersja development: `0.4.10`
+- Aktualna wersja development: `0.5.0`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: v0.4.10 — naprawa filtrowania po zleceniu w Raporcie Szczegółowym zaimplementowana, przetestowana automatycznie i zaakceptowana
+- Stan prac: v0.5.0 — naprawa filtrowania po zleceniu w Raporcie Szczegółowym zaimplementowana, przetestowana automatycznie i zaakceptowana
 
-Zakres wersji `0.4.10`:
+Zakres wersji `0.5.0`:
 
 - Naprawiono filtrowanie po zleceniu w Raporcie Szczegółowym (`GET /api/analytics/report-detailed`), uwzględniając parametr `orderId` w zapytaniu bazy danych.
 - Poprawiono spójność filtrowania w tabeli Raportu Szczegółowego oraz w eksporcie XLSX i CSV (dodano mapowanie `productCode`).
 - Dodano zestaw testów regresyjnych dla backendu (`analytics.test.ts`) i frontendu (`ReportsView.test.tsx`).
 - Zmiana nie wymaga migracji bazy danych.
 
-## Weryfikacja wersji 0.4.10
+## Weryfikacja wersji 0.5.0
 
 - backend: 126 testów zakończonych powodzeniem, w tym 33 testy `analytics.test.ts`,
 - backend: build (`npm run build`) zakończony powodzeniem,

@@ -3,7 +3,7 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.4.10] - 2026-08-25
+## [0.5.0] - 2026-08-25
 
 ### Fixed
 
