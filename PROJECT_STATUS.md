@@ -4,10 +4,27 @@
 
 - Projekt: Workshop Time Tracking
 - Aktualna wersja produkcyjna: `0.3.8`
-- Aktualna wersja development: `0.4.9`
+- Aktualna wersja development: `0.4.10`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: v0.4.9 — tryb „Raport zamknięcia” zaimplementowany i automatycznie zweryfikowany, oczekuje na test ręczny
+- Stan prac: v0.4.10 — naprawa filtrowania po zleceniu w Raporcie Szczegółowym zaimplementowana, przetestowana automatycznie i zaakceptowana
+
+Zakres wersji `0.4.10`:
+
+- Naprawiono filtrowanie po zleceniu w Raporcie Szczegółowym (`GET /api/analytics/report-detailed`), uwzględniając parametr `orderId` w zapytaniu bazy danych.
+- Poprawiono spójność filtrowania w tabeli Raportu Szczegółowego oraz w eksporcie XLSX i CSV (dodano mapowanie `productCode`).
+- Dodano zestaw testów regresyjnych dla backendu (`analytics.test.ts`) i frontendu (`ReportsView.test.tsx`).
+- Zmiana nie wymaga migracji bazy danych.
+
+## Weryfikacja wersji 0.4.10
+
+- backend: 126 testów zakończonych powodzeniem, w tym 33 testy `analytics.test.ts`,
+- backend: build (`npm run build`) zakończony powodzeniem,
+- backend: walidacja schematu Prisma (`npx prisma validate`) zakończona powodzeniem,
+- frontend: 74 testy zakończone powodzeniem, w tym 31 testów `ReportsView.test.tsx`,
+- frontend: build (`npm run build`) zakończony powodzeniem,
+- frontend: lint (`npm run lint`) zakończony powodzeniem z wynikiem 0 ostrzeżeń,
+- test ręczny interfejsu i akceptacja użytkownika zakończone pomyślnie.
 
 Zakres wersji `0.4.9`:
 

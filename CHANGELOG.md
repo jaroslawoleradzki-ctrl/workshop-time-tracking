@@ -3,6 +3,14 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.4.10] - 2026-08-25
+
+### Fixed
+
+- Naprawiono filtrowanie po zleceniu w Raporcie Szczegółowym (`GET /api/analytics/report-detailed`), dodając poprawną obsługę parametru `orderId` w zapytaniu bazy danych.
+- Poprawiono spójność filtrowania w tabeli Raportu Szczegółowego oraz w eksporcie XLSX i CSV (w tym dodano brakujące mapowanie `productCode`).
+- Dodano testy regresyjne backendu i frontendu pokrywające filtrowanie pojedynczego zlecenia, kombinacje z pracownikiem i zakresem dat oraz eksporty.
+
 ## [0.4.9] - 2026-08-06
 
 ### Added

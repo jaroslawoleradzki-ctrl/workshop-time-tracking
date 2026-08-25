@@ -688,4 +688,166 @@ describe('Analytics reports', () => {
       expect(monthWhere).not.toHaveProperty('workTimeType');
     });
   });
+
+  describe('Detailed report (/report-detailed and /export/detailed)', () => {
+    const mockDetailedReports = [
+      {
+        id: 'rep-1',
+        date: new Date('2026-08-10T00:00:00.000Z'),
+        employeeId: EMPLOYEE_ID,
+        orderId: 'order-111',
+        hours: 8,
+        workTimeTypeCode: 'G',
+        missingCard: false,
+        createdAt: new Date('2026-08-10T08:00:00.000Z'),
+        deletedAt: null,
+        employee: { fullName: 'Jan Kowalski' },
+        order: { id: 'order-111', orderNumber: '530-8-49', productName: 'Forma zewnętrzna', productCode: 'P-530', accountingAccount: 'KK-1' },
+        createdByUser: { fullName: 'Admin' },
+      },
+      {
+        id: 'rep-2',
+        date: new Date('2026-08-11T00:00:00.000Z'),
+        employeeId: 'employee-2',
+        orderId: 'order-222',
+        hours: 6,
+        workTimeTypeCode: 'G',
+        missingCard: false,
+        createdAt: new Date('2026-08-11T08:00:00.000Z'),
+        deletedAt: null,
+        employee: { fullName: 'Anna Nowak' },
+        order: { id: 'order-222', orderNumber: '530-8-04', productName: 'Inny produkt', productCode: 'P-531', accountingAccount: 'KK-2' },
+        createdByUser: { fullName: 'Admin' },
+      },
+      {
+        id: 'rep-3',
+        date: new Date('2026-08-12T00:00:00.000Z'),
+        employeeId: EMPLOYEE_ID,
+        orderId: null,
+        hours: 8,
+        workTimeTypeCode: 'UW',
+        missingCard: false,
+        createdAt: new Date('2026-08-12T08:00:00.000Z'),
+        deletedAt: null,
+        employee: { fullName: 'Jan Kowalski' },
+        order: null,
+        createdByUser: { fullName: 'Admin' },
+      },
+    ];
+
+    const mockDetailedSpy = () => vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
+      const { employeeId, orderId, order, date, deletedAt } = args?.where || {};
+      return mockDetailedReports.filter((r) => {
+        if (deletedAt !== undefined && r.deletedAt !== deletedAt) return false;
+        if (employeeId && r.employeeId !== employeeId) return false;
+        if (orderId && r.orderId !== orderId) return false;
+        if (order?.orderNumber?.contains) {
+          if (!r.order?.orderNumber.toLowerCase().includes(order.orderNumber.contains.toLowerCase())) return false;
+        }
+        if (date?.gte && r.date < date.gte) return false;
+        if (date?.lte && r.date > date.lte) return false;
+        return true;
+      }) as any;
+    });
+
+    it('returns all reports including without order when no order filter is provided', async () => {
+      mockDetailedSpy();
+
+      const res = await authenticatedGet('/api/analytics/report-detailed').expect(200);
+      expect(res.body.length).toBe(3);
+      expect(res.body.some((r: any) => r.orderNumber === '530-8-49')).toBe(true);
+      expect(res.body.some((r: any) => r.orderNumber === '530-8-04')).toBe(true);
+      expect(res.body.some((r: any) => r.orderNumber === '-')).toBe(true);
+    });
+
+    it('filters strictly by orderId and excludes other orders and entries without order (Brak zlecenia)', async () => {
+      const findSpy = mockDetailedSpy();
+
+      const res = await authenticatedGet('/api/analytics/report-detailed?orderId=order-111').expect(200);
+      expect(findSpy).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          orderId: 'order-111',
+        }),
+      }));
+
+      expect(res.body.length).toBe(1);
+      expect(res.body[0].orderNumber).toBe('530-8-49');
+      expect(res.body[0].productCode).toBe('P-530');
+      expect(res.body.some((r: any) => r.orderNumber === '530-8-04')).toBe(false);
+      expect(res.body.some((r: any) => r.orderNumber === '-')).toBe(false);
+    });
+
+    it('filters simultaneously by orderId and employeeId', async () => {
+      mockDetailedSpy();
+
+      // Jan Kowalski on order-111 -> 1 result
+      const resMatch = await authenticatedGet(`/api/analytics/report-detailed?orderId=order-111&employeeId=${EMPLOYEE_ID}`).expect(200);
+      expect(resMatch.body.length).toBe(1);
+      expect(resMatch.body[0].employeeName).toBe('Jan Kowalski');
+      expect(resMatch.body[0].orderNumber).toBe('530-8-49');
+
+      // Anna Nowak on order-111 -> 0 results
+      const resNoMatch = await authenticatedGet('/api/analytics/report-detailed?orderId=order-111&employeeId=employee-2').expect(200);
+      expect(resNoMatch.body.length).toBe(0);
+    });
+
+    it('filters simultaneously by orderId, employeeId and date range', async () => {
+      mockDetailedSpy();
+
+      // Range covers 2026-08-10 -> 1 result
+      const resInRange = await authenticatedGet(
+        `/api/analytics/report-detailed?orderId=order-111&employeeId=${EMPLOYEE_ID}&dateFrom=2026-08-01&dateTo=2026-08-10`,
+      ).expect(200);
+      expect(resInRange.body.length).toBe(1);
+
+      // Range does not cover 2026-08-10 -> 0 results
+      const resOutOfRange = await authenticatedGet(
+        `/api/analytics/report-detailed?orderId=order-111&employeeId=${EMPLOYEE_ID}&dateFrom=2026-08-11&dateTo=2026-08-20`,
+      ).expect(200);
+      expect(resOutOfRange.body.length).toBe(0);
+    });
+
+    it('exports detailed report to XLSX with order filter and metadata', async () => {
+      mockDetailedSpy();
+      vi.spyOn(prisma.order, 'findUnique').mockResolvedValue({
+        id: 'order-111',
+        orderNumber: '530-8-49',
+        productName: 'Forma zewnętrzna',
+      } as any);
+
+      const xlsxResponse = await authenticatedGet('/api/analytics/export/detailed?orderId=order-111')
+        .buffer(true)
+        .parse(binaryParser)
+        .expect(200)
+        .expect('Content-Type', /spreadsheetml/);
+
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(xlsxResponse.body);
+      const worksheet = workbook.getWorksheet('Szczegóły');
+      expect(worksheet).toBeDefined();
+
+      expect(worksheet?.getRow(1).getCell(1).value).toBe('Raport: Szczegółowy raport czasu pracy');
+      expect(worksheet?.getRow(4).getCell(1).value).toBe('Zlecenie: 530-8-49');
+
+      // Header row
+      expect(worksheet?.getRow(7).values).toEqual([
+        undefined,
+        'Data',
+        'Pracownik',
+        'Numer zlecenia',
+        'Numer produktu',
+        'Nazwa produktu',
+        'Konto księgowe',
+        'Liczba godzin',
+        'Typ czasu pracy',
+        'Wprowadził użytkownik',
+        'Data wpisu w bazie',
+      ]);
+
+      // Only 1 row for order-111
+      expect(worksheet?.getRow(8).getCell(3).value).toBe('530-8-49');
+      expect(worksheet?.getRow(8).getCell(4).value).toBe('P-530');
+      expect(worksheet?.getRow(9).getCell(3).value).toBeNull();
+    });
+  });
 });

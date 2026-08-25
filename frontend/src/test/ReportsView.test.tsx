@@ -578,4 +578,150 @@ describe('ReportsView — miesięczny raport pracowników', () => {
       )).toBe(true));
     });
   });
+
+  describe('Raport Szczegółowy', () => {
+    it('populates orders in the select dropdown and passes orderId to the detailed report endpoint', async () => {
+      const requestedUrls: string[] = [];
+      const originalFetch = global.fetch;
+      vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        requestedUrls.push(String(input));
+        return originalFetch(input, init);
+      }));
+
+      renderReports();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Raport Szczegółowy' }));
+      await screen.findByRole('table', { name: 'Raport szczegółowy' });
+
+      const orderSelect = screen.getByLabelText('Zlecenie');
+      expect(orderSelect).toBeInTheDocument();
+
+      fireEvent.change(orderSelect, { target: { value: 'order-1' } });
+
+      await waitFor(() => expect(requestedUrls.some(url =>
+        url.includes('/api/analytics/report-detailed') &&
+        url.includes('orderId=order-1'),
+      )).toBe(true));
+    });
+
+    it('passes orderId along with employeeId and date range to the detailed report endpoint', async () => {
+      const requestedUrls: string[] = [];
+      const originalFetch = global.fetch;
+      vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        requestedUrls.push(String(input));
+        return originalFetch(input, init);
+      }));
+
+      renderReports();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Raport Szczegółowy' }));
+      await screen.findByRole('table', { name: 'Raport szczegółowy' });
+
+      fireEvent.change(screen.getByLabelText('Data od'), { target: { value: '2026-08-01' } });
+      fireEvent.change(screen.getByLabelText('Data do'), { target: { value: '2026-08-31' } });
+      fireEvent.change(screen.getByLabelText('Pracownik'), { target: { value: 'employee-1' } });
+      fireEvent.change(screen.getByLabelText('Zlecenie'), { target: { value: 'order-1' } });
+
+      await waitFor(() => expect(requestedUrls.some(url =>
+        url.includes('/api/analytics/report-detailed') &&
+        url.includes('dateFrom=2026-08-01') &&
+        url.includes('dateTo=2026-08-31') &&
+        url.includes('employeeId=employee-1') &&
+        url.includes('orderId=order-1'),
+      )).toBe(true));
+    });
+
+    it('passes orderId to XLSX export for detailed report', async () => {
+      const requestedUrls: string[] = [];
+      vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        requestedUrls.push(url);
+        if (url === '/api/employees') return response(employees);
+        if (url === '/api/orders') return response(orders);
+        if (url === '/api/work-time-types') return response(workTimeTypes);
+        if (url.startsWith('/api/analytics/report-detailed')) {
+          return response([{
+            id: 'rep-1',
+            date: '2026-08-10',
+            employeeName: 'Jan Kowalski',
+            orderNumber: 'ZL-001',
+            productCode: 'P-001',
+            productName: 'Produkt testowy',
+            accountingAccount: 'K-001',
+            hours: 8,
+            workTimeTypeCode: 'G',
+            creatorName: 'Admin',
+            createdAt: '2026-08-10T08:00:00.000Z',
+          }]);
+        }
+        if (url.startsWith('/api/analytics/export/detailed')) {
+          return { ok: true, blob: async () => new Blob(['xlsx']) } as Response;
+        }
+        return response([]);
+      }));
+      vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:detailed-report');
+      vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+
+      renderReports();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Raport Szczegółowy' }));
+      await screen.findByRole('table', { name: 'Raport szczegółowy' });
+
+      fireEvent.change(screen.getByLabelText('Zlecenie'), { target: { value: 'order-1' } });
+      await screen.findByText('Jan Kowalski');
+      fireEvent.click(screen.getByRole('button', { name: 'Pobierz Excel (XLSX)' }));
+
+      await waitFor(() => expect(requestedUrls.some(url =>
+        url.startsWith('/api/analytics/export/detailed') &&
+        url.includes('orderId=order-1'),
+      )).toBe(true));
+    });
+
+    it('exports CSV with correct detailed report metadata, order number and product code', async () => {
+      let exportedBlob: Blob | undefined;
+      vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
+        if (blob instanceof Blob) exportedBlob = blob;
+        return 'blob:test-report-detailed-csv';
+      });
+      vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+
+      vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === '/api/employees') return response(employees);
+        if (url === '/api/orders') return response(orders);
+        if (url === '/api/work-time-types') return response(workTimeTypes);
+        if (url.startsWith('/api/analytics/report-detailed')) {
+          return response([{
+            id: 'rep-1',
+            date: '2026-08-10',
+            employeeName: 'Jan Kowalski',
+            orderNumber: 'ZL-001',
+            productCode: 'P-001',
+            productName: 'Produkt testowy',
+            accountingAccount: 'K-001',
+            hours: 8,
+            workTimeTypeCode: 'G',
+            creatorName: 'Admin',
+            createdAt: '2026-08-10T08:00:00.000Z',
+          }]);
+        }
+        return response([]);
+      }));
+
+      renderReports();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Raport Szczegółowy' }));
+      await screen.findByRole('table', { name: 'Raport szczegółowy' });
+
+      fireEvent.change(screen.getByLabelText('Zlecenie'), { target: { value: 'order-1' } });
+      await screen.findByText('Jan Kowalski');
+      fireEvent.click(screen.getByRole('button', { name: 'Pobierz plik CSV' }));
+
+      expect(exportedBlob).toBeDefined();
+      const csv = (await exportedBlob!.text()).replace(/^\uFEFF/, '');
+      expect(csv).toContain('Raport;Szczegółowy raport czasu pracy');
+      expect(csv).toContain('Zlecenie;ZL-001');
+      expect(csv).toContain('2026-08-10;Jan Kowalski;ZL-001;P-001;Produkt testowy;K-001;8;G;Admin');
+    });
+  });
 });

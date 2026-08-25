@@ -1,6 +1,6 @@
 # Reguły biznesowe
 
-Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.4.9.
+Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.4.10.
 
 ## Role i dostęp
 

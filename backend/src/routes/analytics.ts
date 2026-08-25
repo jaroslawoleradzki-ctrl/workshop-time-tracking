@@ -594,18 +594,19 @@ router.get('/report-by-account', async (req: AuthRequest, res: Response) => {
 
 // 5. Detailed Report
 router.get('/report-detailed', async (req: AuthRequest, res: Response) => {
-  const { dateFrom, dateTo, employeeId, orderNumber } = req.query;
+  const { dateFrom, dateTo, employeeId, orderId, orderNumber } = req.query;
 
   try {
     const reports = await prisma.workTimeReport.findMany({
       where: {
         deletedAt: null,
         employeeId: employeeId ? (employeeId as string) : undefined,
+        orderId: orderId ? (orderId as string) : undefined,
         date: {
           gte: dateFrom ? new Date(dateFrom as string) : undefined,
           lte: dateTo ? new Date(dateTo as string) : undefined,
         },
-        order: orderNumber
+        order: !orderId && orderNumber
           ? { orderNumber: { contains: orderNumber as string, mode: 'insensitive' } }
           : undefined,
       },
@@ -622,6 +623,7 @@ router.get('/report-detailed', async (req: AuthRequest, res: Response) => {
       date: r.date.toISOString().split('T')[0],
       employeeName: r.employee.fullName,
       orderNumber: r.order?.orderNumber || '-',
+      productCode: r.order?.productCode || '-',
       productName: r.order?.productName || '-',
       accountingAccount: r.order?.accountingAccount || 'brak',
       hours: Number(r.hours),
@@ -873,7 +875,7 @@ router.get('/export/by-account', async (req: AuthRequest, res: Response) => {
 
 // Export: Detailed report
 router.get('/export/detailed', async (req: AuthRequest, res: Response) => {
-  const { dateFrom, dateTo, employeeId, orderId } = req.query;
+  const { dateFrom, dateTo, employeeId, orderId, orderNumber } = req.query;
 
   try {
     const reports = await prisma.workTimeReport.findMany({
@@ -885,13 +887,16 @@ router.get('/export/detailed', async (req: AuthRequest, res: Response) => {
           gte: dateFrom ? new Date(dateFrom as string) : undefined,
           lte: dateTo ? new Date(dateTo as string) : undefined,
         },
+        order: !orderId && orderNumber
+          ? { orderNumber: { contains: orderNumber as string, mode: 'insensitive' } }
+          : undefined,
       },
       include: {
         employee: true,
         order: true,
         createdByUser: true,
       },
-      orderBy: { date: 'desc' },
+      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
     });
 
     const headers = [
@@ -932,6 +937,8 @@ router.get('/export/detailed', async (req: AuthRequest, res: Response) => {
       const ord = await prisma.order.findUnique({ where: { id: orderId as string } });
       if (ord) orderNumVal = ord.orderNumber;
       else orderNumVal = orderId as string;
+    } else if (orderNumber) {
+      orderNumVal = orderNumber as string;
     }
 
     await generateExcelResponse({

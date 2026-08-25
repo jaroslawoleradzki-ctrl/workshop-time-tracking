@@ -25,6 +25,12 @@ Dokument przedstawia zrealizowane etapy rozwoju i kamienie milowe aplikacji Work
 - [x] ✔ Uwzględniono zamknięte zlecenia bez wpisów czasu dzięki zapytaniu rozpoczynającemu od zleceń.
 - [x] ✔ Ujednolicono dane JSON/XLSX i dodano pamiętanie trybu oraz testy regresyjne.
 
+## Wersja 0.4.10 — Naprawa filtrowania w Raporcie Szczegółowym
+
+- [x] ✔ Naprawiono filtrowanie po zleceniu (`orderId`) w Raporcie Szczegółowym w API i bazie danych.
+- [x] ✔ Zapewniono pełną zgodność filtrowania w tabeli UI, eksporcie XLSX oraz eksporcie CSV wraz z danymi produktu.
+- [x] ✔ Dodano testy regresyjne backendu i frontendu.
+
 ## Sprint A
 *Status: Zakończony*
 - [x] ✔ Wdrożenie podstawowego systemu logowania liderów i administratorów (autoryzacja JWT, hash bcrypt).
