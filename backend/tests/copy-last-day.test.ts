@@ -584,21 +584,19 @@ describe('POST /api/reports/copy-last-day', () => {
     expect(response.body.code).toBe('INVALID_COPY_REQUEST');
   });
 
-  it('rejects copy-last-day when targetDate is Saturday', async () => {
+  it('rejects copying G onto a base-calendar Saturday', async () => {
     fakePrisma.seedReport({ employeeId: EMPLOYEE_A_ID, date: '2026-07-31' }); // Friday
     const response = await copyRequest(LEADER_ID, EMPLOYEE_A_ID, '2026-08-01').expect(400); // Saturday
 
-    expect(response.body.code).toBe('WEEKEND_COPY_NOT_ALLOWED');
-    expect(response.body.message).toBe('Kopiowanie wpisów na dzień wolny nie jest dozwolone.');
+    expect(response.body.code).toBe('NON_WORKING_DAY_ENTRY_NOT_ALLOWED');
     expect(fakePrisma.activeReports(EMPLOYEE_A_ID, '2026-08-01')).toHaveLength(0);
   });
 
-  it('rejects copy-last-day when targetDate is Sunday', async () => {
+  it('rejects copying G onto a base-calendar Sunday', async () => {
     fakePrisma.seedReport({ employeeId: EMPLOYEE_A_ID, date: '2026-07-31' }); // Friday
     const response = await copyRequest(LEADER_ID, EMPLOYEE_A_ID, '2026-08-02').expect(400); // Sunday
 
-    expect(response.body.code).toBe('WEEKEND_COPY_NOT_ALLOWED');
-    expect(response.body.message).toBe('Kopiowanie wpisów na dzień wolny nie jest dozwolone.');
+    expect(response.body.code).toBe('NON_WORKING_DAY_ENTRY_NOT_ALLOWED');
     expect(fakePrisma.activeReports(EMPLOYEE_A_ID, '2026-08-02')).toHaveLength(0);
   });
 
@@ -812,6 +810,35 @@ describe('POST /api/reports/copy-last-day', () => {
   });
 
   describe('copy-last-day entry types', () => {
+    it('allows copying an ordered overtime type onto a base-calendar Saturday', async () => {
+      const orderId = fakePrisma.seedOrder();
+      fakePrisma.seedReport({
+        employeeId: EMPLOYEE_A_ID,
+        date: '2026-07-31',
+        orderId,
+        workTimeTypeCode: 'NS',
+      });
+
+      await copyRequest(LEADER_ID, EMPLOYEE_A_ID, '2026-08-01').expect(201);
+
+      expect(fakePrisma.activeReports(EMPLOYEE_A_ID, '2026-08-01')).toEqual([
+        expect.objectContaining({ workTimeTypeCode: 'NS', orderId }),
+      ]);
+    });
+
+    it('rejects copying a custom absence type onto a base-calendar Saturday', async () => {
+      fakePrisma.seedReport({
+        employeeId: EMPLOYEE_A_ID,
+        date: '2026-07-31',
+        workTimeTypeCode: 'CUSTOM_ABS',
+      });
+
+      const response = await copyRequest(LEADER_ID, EMPLOYEE_A_ID, '2026-08-01').expect(400);
+
+      expect(response.body.code).toBe('NON_WORKING_DAY_ENTRY_NOT_ALLOWED');
+      expect(fakePrisma.activeReports(EMPLOYEE_A_ID, '2026-08-01')).toHaveLength(0);
+    });
+
     it('rejects copying G onto a weekday company day override marked free', async () => {
       fakePrisma.seedCalendarDay('2026-08-14', false, 'Dzień wolny za święto');
       fakePrisma.seedReport({ employeeId: EMPLOYEE_A_ID, date: '2026-08-13', workTimeTypeCode: 'G' });

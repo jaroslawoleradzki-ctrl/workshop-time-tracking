@@ -107,13 +107,6 @@ export async function copyLastDayForEmployee({
       }
 
       const calendarDay = await getWorkingDayDecision(targetDate, tx);
-      if (!calendarDay.isWorkingDay && calendarDay.source === 'weekend') {
-        throw new CopyLastDayError(
-          400,
-          'WEEKEND_COPY_NOT_ALLOWED',
-          'Kopiowanie wpisów na dzień wolny nie jest dozwolone.',
-        );
-      }
 
       // This check must run after the advisory lock has been acquired. A
       // waiting concurrent request will therefore see the rows committed by
