@@ -43,6 +43,10 @@ Dokument opisuje proces instalacji, aktualizacji, backupu oraz przywracania apli
 
 Pliki `backend/.env` i `frontend/.env` nie konfigurują stosu Compose. `backend/.env` służy wyłącznie uruchamianiu backendu lokalnie poza Dockerem.
 
+## Developerski stack Homelab przez Portainer
+
+Stack developerski można wdrożyć w Portainerze przez `Git Repository`, wskazując ref `refs/heads/development` oraz plik `docker-compose.homelab-dev.yml`. Obraz frontendu zawiera konfigurację Nginx, dlatego ten wariant nie wymaga bind mountu `./nginx/nginx.conf` zależnego od ścieżki checkoutu Portainera.
+
 ## Inicjalizacja bazy danych i zasilanie (Migrations & Seeding)
 
 Od wersji `v0.2.8` cały proces konfiguracji bazy danych po pierwszej instalacji został w pełni zautomatyzowany. Podczas każdego startu kontenera backendu `worktime-api` uruchamiany jest skrypt `docker-entrypoint.sh`, który wykonuje następujące operacje:

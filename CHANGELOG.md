@@ -3,6 +3,12 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Fixed
+
+- Usunięto zależność developerskiego stosu Homelab od bind mountu konfiguracji Nginx z checkoutu Portainera; konfiguracja jest teraz wbudowana w obraz frontendu.
+
 ## [0.5.0] - 2026-08-25
 
 ### Fixed
