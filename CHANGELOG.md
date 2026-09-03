@@ -17,6 +17,10 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Poprawiono spójność filtrowania w tabeli Raportu Szczegółowego oraz w eksporcie XLSX i CSV (w tym dodano brakujące mapowanie `productCode`).
 - Dodano testy regresyjne backendu i frontendu pokrywające filtrowanie pojedynczego zlecenia, kombinacje z pracownikiem i zakresem dat oraz eksporty.
 
+### Added
+
+- Dodano test regresyjny dla raportu okresów nieobecności weryfikujący, że **dowolny** typ czasu z `isAbsence=true` (nie tylko standardowe UW/UOK/UŻ/L4) jest poprawnie uwzględniany w raporcie, łącząc kolejne dni robocze przez weekend, rozdzielając przerwami i pomijając typy `isAbsence=false`. Test używa kodu `ART188` jako przykładu niestandardowego typu nieobecności.
+
 ## [0.4.9] - 2026-08-06
 
 ### Added

@@ -7,7 +7,7 @@
 - Aktualna wersja development: `0.5.0`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: v0.5.0 — naprawa filtrowania po zleceniu w Raporcie Szczegółowym zaimplementowana, przetestowana automatycznie i zaakceptowana
+- Stan prac: v0.5.0 — naprawa filtrowania po zleceniu w Raporcie Szczegółowym zaimplementowana, przetestowana automatycznie i zaakceptowana; analiza bugu „art. 188” w raporcie nieobecności — problem w konfiguracji danych, nie w kodzie; dodano test regresyjny.
 
 Zakres wersji `0.5.0`:
 
@@ -16,11 +16,11 @@ Zakres wersji `0.5.0`:
 - Dodano zestaw testów regresyjnych dla backendu (`analytics.test.ts`) i frontendu (`ReportsView.test.tsx`).
 - Zmiana nie wymaga migracji bazy danych.
 
-## Weryfikacja wersji 0.5.0
+## Weryfikacja wersji 0.5.0 (z aktualizacją testu regresyjnym nieobecności)
 
-- backend: 126 testów zakończonych powodzeniem, w tym 33 testy `analytics.test.ts`,
+- backend: 127 testów zakończonych powodzeniem, w tym 34 testy `analytics.test.ts` (nowy test: niestandardowe typy nieobecności z `isAbsence=true`, mostkowanie weekendów, rozdzielanie przerwami, pomijanie `isAbsence=false`),
 - backend: build (`npm run build`) zakończony powodzeniem,
-- backend: walidacja schematu Prisma (`npx prisma validate`) zakończona powodzeniem,
+- backend: walidacja schematu Prisma (`npx prisma validate`) — schemat poprawny (DATABASE_URL nieustawione w środowisku testowym),
 - frontend: 74 testy zakończone powodzeniem, w tym 31 testów `ReportsView.test.tsx`,
 - frontend: build (`npm run build`) zakończony powodzeniem,
 - frontend: lint (`npm run lint`) zakończony powodzeniem z wynikiem 0 ostrzeżeń,

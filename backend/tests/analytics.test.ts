@@ -284,6 +284,115 @@ describe('Analytics reports', () => {
     ]);
   });
 
+  it('regression: includes custom absence types like ART188 when isAbsence=true, and still includes standard UW/UŻ/L4', async () => {
+    const employee = {
+      fullName: 'Yurii Rudenko',
+      firstName: 'Yurii',
+      lastName: 'Rudenko',
+    };
+
+    const art188Type = {
+      code: 'ART188',
+      name: 'Art. 188 Kodeksu pracy',
+      isAbsence: true,
+      requiresOrder: false,
+    };
+
+    const uwType = {
+      code: 'UW',
+      name: 'Urlop wypoczynkowy',
+      isAbsence: true,
+      requiresOrder: false,
+    };
+
+    const uzType = {
+      code: 'UŻ',
+      name: 'Urlop na żądanie',
+      isAbsence: true,
+      requiresOrder: false,
+    };
+
+    const l4Type = {
+      code: 'L4',
+      name: 'Zwolnienie chorobowe',
+      isAbsence: true,
+      requiresOrder: false,
+    };
+
+    const reportSpy = vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([
+      // ART188 on 2026-08-06 (Thursday) and 2026-08-07 (Friday) = 2 consecutive working days = 16h total (8h/day)
+      { employeeId: EMPLOYEE_ID, employee, workTimeTypeCode: 'ART188', workTimeType: art188Type, hours: 8, date: new Date('2026-08-06T00:00:00.000Z') },
+      { employeeId: EMPLOYEE_ID, employee, workTimeTypeCode: 'ART188', workTimeType: art188Type, hours: 8, date: new Date('2026-08-07T00:00:00.000Z') },
+      // UW spanning weekend (bridged)
+      { employeeId: EMPLOYEE_ID, employee, workTimeTypeCode: 'UW', workTimeType: uwType, hours: 8, date: new Date('2026-08-10T00:00:00.000Z') },
+      { employeeId: EMPLOYEE_ID, employee, workTimeTypeCode: 'UW', workTimeType: uwType, hours: 8, date: new Date('2026-08-11T00:00:00.000Z') },
+      // UŻ single day
+      { employeeId: EMPLOYEE_ID, employee, workTimeTypeCode: 'UŻ', workTimeType: uzType, hours: 8, date: new Date('2026-08-12T00:00:00.000Z') },
+      // L4 split by missing workday
+      { employeeId: EMPLOYEE_ID, employee, workTimeTypeCode: 'L4', workTimeType: l4Type, hours: 8, date: new Date('2026-08-14T00:00:00.000Z') },
+      { employeeId: EMPLOYEE_ID, employee, workTimeTypeCode: 'L4', workTimeType: l4Type, hours: 8, date: new Date('2026-08-18T00:00:00.000Z') },
+      // Non-absence type should be excluded
+      { employeeId: EMPLOYEE_ID, employee, workTimeTypeCode: 'G', workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true }, hours: 8, date: new Date('2026-08-06T00:00:00.000Z') },
+    ] as any);
+
+    // Test without workTimeTypeCode filter to get all absence types
+    const response = await authenticatedGet(
+      `/api/analytics/report-absence-periods?dateFrom=2026-08-01&dateTo=2026-08-31&employeeId=${EMPLOYEE_ID}`,
+    ).expect(200);
+
+    expect(reportSpy).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        deletedAt: null,
+        employeeId: EMPLOYEE_ID,
+        workTimeType: { isAbsence: true },
+        date: {
+          gte: new Date('2026-08-01T00:00:00.000Z'),
+          lte: new Date('2026-08-31T00:00:00.000Z'),
+        },
+      }),
+    }));
+
+    // Verify all absence types appear in results
+    const typesInResponse = [...new Set(response.body.map((r: any) => r.workTimeTypeCode))];
+    expect(typesInResponse).toContain('ART188');
+    expect(typesInResponse).toContain('UW');
+    expect(typesInResponse).toContain('UŻ');
+    expect(typesInResponse).toContain('L4');
+    expect(typesInResponse).not.toContain('G');
+
+    // Verify ART188 period: 2026-08-06 to 2026-08-07 (consecutive working days, weekend bridges)
+    const art188Period = response.body.find((r: any) => r.workTimeTypeCode === 'ART188');
+    expect(art188Period).toBeDefined();
+    expect(art188Period.dateFrom).toBe('2026-08-06');
+    expect(art188Period.dateTo).toBe('2026-08-07');
+    expect(art188Period.workingDays).toBe(2);
+    expect(art188Period.absenceType).toBe('ART188 (Art. 188 Kodeksu pracy)');
+
+    // Verify UW bridges weekend (Fri 10th + Mon 11th = consecutive working days)
+    const uwPeriod = response.body.find((r: any) => r.workTimeTypeCode === 'UW');
+    expect(uwPeriod).toBeDefined();
+    expect(uwPeriod.dateFrom).toBe('2026-08-10');
+    expect(uwPeriod.dateTo).toBe('2026-08-11');
+    expect(uwPeriod.workingDays).toBe(2);
+
+    // Verify UŻ single day
+    const uzPeriod = response.body.find((r: any) => r.workTimeTypeCode === 'UŻ');
+    expect(uzPeriod).toBeDefined();
+    expect(uzPeriod.dateFrom).toBe('2026-08-12');
+    expect(uzPeriod.dateTo).toBe('2026-08-12');
+    expect(uzPeriod.workingDays).toBe(1);
+
+    // Verify L4 split by missing workday (14th and 18th are not consecutive working days - 15th,16th weekend, 17th missing)
+    const l4Periods = response.body.filter((r: any) => r.workTimeTypeCode === 'L4');
+    expect(l4Periods.length).toBe(2);
+    expect(l4Periods[0].dateFrom).toBe('2026-08-14');
+    expect(l4Periods[0].dateTo).toBe('2026-08-14');
+    expect(l4Periods[0].workingDays).toBe(1);
+    expect(l4Periods[1].dateFrom).toBe('2026-08-18');
+    expect(l4Periods[1].dateTo).toBe('2026-08-18');
+    expect(l4Periods[1].workingDays).toBe(1);
+  });
+
   it('exports the same clipped absence periods to XLSX with report metadata', async () => {
     vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([{
       employeeId: EMPLOYEE_ID,
