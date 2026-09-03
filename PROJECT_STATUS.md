@@ -4,10 +4,10 @@
 
 - Projekt: Workshop Time Tracking
 - Aktualna wersja produkcyjna: `0.3.8`
-- Aktualna wersja development: `0.5.0`
+- Aktualna wersja development: `0.5.1`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: v0.5.0 — Company Work Calendar jest zintegrowany z walidacją wpisów, zakresami nieobecności, kopiowaniem dnia i raportem okresów nieobecności; automatyczne sumy kontrolne zamknięcia miesiąca (Pakiet 2) oraz wcześniejsze poprawki raportów są przetestowane automatycznie
+- Stan prac: v0.5.1 — zakończono Pakiety 1–3 oraz follow-up integrujący raport okresów nieobecności z Company Calendar; zakres obejmuje również kompatybilność HomeLab DEV z Portainerem
 
 Zakres prac Pakietu 2 (Sumy kontrolne zamknięcia miesiąca):
 
@@ -27,16 +27,16 @@ Zakres prac Pakietu 2 (Sumy kontrolne zamknięcia miesiąca):
 - frontend: build (`npm run build`) zakończony powodzeniem,
 - frontend: lint (`npm run lint`) zakończony powodzeniem z wynikiem 0 ostrzeżeń.
 
-Zakres Pakietu 3 (worktree `feature/work-calendar`): fundament kalendarza zakładowego został zaimplementowany na osobnej gałęzi do przeglądu; nie obejmuje automatycznej bazy polskich świąt.
+Zakres Pakietu 3: fundament kalendarza zakładowego został wdrożony; nie obejmuje automatycznej bazy polskich świąt. Walidacja blokuje `G` i wszystkie typy `isAbsence=true` w dniach wolnych, a dozwolone typy nadgodzin, np. `NS`, pozostają dostępne.
 
-Zakres wersji `0.5.0`:
+Zakres wersji `0.5.1`:
 
 - Naprawiono filtrowanie po zleceniu w Raporcie Szczegółowym (`GET /api/analytics/report-detailed`), uwzględniając parametr `orderId` w zapytaniu bazy danych.
 - Poprawiono spójność filtrowania w tabeli Raportu Szczegółowego oraz w eksporcie XLSX i CSV (dodano mapowanie `productCode`).
 - Dodano zestaw testów regresyjnych dla backendu (`analytics.test.ts`) i frontendu (`ReportsView.test.tsx`).
 - Zmiana nie wymaga migracji bazy danych.
 
-## Weryfikacja wersji 0.5.0 (z aktualizacją testu regresyjnym nieobecności)
+## Weryfikacja wersji 0.5.1
 
 - backend: 127 testów zakończonych powodzeniem, w tym 34 testy `analytics.test.ts` (nowy test: niestandardowe typy nieobecności z `isAbsence=true`, mostkowanie weekendów, rozdzielanie przerwami, pomijanie `isAbsence=false`),
 - backend: build (`npm run build`) zakończony powodzeniem,

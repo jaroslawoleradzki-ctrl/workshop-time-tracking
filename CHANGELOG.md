@@ -3,7 +3,7 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [0.5.1] - 2026-09-03
 
 ### Added
 
@@ -17,6 +17,8 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Usunięto zależność developerskiego stosu Homelab od bind mountu konfiguracji Nginx z checkoutu Portainera; konfiguracja jest teraz wbudowana w obraz frontendu.
 - Raport okresów nieobecności korzysta teraz ze wspólnego kalendarza zakładowego przy pomijaniu dni wolnych i grupowaniu okresów.
+- Zakres wersji obejmuje niestandardowe typy nieobecności przez `WorkTimeType.isAbsence` (przyczyna braku typu art. 188 była konfiguracyjna), sumy kontrolne zamknięcia miesiąca, Company Work Calendar i walidację `G`/nieobecności/`NS` w dniach wolnych.
+- Ujednolicono kopiowanie ostatniego dnia z regułami kalendarza oraz poprawiono kompatybilność HomeLab DEV z Portainerem.
 
 ## [0.5.0] - 2026-08-25
 

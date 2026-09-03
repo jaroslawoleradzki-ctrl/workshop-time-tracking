@@ -9,7 +9,7 @@ Nie opisuje funkcji jako istniejących — to plan do realizacji w kolejnych pak
 
 Klient ręcznie zweryfikował dane za sierpień 2026 i zgłosił rozbieżności w raportach oraz nowe wymagania biznesowe dotyczące kalendarza zakładowego i walidacji raportowania czasu.
 
-Aktualna wersja development: **0.5.0** (poprawka filtrowania w Raporcie Szczegółowym).
+Aktualna wersja development: **0.5.1** (zakończone Pakiety 1–3 i integracja Company Calendar z raportem okresów nieobecności).
 
 ---
 
