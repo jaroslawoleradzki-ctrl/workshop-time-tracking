@@ -1,0 +1,68 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: worktime-dev-db
+    restart: always
+    environment:
+      POSTGRES_USER: "${WTT_POSTGRES_USER:?WTT_POSTGRES_USER is required}"
+      POSTGRES_PASSWORD: "${WTT_POSTGRES_PASSWORD:?WTT_POSTGRES_PASSWORD is required}"
+      POSTGRES_DB: "${WTT_POSTGRES_DB:?WTT_POSTGRES_DB is required}"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "${WTT_POSTGRES_HOST_PORT:-5485}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: worktime-dev-api
+    restart: always
+    environment:
+      DATABASE_URL: "postgresql://${WTT_POSTGRES_USER:?WTT_POSTGRES_USER is required}:${WTT_POSTGRES_PASSWORD:?WTT_POSTGRES_PASSWORD is required}@postgres:5432/${WTT_POSTGRES_DB:?WTT_POSTGRES_DB is required}?schema=public"
+      JWT_SECRET: "${WTT_JWT_SECRET:?WTT_JWT_SECRET is required}"
+      LOG_LEVEL: "${WTT_LOG_LEVEL:-info}"
+      PORT: 5000
+      APP_VERSION: "0.5.0"
+    ports:
+      - "${WTT_BACKEND_HOST_PORT:-5085}:5000"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          require('http').get('http://127.0.0.1:5000/api/health',
+          (response) => process.exit(response.statusCode === 200 ? 0 : 1))
+          .on('error', () => process.exit(1))
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 60s
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  nginx:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: worktime-dev-web
+    restart: always
+    ports:
+      - "${WTT_HTTP_PORT:-8085}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+    external: true
+    name: "${WTT_POSTGRES_VOLUME:?WTT_POSTGRES_VOLUME is required}"
