@@ -97,6 +97,7 @@ describe('Analytics reports', () => {
     });
     vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([]);
     vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([]);
+    vi.spyOn(prisma.companyCalendarDay, 'findUnique').mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -393,6 +394,52 @@ describe('Analytics reports', () => {
     expect(l4Periods[1].dateFrom).toBe('2026-08-18');
     expect(l4Periods[1].dateTo).toBe('2026-08-18');
     expect(l4Periods[1].workingDays).toBe(1);
+  });
+
+  it('uses the company calendar when grouping absence periods', async () => {
+    const employee = { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' };
+    const absenceType = { code: 'L4', name: 'Zwolnienie chorobowe', isAbsence: true, requiresOrder: false };
+    const report = (date: string) => ({
+      employeeId: EMPLOYEE_ID,
+      employee,
+      workTimeTypeCode: 'L4',
+      workTimeType: absenceType,
+      date: new Date(`${date}T00:00:00.000Z`),
+    });
+    const calendarSpy = vi.spyOn(prisma.companyCalendarDay, 'findUnique');
+    const reportSpy = vi.spyOn(prisma.workTimeReport, 'findMany');
+
+    const run = async (reports: object[]) => {
+      reportSpy.mockResolvedValue(reports as any);
+      return authenticatedGet(
+        `/api/analytics/report-absence-periods?dateFrom=2026-08-13&dateTo=2026-08-17&employeeId=${EMPLOYEE_ID}&workTimeTypeCode=L4`,
+      ).expect(200);
+    };
+
+    // Base Saturday is free, so Friday and Monday remain one period.
+    calendarSpy.mockResolvedValue(null);
+    const weekendResponse = await run([report('2026-08-14'), report('2026-08-17')]);
+    expect(weekendResponse.body).toHaveLength(1);
+    expect(weekendResponse.body[0]).toMatchObject({ dateFrom: '2026-08-14', dateTo: '2026-08-17', workingDays: 2 });
+
+    // A working Saturday is a missing working day and therefore splits the period.
+    calendarSpy.mockImplementation(async ({ where }: any) =>
+      where.date.toISOString().startsWith('2026-08-15')
+        ? { date: where.date, isWorkingDay: true, reason: null }
+        : null,
+    );
+    const workingSaturdayResponse = await run([report('2026-08-14'), report('2026-08-17')]);
+    expect(workingSaturdayResponse.body).toHaveLength(2);
+
+    // A weekday explicitly marked free is skipped just like a weekend.
+    calendarSpy.mockImplementation(async ({ where }: any) =>
+      where.date.toISOString().startsWith('2026-08-14')
+        ? { date: where.date, isWorkingDay: false, reason: 'dzień wolny' }
+        : null,
+    );
+    const freeWeekdayResponse = await run([report('2026-08-13'), report('2026-08-17')]);
+    expect(freeWeekdayResponse.body).toHaveLength(1);
+    expect(freeWeekdayResponse.body[0]).toMatchObject({ dateFrom: '2026-08-13', dateTo: '2026-08-17', workingDays: 2 });
   });
 
   it('exports the same clipped absence periods to XLSX with report metadata', async () => {

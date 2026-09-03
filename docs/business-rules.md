@@ -64,9 +64,9 @@ Odpowiedź sukcesu (`201`) zawiera co najmniej `employeeId`, `sourceDate`, `targ
 ## Raport okresów nieobecności
 
 - Raport uwzględnia wyłącznie aktywne wpisy (`deletedAt=null`) powiązane z typem czasu, dla którego `isAbsence=true`.
-- Kolejne dni robocze jednego pracownika i jednego typu są łączone w okres; sobota i niedziela nie przerywają okresu i nie zwiększają liczby dni.
+- Kolejne dni robocze jednego pracownika i jednego typu są łączone w okres; dni oznaczone przez kalendarz zakładowy jako wolne nie przerywają okresu i nie zwiększają liczby dni. Obejmuje to zarówno bazowe weekendy, jak i jawne wyjątki administratora.
 - Brak wpisu w dniu roboczym rozdziela okres, a wielokrotne wpisy tego samego typu w tym samym dniu są liczone jako jeden dzień.
-- Filtr dat przycina dane przed grupowaniem. Wersja nie uwzględnia świąt ani indywidualnych harmonogramów pracowników.
+- Filtr dat przycina dane przed grupowaniem. Raport korzysta z kalendarza zakładowego, ale nie zawiera automatycznej bazy polskich świąt ani indywidualnych harmonogramów pracowników; dzień świąteczny przypadający w dzień tygodnia wymaga jawnego wyjątku administratora.
 - **Ważne**: Automatycznie jako nieobecność sklasyfikowano wyłącznie kody standardowe `UW`, `UOK`, `UŻ`, `L4` (wersja 0.4.7). Wszelkie niestandardowe typy nieobecności (np. „art. 188”, „CH”, „OPIEKA” itp.) muszą zostać ręcznie oznaczone przez administratora w **Administracja → Słownik Rodzajów Czasu Pracy** (pole „Nieobecność” = Tak). Kod raportu **nie hardkoduje** listy kodów — filtruje dynamicznie po `isAbsence=true`.
 
 ## Raport zamknięcia zleceń

@@ -7,7 +7,7 @@
 - Aktualna wersja development: `0.5.0`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: v0.5.0 — naprawa filtrowania po zleceniu w Raporcie Szczegółowym zaimplementowana, przetestowana automatycznie i zaakceptowana; analiza bugu „art. 188” w raporcie nieobecności (problem w konfiguracji danych, dodano test regresyjny); automatyczne sumy kontrolne zamknięcia miesiąca (Pakiet 2) zaimplementowane i przetestowane automatycznie w backendzie i frontendzie
+- Stan prac: v0.5.0 — Company Work Calendar jest zintegrowany z walidacją wpisów, zakresami nieobecności, kopiowaniem dnia i raportem okresów nieobecności; automatyczne sumy kontrolne zamknięcia miesiąca (Pakiet 2) oraz wcześniejsze poprawki raportów są przetestowane automatycznie
 
 Zakres prac Pakietu 2 (Sumy kontrolne zamknięcia miesiąca):
 

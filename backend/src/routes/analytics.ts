@@ -4,6 +4,8 @@ import { AuthRequest, authenticateJWT } from '../middlewares/auth';
 import * as ExcelJS from 'exceljs';
 import { OrderStatus } from '@prisma/client';
 import logger from '../utils/logger';
+import { getWorkingDayDecision } from '../services/company-calendar';
+import { formatDateString, parseDateString } from '../utils/date';
 
 const router = Router();
 
@@ -105,15 +107,21 @@ export function formatEmployeeName(emp: {
 }
 
 function formatDateKey(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  return formatDateString(date);
 }
 
-function nextWorkingDate(dateKey: string): string {
-  const date = new Date(`${dateKey}T00:00:00.000Z`);
-  do {
+async function nextWorkingDate(
+  dateKey: string,
+  getDecision: (dateKey: string) => Promise<{ isWorkingDay: boolean }>,
+): Promise<string> {
+  const date = parseDateString(dateKey);
+  if (!date) throw new Error(`Invalid date key: ${dateKey}`);
+
+  while (true) {
     date.setUTCDate(date.getUTCDate() + 1);
-  } while (date.getUTCDay() === 0 || date.getUTCDay() === 6);
-  return formatDateKey(date);
+    const nextDateKey = formatDateKey(date);
+    if ((await getDecision(nextDateKey)).isWorkingDay) return nextDateKey;
+  }
 }
 
 export async function getAbsencePeriodRows(
@@ -152,9 +160,19 @@ export async function getAbsencePeriodRows(
     dates: Set<string>;
   }>();
 
+  const decisionCache = new Map<string, { isWorkingDay: boolean }>();
+  const getDecision = async (dateKey: string) => {
+    const cached = decisionCache.get(dateKey);
+    if (cached) return cached;
+    const decision = await getWorkingDayDecision(dateKey);
+    decisionCache.set(dateKey, decision);
+    return decision;
+  };
+
   for (const report of reports) {
     if (!report.workTimeType.isAbsence) continue;
-    if (report.date.getUTCDay() === 0 || report.date.getUTCDay() === 6) continue;
+    const dateKey = formatDateKey(report.date);
+    if (!(await getDecision(dateKey)).isWorkingDay) continue;
     const employeeName = formatEmployeeName(report.employee);
     const employeeSortKey = `${report.employee.lastName || ''} ${report.employee.firstName || ''} ${employeeName}`.trim();
     const key = `${report.employeeId}\u0000${report.workTimeTypeCode}`;
@@ -166,7 +184,7 @@ export async function getAbsencePeriodRows(
       absenceType: `${report.workTimeType.code} (${report.workTimeType.name})`,
       dates: new Set<string>(),
     };
-    group.dates.add(formatDateKey(report.date));
+    group.dates.add(dateKey);
     groupedDays.set(key, group);
   }
 
@@ -196,7 +214,7 @@ export async function getAbsencePeriodRows(
         periodStart = date;
         periodEnd = date;
         workingDays = 1;
-      } else if (date === nextWorkingDate(periodEnd)) {
+      } else if (date === await nextWorkingDate(periodEnd, getDecision)) {
         periodEnd = date;
         workingDays += 1;
       } else {

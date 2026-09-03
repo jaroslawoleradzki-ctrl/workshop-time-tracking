@@ -16,6 +16,7 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 
 - Usunięto zależność developerskiego stosu Homelab od bind mountu konfiguracji Nginx z checkoutu Portainera; konfiguracja jest teraz wbudowana w obraz frontendu.
+- Raport okresów nieobecności korzysta teraz ze wspólnego kalendarza zakładowego przy pomijaniu dni wolnych i grupowaniu okresów.
 
 ## [0.5.0] - 2026-08-25
 
