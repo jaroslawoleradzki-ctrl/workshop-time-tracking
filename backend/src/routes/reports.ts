@@ -17,7 +17,10 @@ import {
   createAbsenceRange,
   getAbsenceRangePreview,
 } from '../services/absence-range';
-import { getWorkingDayDecision } from '../services/company-calendar';
+import {
+  getWorkingDayDecision,
+  isWorkTimeReportAllowedOnCalendarDay,
+} from '../services/company-calendar';
 
 const router = Router();
 
@@ -265,7 +268,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 
     // 2b. Validate entries against the company calendar.
     const calendarDay = await getWorkingDayDecision(workDate);
-    if (!calendarDay.isWorkingDay && (workTimeTypeCode === 'G' || type.isAbsence || !type.requiresOrder || !orderId)) {
+    if (!isWorkTimeReportAllowedOnCalendarDay(calendarDay, type, orderId)) {
       return res.status(400).json({
         message: 'W dni wolne (sobota, niedziela) dozwolona jest wyłącznie rejestracja pracy nad zleceniem; typ G i nieobecności są niedozwolone.',
         code: 'NON_WORKING_DAY_ENTRY_NOT_ALLOWED',
@@ -386,7 +389,7 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
     }
 
     const calendarDay = await getWorkingDayDecision(workDate);
-    if (!calendarDay.isWorkingDay && (workTimeTypeCode === 'G' || type.isAbsence || !type.requiresOrder || !orderId)) {
+    if (!isWorkTimeReportAllowedOnCalendarDay(calendarDay, type, orderId)) {
       return res.status(400).json({
         message: 'W dni wolne (sobota, niedziela) dozwolona jest wyłącznie rejestracja pracy nad zleceniem; typ G i nieobecności są niedozwolone.',
         code: 'NON_WORKING_DAY_ENTRY_NOT_ALLOWED',

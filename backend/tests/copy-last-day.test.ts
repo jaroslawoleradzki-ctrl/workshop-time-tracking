@@ -30,6 +30,12 @@ interface FakeOrder {
   deletedAt: Date | null;
 }
 
+interface FakeCalendarDay {
+  date: Date;
+  isWorkingDay: boolean;
+  reason?: string | null;
+}
+
 interface FakeReport {
   id: string;
   date: Date;
@@ -94,6 +100,14 @@ class FakeTransaction {
     findFirst: async () => null,
   };
 
+  companyCalendarDay: { findUnique: (args: any) => Promise<any> } = {
+    findUnique: async () => null,
+  };
+
+  workTimeType: { findUnique: (args: any) => Promise<any> } = {
+    findUnique: async () => null,
+  };
+
   workTimeReport: {
     count: (args: any) => Promise<number>;
     findFirst: (args: any) => Promise<any>;
@@ -113,6 +127,11 @@ class FakeTransaction {
   };
 
   initializeDelegates() {
+    this.companyCalendarDay.findUnique = async ({ where }: any) =>
+      this.owner.calendarDays.find((day) => sameDate(day.date, where.date)) || null;
+
+    this.workTimeType.findUnique = async ({ where }: any) => this.owner.workTimeType.findUnique({ where });
+
     this.employee.findFirst = async ({ where }: any) => {
       this.ensureSnapshot();
       return (
@@ -219,6 +238,8 @@ class FakePrismaClient {
   orders: FakeOrder[] = [];
   reports: FakeReport[] = [];
   auditLogs: FakeAuditLog[] = [];
+  calendarDays: FakeCalendarDay[] = [];
+  workTimeTypes = new Map<string, { code: string; isAbsence: boolean; requiresOrder: boolean }>();
   failAudit = false;
   lastSourceTake: number | undefined;
   private lockTails = new Map<string, Promise<void>>();
@@ -239,9 +260,9 @@ class FakePrismaClient {
 
   workTimeType = {
     findUnique: async ({ where }: any) =>
-      where.code === 'G'
-        ? { code: 'G', name: 'Godziny standardowe', requiresOrder: false }
-        : null,
+      this.workTimeTypes.get(where.code) || (where.code === 'G'
+        ? { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false }
+        : null),
   };
 
   order = {
@@ -322,6 +343,13 @@ class FakePrismaClient {
     this.orders = [];
     this.reports = [];
     this.auditLogs = [];
+    this.calendarDays = [];
+    this.workTimeTypes = new Map([
+      ['G', { code: 'G', isAbsence: false, requiresOrder: false }],
+      ['NS', { code: 'NS', isAbsence: false, requiresOrder: true }],
+      ['L4', { code: 'L4', isAbsence: true, requiresOrder: false }],
+      ['CUSTOM_ABS', { code: 'CUSTOM_ABS', isAbsence: true, requiresOrder: false }],
+    ]);
     this.failAudit = false;
     this.lastSourceTake = undefined;
     this.lockTails.clear();
@@ -332,6 +360,10 @@ class FakePrismaClient {
     const order = { id: randomUUID(), deletedAt };
     this.orders.push(order);
     return order.id;
+  }
+
+  seedCalendarDay(date: string, isWorkingDay: boolean, reason?: string) {
+    this.calendarDays.push({ date: new Date(`${date}T00:00:00.000Z`), isWorkingDay, reason });
   }
 
   seedReport(params: {
@@ -780,6 +812,53 @@ describe('POST /api/reports/copy-last-day', () => {
   });
 
   describe('copy-last-day entry types', () => {
+    it('rejects copying G onto a weekday company day override marked free', async () => {
+      fakePrisma.seedCalendarDay('2026-08-14', false, 'Dzień wolny za święto');
+      fakePrisma.seedReport({ employeeId: EMPLOYEE_A_ID, date: '2026-08-13', workTimeTypeCode: 'G' });
+
+      const response = await copyRequest(LEADER_ID, EMPLOYEE_A_ID, '2026-08-14').expect(400);
+
+      expect(response.body.code).toBe('NON_WORKING_DAY_ENTRY_NOT_ALLOWED');
+      expect(fakePrisma.activeReports(EMPLOYEE_A_ID, '2026-08-14')).toHaveLength(0);
+    });
+
+    it('rejects copying a custom absence type onto a free company day override', async () => {
+      fakePrisma.seedCalendarDay('2026-08-14', false);
+      fakePrisma.seedReport({ employeeId: EMPLOYEE_A_ID, date: '2026-08-13', workTimeTypeCode: 'CUSTOM_ABS' });
+
+      const response = await copyRequest(LEADER_ID, EMPLOYEE_A_ID, '2026-08-14').expect(400);
+
+      expect(response.body.code).toBe('NON_WORKING_DAY_ENTRY_NOT_ALLOWED');
+      expect(fakePrisma.activeReports(EMPLOYEE_A_ID, '2026-08-14')).toHaveLength(0);
+    });
+
+    it('allows copying an ordered overtime type onto a free company day override', async () => {
+      const orderId = fakePrisma.seedOrder();
+      fakePrisma.seedCalendarDay('2026-08-14', false);
+      fakePrisma.seedReport({
+        employeeId: EMPLOYEE_A_ID,
+        date: '2026-08-13',
+        orderId,
+        workTimeTypeCode: 'NS',
+      });
+
+      await copyRequest(LEADER_ID, EMPLOYEE_A_ID, '2026-08-14').expect(201);
+
+      expect(fakePrisma.activeReports(EMPLOYEE_A_ID, '2026-08-14')).toEqual([
+        expect.objectContaining({ workTimeTypeCode: 'NS', orderId }),
+      ]);
+    });
+
+    it('continues copying G onto a working day', async () => {
+      fakePrisma.seedReport({ employeeId: EMPLOYEE_A_ID, date: '2026-08-13', workTimeTypeCode: 'G' });
+
+      await copyRequest(LEADER_ID, EMPLOYEE_A_ID, '2026-08-14').expect(201);
+
+      expect(fakePrisma.activeReports(EMPLOYEE_A_ID, '2026-08-14')).toEqual([
+        expect.objectContaining({ workTimeTypeCode: 'G' }),
+      ]);
+    });
+
     it('copies UW from Monday to Tuesday', async () => {
       fakePrisma.seedReport({
         employeeId: EMPLOYEE_A_ID,

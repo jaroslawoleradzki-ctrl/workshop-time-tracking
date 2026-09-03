@@ -11,6 +11,12 @@ export interface WorkingDayDecision {
   reason?: string;
 }
 
+export interface CalendarWorkTimeType {
+  code: string;
+  isAbsence: boolean;
+  requiresOrder: boolean;
+}
+
 type CalendarClient = PrismaClient | Prisma.TransactionClient;
 
 export async function getWorkingDayDecision(
@@ -51,4 +57,14 @@ export async function getWorkingDayDecision(
 
 export async function isWorkingDay(dateInput: Date | string, client: CalendarClient = prisma) {
   return (await getWorkingDayDecision(dateInput, client)).isWorkingDay;
+}
+
+export function isWorkTimeReportAllowedOnCalendarDay(
+  decision: WorkingDayDecision,
+  workTimeType: CalendarWorkTimeType,
+  orderId?: string | null,
+) {
+  if (decision.isWorkingDay) return true;
+
+  return workTimeType.code !== 'G' && !workTimeType.isAbsence && workTimeType.requiresOrder && Boolean(orderId);
 }
