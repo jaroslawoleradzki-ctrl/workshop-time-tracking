@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:15-alpine
-    container_name: worktime-db
+    container_name: worktime-dev-db
     restart: always
     environment:
       POSTGRES_USER: "${WTT_POSTGRES_USER:?WTT_POSTGRES_USER is required}"
@@ -10,7 +10,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "${WTT_POSTGRES_HOST_PORT:-5432}:5432"
+      - "${WTT_POSTGRES_HOST_PORT:-5485}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -21,7 +21,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: worktime-api
+    container_name: worktime-dev-api
     restart: always
     environment:
       DATABASE_URL: "postgresql://${WTT_POSTGRES_USER:?WTT_POSTGRES_USER is required}:${WTT_POSTGRES_PASSWORD:?WTT_POSTGRES_PASSWORD is required}@postgres:5432/${WTT_POSTGRES_DB:?WTT_POSTGRES_DB is required}?schema=public"
@@ -30,7 +30,7 @@ services:
       PORT: 5000
       APP_VERSION: "0.5.1"
     ports:
-      - "${WTT_BACKEND_HOST_PORT:-5000}:5000"
+      - "${WTT_BACKEND_HOST_PORT:-5085}:5000"
     healthcheck:
       test:
         - CMD
@@ -52,12 +52,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: worktime-web
+    container_name: worktime-dev-web
     restart: always
     ports:
-      - "${WTT_HTTP_PORT:-80}:80"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - "${WTT_HTTP_PORT:-8085}:80"
     depends_on:
       backend:
         condition: service_healthy

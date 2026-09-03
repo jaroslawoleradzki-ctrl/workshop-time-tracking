@@ -4,23 +4,43 @@
 
 - Projekt: Workshop Time Tracking
 - Aktualna wersja produkcyjna: `0.3.8`
-- Aktualna wersja development: `0.5.0`
+- Aktualna wersja development: `0.5.1`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: v0.5.0 — naprawa filtrowania po zleceniu w Raporcie Szczegółowym zaimplementowana, przetestowana automatycznie i zaakceptowana
+- Stan prac: v0.5.1 — zakończono Pakiety 1–3 oraz follow-up integrujący raport okresów nieobecności z Company Calendar; zakres obejmuje również kompatybilność HomeLab DEV z Portainerem
 
-Zakres wersji `0.5.0`:
+Zakres prac Pakietu 2 (Sumy kontrolne zamknięcia miesiąca):
+
+- Dodano automatyczną sekcję „Kontrola rozliczenia czasu” w trybie Raportu zamknięcia w widoku „Godziny wg zleceń”.
+- Zaimplementowano backendową logikę analityczną `getClosureControlSummary` oraz dedykowany endpoint `GET /api/analytics/closure-control-summary`.
+- Logika dynamicznie agreguje godziny zleceń oraz wszystkie rodzaje nieobecności ze słownika `WorkTimeType` (`isAbsence=true`) występujące w okresie, bez sztywnej listy kodów, i porównuje je z łączną sumą godzin pracowników z miesięcznego raportu czasu pracy.
+- Dodano prezentację statusu zgodności (ZGODNE / NIEZGODNE) oraz różnicy w UI, eksporcie XLSX (`GET /api/analytics/export/by-order`) oraz CSV.
+- Dodano zestaw testów regresyjnych dla backendu (`analytics.test.ts`) i frontendu (`ReportsView.test.tsx`).
+- Zmiana nie wymaga migracji bazy danych.
+
+## Weryfikacja Pakietu 2
+
+- backend: 131 testów zakończonych powodzeniem, w tym 38 testów `analytics.test.ts`,
+- backend: build (`npm run build`) zakończony powodzeniem,
+- backend: walidacja schematu Prisma (`npx prisma validate`) zakończona powodzeniem,
+- frontend: 77 testów zakończonych powodzeniem, w tym 34 testy `ReportsView.test.tsx`,
+- frontend: build (`npm run build`) zakończony powodzeniem,
+- frontend: lint (`npm run lint`) zakończony powodzeniem z wynikiem 0 ostrzeżeń.
+
+Zakres Pakietu 3: fundament kalendarza zakładowego został wdrożony; nie obejmuje automatycznej bazy polskich świąt. Walidacja blokuje `G` i wszystkie typy `isAbsence=true` w dniach wolnych, a dozwolone typy nadgodzin, np. `NS`, pozostają dostępne.
+
+Zakres wersji `0.5.1`:
 
 - Naprawiono filtrowanie po zleceniu w Raporcie Szczegółowym (`GET /api/analytics/report-detailed`), uwzględniając parametr `orderId` w zapytaniu bazy danych.
 - Poprawiono spójność filtrowania w tabeli Raportu Szczegółowego oraz w eksporcie XLSX i CSV (dodano mapowanie `productCode`).
 - Dodano zestaw testów regresyjnych dla backendu (`analytics.test.ts`) i frontendu (`ReportsView.test.tsx`).
 - Zmiana nie wymaga migracji bazy danych.
 
-## Weryfikacja wersji 0.5.0
+## Weryfikacja wersji 0.5.1
 
-- backend: 126 testów zakończonych powodzeniem, w tym 33 testy `analytics.test.ts`,
+- backend: 127 testów zakończonych powodzeniem, w tym 34 testy `analytics.test.ts` (nowy test: niestandardowe typy nieobecności z `isAbsence=true`, mostkowanie weekendów, rozdzielanie przerwami, pomijanie `isAbsence=false`),
 - backend: build (`npm run build`) zakończony powodzeniem,
-- backend: walidacja schematu Prisma (`npx prisma validate`) zakończona powodzeniem,
+- backend: walidacja schematu Prisma (`npx prisma validate`) — schemat poprawny (DATABASE_URL nieustawione w środowisku testowym),
 - frontend: 74 testy zakończone powodzeniem, w tym 31 testów `ReportsView.test.tsx`,
 - frontend: build (`npm run build`) zakończony powodzeniem,
 - frontend: lint (`npm run lint`) zakończony powodzeniem z wynikiem 0 ostrzeżeń,

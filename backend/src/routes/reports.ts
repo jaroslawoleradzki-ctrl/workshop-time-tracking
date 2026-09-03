@@ -17,6 +17,10 @@ import {
   createAbsenceRange,
   getAbsenceRangePreview,
 } from '../services/absence-range';
+import {
+  getWorkingDayDecision,
+  isWorkTimeReportAllowedOnCalendarDay,
+} from '../services/company-calendar';
 
 const router = Router();
 
@@ -262,10 +266,13 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Kod czasu pracy nie istnieje' });
     }
 
-    // 2b. Validate weekend entries: only work on orders is allowed
-    const dayOfWeek = reportDate.getUTCDay();
-    if ((dayOfWeek === 0 || dayOfWeek === 6) && (!type.requiresOrder || !orderId)) {
-      return res.status(400).json({ message: 'W dni wolne (sobota, niedziela) dozwolona jest wyłącznie rejestracja pracy nad zleceniem.' });
+    // 2b. Validate entries against the company calendar.
+    const calendarDay = await getWorkingDayDecision(workDate);
+    if (!isWorkTimeReportAllowedOnCalendarDay(calendarDay, type, orderId)) {
+      return res.status(400).json({
+        message: 'W dni wolne (sobota, niedziela) dozwolona jest wyłącznie rejestracja pracy nad zleceniem; typ G i nieobecności są niedozwolone.',
+        code: 'NON_WORKING_DAY_ENTRY_NOT_ALLOWED',
+      });
     }
 
     // 3. Enforce order requirement
@@ -381,9 +388,12 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Kod czasu pracy nie istnieje' });
     }
 
-    const dayOfWeek = reportDate.getUTCDay();
-    if ((dayOfWeek === 0 || dayOfWeek === 6) && (!type.requiresOrder || !orderId)) {
-      return res.status(400).json({ message: 'W dni wolne (sobota, niedziela) dozwolona jest wyłącznie rejestracja pracy nad zleceniem.' });
+    const calendarDay = await getWorkingDayDecision(workDate);
+    if (!isWorkTimeReportAllowedOnCalendarDay(calendarDay, type, orderId)) {
+      return res.status(400).json({
+        message: 'W dni wolne (sobota, niedziela) dozwolona jest wyłącznie rejestracja pracy nad zleceniem; typ G i nieobecności są niedozwolone.',
+        code: 'NON_WORKING_DAY_ENTRY_NOT_ALLOWED',
+      });
     }
 
     if (type.requiresOrder) {
@@ -401,7 +411,7 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
     const updated = await prisma.workTimeReport.update({
       where: { id },
       data: {
-        date: new Date(date),
+        date: reportDate,
         employeeId,
         orderId: type.requiresOrder ? orderId : null,
         hours: hoursNum,

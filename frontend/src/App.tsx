@@ -10,7 +10,8 @@ import {
   Sun, 
   Moon, 
   Lock,
-  ChevronDown
+  ChevronDown,
+  CalendarDays
 } from 'lucide-react';
 
 // View Components (to be created)
@@ -22,6 +23,7 @@ import DictionariesView from './components/DictionariesView';
 import UsersView from './components/UsersView';
 import ReportsView from './components/ReportsView';
 import ImportsView from './components/ImportsView';
+import CompanyCalendarView from './components/CompanyCalendarView';
 
 export interface UserSession {
   id: string;
@@ -149,7 +151,7 @@ function App() {
   // Save currentTab to sessionStorage and auto-expand Administracja submenu if active page is inside it
   useEffect(() => {
     sessionStorage.setItem('current_tab', currentTab);
-    if (['users', 'dictionaries', 'imports'].includes(currentTab)) {
+    if (['users', 'dictionaries', 'imports', 'calendar'].includes(currentTab)) {
       setIsAdminOpen(true);
     }
   }, [currentTab]);
@@ -302,6 +304,8 @@ function App() {
         return <UsersView token={token} currentUser={user} />;
       case 'imports':
         return <ImportsView token={token} />;
+      case 'calendar':
+        return user.role === 'admin' ? <CompanyCalendarView token={token} /> : <ReportingPanel token={token} user={user} />;
       case 'reports':
         return <ReportsView token={token} user={user} />;
       default:
@@ -416,7 +420,7 @@ function App() {
                       return next;
                     });
                   }}
-                  className={`nav-item ${['users', 'dictionaries', 'imports'].includes(currentTab) ? 'parent-active' : ''}`}
+                  className={`nav-item ${['users', 'dictionaries', 'imports', 'calendar'].includes(currentTab) ? 'parent-active' : ''}`}
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -444,6 +448,13 @@ function App() {
                     >
                       <span className="bullet">•</span>
                       <span>Słowniki</span>
+                    </button>
+                    <button
+                      onClick={() => setCurrentTab('calendar')}
+                      className={`nav-submenu-item ${currentTab === 'calendar' ? 'active' : ''}`}
+                    >
+                      <CalendarDays size={15} />
+                      <span>Kalendarz zakładowy</span>
                     </button>
                     <button
                       onClick={() => setCurrentTab('imports')}
@@ -488,7 +499,7 @@ function App() {
 
         {/* Content Area */}
         <main className="main-content">
-          <div className={`content-wrapper ${['orders', 'employees', 'users', 'dictionaries', 'reports'].includes(currentTab) ? 'orders-tab-wrapper' : ''}`}>
+          <div className={`content-wrapper ${['orders', 'employees', 'users', 'dictionaries', 'imports', 'calendar', 'reports'].includes(currentTab) ? 'orders-tab-wrapper' : ''}`}>
             {renderActiveTab()}
           </div>
         </main>

@@ -111,6 +111,17 @@ model WorkTimeReport {
   @@map("work_time_reports")
 }
 
+model CompanyCalendarDay {
+  id           String   @id @default(uuid()) @db.Uuid
+  date         DateTime @unique @db.Date
+  isWorkingDay Boolean  @map("is_working_day")
+  reason       String?  @db.VarChar(255)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("company_calendar_days")
+}
+
 model AuditLog {
   id         String   @id @default(uuid()) @db.Uuid
   tableName  String   @map("table_name") @db.VarChar(50) // "work_time_reports", "orders", "employees"

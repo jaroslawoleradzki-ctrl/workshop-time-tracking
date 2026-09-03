@@ -95,6 +95,9 @@ describe('Analytics reports', () => {
       createdAt: new Date('2026-01-01T00:00:00.000Z'),
       updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     });
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([]);
+    vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([]);
+    vi.spyOn(prisma.companyCalendarDay, 'findUnique').mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -282,6 +285,161 @@ describe('Analytics reports', () => {
         workingDays: 1,
       },
     ]);
+  });
+
+  it('regression: includes custom absence types like ART188 when isAbsence=true, and still includes standard UW/UŻ/L4', async () => {
+    const employee = {
+      fullName: 'Yurii Rudenko',
+      firstName: 'Yurii',
+      lastName: 'Rudenko',
+    };
+
+    const art188Type = {
+      code: 'ART188',
+      name: 'Art. 188 Kodeksu pracy',
+      isAbsence: true,
+      requiresOrder: false,
+    };
+
+    const uwType = {
+      code: 'UW',
+      name: 'Urlop wypoczynkowy',
+      isAbsence: true,
+      requiresOrder: false,
+    };
+
+    const uzType = {
+      code: 'UŻ',
+      name: 'Urlop na żądanie',
+      isAbsence: true,
+      requiresOrder: false,
+    };
+
+    const l4Type = {
+      code: 'L4',
+      name: 'Zwolnienie chorobowe',
+      isAbsence: true,
+      requiresOrder: false,
+    };
+
+    const reportSpy = vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([
+      // ART188 on 2026-08-06 (Thursday) and 2026-08-07 (Friday) = 2 consecutive working days = 16h total (8h/day)
+      { employeeId: EMPLOYEE_ID, employee, workTimeTypeCode: 'ART188', workTimeType: art188Type, hours: 8, date: new Date('2026-08-06T00:00:00.000Z') },
+      { employeeId: EMPLOYEE_ID, employee, workTimeTypeCode: 'ART188', workTimeType: art188Type, hours: 8, date: new Date('2026-08-07T00:00:00.000Z') },
+      // UW spanning weekend (bridged)
+      { employeeId: EMPLOYEE_ID, employee, workTimeTypeCode: 'UW', workTimeType: uwType, hours: 8, date: new Date('2026-08-10T00:00:00.000Z') },
+      { employeeId: EMPLOYEE_ID, employee, workTimeTypeCode: 'UW', workTimeType: uwType, hours: 8, date: new Date('2026-08-11T00:00:00.000Z') },
+      // UŻ single day
+      { employeeId: EMPLOYEE_ID, employee, workTimeTypeCode: 'UŻ', workTimeType: uzType, hours: 8, date: new Date('2026-08-12T00:00:00.000Z') },
+      // L4 split by missing workday
+      { employeeId: EMPLOYEE_ID, employee, workTimeTypeCode: 'L4', workTimeType: l4Type, hours: 8, date: new Date('2026-08-14T00:00:00.000Z') },
+      { employeeId: EMPLOYEE_ID, employee, workTimeTypeCode: 'L4', workTimeType: l4Type, hours: 8, date: new Date('2026-08-18T00:00:00.000Z') },
+      // Non-absence type should be excluded
+      { employeeId: EMPLOYEE_ID, employee, workTimeTypeCode: 'G', workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true }, hours: 8, date: new Date('2026-08-06T00:00:00.000Z') },
+    ] as any);
+
+    // Test without workTimeTypeCode filter to get all absence types
+    const response = await authenticatedGet(
+      `/api/analytics/report-absence-periods?dateFrom=2026-08-01&dateTo=2026-08-31&employeeId=${EMPLOYEE_ID}`,
+    ).expect(200);
+
+    expect(reportSpy).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        deletedAt: null,
+        employeeId: EMPLOYEE_ID,
+        workTimeType: { isAbsence: true },
+        date: {
+          gte: new Date('2026-08-01T00:00:00.000Z'),
+          lte: new Date('2026-08-31T00:00:00.000Z'),
+        },
+      }),
+    }));
+
+    // Verify all absence types appear in results
+    const typesInResponse = [...new Set(response.body.map((r: any) => r.workTimeTypeCode))];
+    expect(typesInResponse).toContain('ART188');
+    expect(typesInResponse).toContain('UW');
+    expect(typesInResponse).toContain('UŻ');
+    expect(typesInResponse).toContain('L4');
+    expect(typesInResponse).not.toContain('G');
+
+    // Verify ART188 period: 2026-08-06 to 2026-08-07 (consecutive working days, weekend bridges)
+    const art188Period = response.body.find((r: any) => r.workTimeTypeCode === 'ART188');
+    expect(art188Period).toBeDefined();
+    expect(art188Period.dateFrom).toBe('2026-08-06');
+    expect(art188Period.dateTo).toBe('2026-08-07');
+    expect(art188Period.workingDays).toBe(2);
+    expect(art188Period.absenceType).toBe('ART188 (Art. 188 Kodeksu pracy)');
+
+    // Verify UW bridges weekend (Fri 10th + Mon 11th = consecutive working days)
+    const uwPeriod = response.body.find((r: any) => r.workTimeTypeCode === 'UW');
+    expect(uwPeriod).toBeDefined();
+    expect(uwPeriod.dateFrom).toBe('2026-08-10');
+    expect(uwPeriod.dateTo).toBe('2026-08-11');
+    expect(uwPeriod.workingDays).toBe(2);
+
+    // Verify UŻ single day
+    const uzPeriod = response.body.find((r: any) => r.workTimeTypeCode === 'UŻ');
+    expect(uzPeriod).toBeDefined();
+    expect(uzPeriod.dateFrom).toBe('2026-08-12');
+    expect(uzPeriod.dateTo).toBe('2026-08-12');
+    expect(uzPeriod.workingDays).toBe(1);
+
+    // Verify L4 split by missing workday (14th and 18th are not consecutive working days - 15th,16th weekend, 17th missing)
+    const l4Periods = response.body.filter((r: any) => r.workTimeTypeCode === 'L4');
+    expect(l4Periods.length).toBe(2);
+    expect(l4Periods[0].dateFrom).toBe('2026-08-14');
+    expect(l4Periods[0].dateTo).toBe('2026-08-14');
+    expect(l4Periods[0].workingDays).toBe(1);
+    expect(l4Periods[1].dateFrom).toBe('2026-08-18');
+    expect(l4Periods[1].dateTo).toBe('2026-08-18');
+    expect(l4Periods[1].workingDays).toBe(1);
+  });
+
+  it('uses the company calendar when grouping absence periods', async () => {
+    const employee = { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' };
+    const absenceType = { code: 'L4', name: 'Zwolnienie chorobowe', isAbsence: true, requiresOrder: false };
+    const report = (date: string) => ({
+      employeeId: EMPLOYEE_ID,
+      employee,
+      workTimeTypeCode: 'L4',
+      workTimeType: absenceType,
+      date: new Date(`${date}T00:00:00.000Z`),
+    });
+    const calendarSpy = vi.spyOn(prisma.companyCalendarDay, 'findUnique');
+    const reportSpy = vi.spyOn(prisma.workTimeReport, 'findMany');
+
+    const run = async (reports: object[]) => {
+      reportSpy.mockResolvedValue(reports as any);
+      return authenticatedGet(
+        `/api/analytics/report-absence-periods?dateFrom=2026-08-13&dateTo=2026-08-17&employeeId=${EMPLOYEE_ID}&workTimeTypeCode=L4`,
+      ).expect(200);
+    };
+
+    // Base Saturday is free, so Friday and Monday remain one period.
+    calendarSpy.mockResolvedValue(null);
+    const weekendResponse = await run([report('2026-08-14'), report('2026-08-17')]);
+    expect(weekendResponse.body).toHaveLength(1);
+    expect(weekendResponse.body[0]).toMatchObject({ dateFrom: '2026-08-14', dateTo: '2026-08-17', workingDays: 2 });
+
+    // A working Saturday is a missing working day and therefore splits the period.
+    calendarSpy.mockImplementation(async ({ where }: any) =>
+      where.date.toISOString().startsWith('2026-08-15')
+        ? { date: where.date, isWorkingDay: true, reason: null }
+        : null,
+    );
+    const workingSaturdayResponse = await run([report('2026-08-14'), report('2026-08-17')]);
+    expect(workingSaturdayResponse.body).toHaveLength(2);
+
+    // A weekday explicitly marked free is skipped just like a weekend.
+    calendarSpy.mockImplementation(async ({ where }: any) =>
+      where.date.toISOString().startsWith('2026-08-14')
+        ? { date: where.date, isWorkingDay: false, reason: 'dzień wolny' }
+        : null,
+    );
+    const freeWeekdayResponse = await run([report('2026-08-13'), report('2026-08-17')]);
+    expect(freeWeekdayResponse.body).toHaveLength(1);
+    expect(freeWeekdayResponse.body[0]).toMatchObject({ dateFrom: '2026-08-13', dateTo: '2026-08-17', workingDays: 2 });
   });
 
   it('exports the same clipped absence periods to XLSX with report metadata', async () => {
@@ -848,6 +1006,304 @@ describe('Analytics reports', () => {
       expect(worksheet?.getRow(8).getCell(3).value).toBe('530-8-49');
       expect(worksheet?.getRow(8).getCell(4).value).toBe('P-530');
       expect(worksheet?.getRow(9).getCell(3).value).toBeNull();
+    });
+  });
+
+  describe('Closure control summary', () => {
+    it('calculates matched control sums for client August 2026 dataset (3168 orders + 232 L4 + 832 UW + 8 UZ + 16 custom OP = 4256)', async () => {
+      // 1. Mock orders with 3168 total hours in range
+      vi.spyOn(prisma.order, 'findMany').mockResolvedValue([
+        {
+          id: 'ord-1',
+          orderNumber: 'ZL-MAIN',
+          productName: 'Główny produkt',
+          productCode: 'P-01',
+          accountingAccount: 'K-100',
+          plannedHours: 4000,
+          quantity: 100,
+          quantityUnit: 'szt.',
+          status: 'OPEN',
+          completionDate: null,
+          deletedAt: null,
+          reports: [
+            { hours: 3168, date: new Date('2026-08-15T00:00:00.000Z'), deletedAt: null },
+          ],
+        },
+      ] as any);
+
+      // 2. Mock workTimeTypes with isAbsence=true (including standard and custom OP type)
+      vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
+        { code: 'L4', name: 'Zwolnienie lekarskie', isAbsence: true, requiresOrder: false },
+        { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+        { code: 'UŻ', name: 'Urlop na żądanie', isAbsence: true, requiresOrder: false },
+        { code: 'OP', name: 'Opieka nad dzieckiem art. 188', isAbsence: true, requiresOrder: false },
+        { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+      ] as any);
+
+      // 3. Mock workTimeReport entries: 232 L4 + 832 UW + 8 UŻ + 16 OP, plus orders and employee pivot
+      vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
+        // Query for absence reports
+        if (args?.where?.workTimeType?.isAbsence) {
+          return [
+            { workTimeTypeCode: 'L4', hours: 232 },
+            { workTimeTypeCode: 'UW', hours: 832 },
+            { workTimeTypeCode: 'UŻ', hours: 8 },
+            { workTimeTypeCode: 'OP', hours: 16 },
+          ] as any;
+        }
+
+        // Query for employee report rows (total employee hours)
+        return [
+          {
+            employeeId: 'emp-1',
+            employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+            hours: 3168,
+            workTimeTypeCode: 'G',
+            workTimeType: { name: 'Standardowe' },
+          },
+          {
+            employeeId: 'emp-2',
+            employee: { fullName: 'Adam Nowak', firstName: 'Adam', lastName: 'Nowak' },
+            hours: 232,
+            workTimeTypeCode: 'L4',
+            workTimeType: { name: 'Zwolnienie lekarskie' },
+          },
+          {
+            employeeId: 'emp-3',
+            employee: { fullName: 'Ewa Wiśniewska', firstName: 'Ewa', lastName: 'Wiśniewska' },
+            hours: 832,
+            workTimeTypeCode: 'UW',
+            workTimeType: { name: 'Urlop wypoczynkowy' },
+          },
+          {
+            employeeId: 'emp-4',
+            employee: { fullName: 'Piotr Zieliński', firstName: 'Piotr', lastName: 'Zieliński' },
+            hours: 8,
+            workTimeTypeCode: 'UŻ',
+            workTimeType: { name: 'Urlop na żądanie' },
+          },
+          {
+            employeeId: 'emp-5',
+            employee: { fullName: 'Marek Kozłowski', firstName: 'Marek', lastName: 'Kozłowski' },
+            hours: 16,
+            workTimeTypeCode: 'OP',
+            workTimeType: { name: 'Opieka nad dzieckiem art. 188' },
+          },
+        ] as any;
+      });
+
+      const response = await authenticatedGet('/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31').expect(200);
+
+      expect(response.body).toEqual({
+        ordersHours: 3168,
+        absences: [
+          { code: 'L4', name: 'Zwolnienie lekarskie', hours: 232 },
+          { code: 'UW', name: 'Urlop wypoczynkowy', hours: 832 },
+          { code: 'UŻ', name: 'Urlop na żądanie', hours: 8 },
+          { code: 'OP', name: 'Opieka nad dzieckiem art. 188', hours: 16 },
+        ],
+        totalAbsenceHours: 1088,
+        totalSettledHours: 4256,
+        totalEmployeeHours: 4256,
+        difference: 0,
+        status: 'MATCHED',
+        statusLabel: 'Zgodne',
+      });
+    });
+
+    it('returns MISMATCHED status when settled hours differ from employee total hours', async () => {
+      // Orders: 100h
+      vi.spyOn(prisma.order, 'findMany').mockResolvedValue([
+        {
+          id: 'ord-1',
+          orderNumber: 'ZL-100',
+          productName: 'Produkt',
+          productCode: 'P-1',
+          accountingAccount: 'K-1',
+          plannedHours: 100,
+          quantity: 1,
+          quantityUnit: 'szt.',
+          status: 'OPEN',
+          completionDate: null,
+          deletedAt: null,
+          reports: [{ hours: 100, date: new Date('2026-08-10T00:00:00.000Z'), deletedAt: null }],
+        },
+      ] as any);
+
+      // WorkTimeTypes: L4 (absence), SZK (non-absence, no order)
+      vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
+        { code: 'L4', name: 'Zwolnienie', isAbsence: true, requiresOrder: false },
+        { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+      ] as any);
+
+      // Reports: 16h L4, but employee also has 8h SZK (unsettled non-absence without order)
+      vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
+        if (args?.where?.workTimeType?.isAbsence) {
+          return [{ workTimeTypeCode: 'L4', hours: 16 }] as any;
+        }
+
+        return [
+          {
+            employeeId: 'emp-1',
+            employee: { fullName: 'Jan Kowalski' },
+            hours: 100,
+            workTimeTypeCode: 'G',
+            workTimeType: { name: 'Standardowe' },
+          },
+          {
+            employeeId: 'emp-1',
+            employee: { fullName: 'Jan Kowalski' },
+            hours: 16,
+            workTimeTypeCode: 'L4',
+            workTimeType: { name: 'Zwolnienie' },
+          },
+          {
+            employeeId: 'emp-1',
+            employee: { fullName: 'Jan Kowalski' },
+            hours: 8,
+            workTimeTypeCode: 'SZK',
+            workTimeType: { name: 'Szkolenie' },
+          },
+        ] as any;
+      });
+
+      const response = await authenticatedGet('/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31').expect(200);
+
+      // Settled: 100 orders + 16 L4 = 116
+      // Employee total: 100 + 16 + 8 = 124
+      // Difference: 116 - 124 = -8
+      expect(response.body.ordersHours).toBe(100);
+      expect(response.body.totalAbsenceHours).toBe(16);
+      expect(response.body.totalSettledHours).toBe(116);
+      expect(response.body.totalEmployeeHours).toBe(124);
+      expect(response.body.difference).toBe(-8);
+      expect(response.body.status).toBe('MISMATCHED');
+      expect(response.body.statusLabel).toBe('Niezgodne');
+    });
+
+    it('dynamically includes custom absence type with isAbsence=true and excludes isAbsence=false', async () => {
+      vi.spyOn(prisma.order, 'findMany').mockResolvedValue([]);
+
+      vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
+        { code: 'DELEGACJA_URLOP', name: 'Urlop delegacyjny', isAbsence: true, requiresOrder: false },
+        { code: 'PRZESTOJ', name: 'Przestój płatny', isAbsence: false, requiresOrder: false },
+      ] as any);
+
+      vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
+        if (args?.where?.workTimeType?.isAbsence) {
+          return [{ workTimeTypeCode: 'DELEGACJA_URLOP', hours: 24 }] as any;
+        }
+
+        return [
+          {
+            employeeId: 'emp-1',
+            employee: { fullName: 'Jan Kowalski' },
+            hours: 24,
+            workTimeTypeCode: 'DELEGACJA_URLOP',
+            workTimeType: { name: 'Urlop delegacyjny' },
+          },
+        ] as any;
+      });
+
+      const response = await authenticatedGet('/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31').expect(200);
+
+      expect(response.body.absences).toEqual([
+        { code: 'DELEGACJA_URLOP', name: 'Urlop delegacyjny', hours: 24 },
+      ]);
+      expect(response.body.absences.some((a: any) => a.code === 'PRZESTOJ')).toBe(false);
+      expect(response.body.status).toBe('MATCHED');
+    });
+
+    it('rejects invalid date parameters with HTTP 400', async () => {
+      await authenticatedGet('/api/analytics/closure-control-summary?dateFrom=2026-08-31&dateTo=2026-08-01')
+        .expect(400)
+        .expect(({ body }) => expect(body.code).toBe('INVALID_CLOSURE_REPORT_PARAMS'));
+
+      await authenticatedGet('/api/analytics/closure-control-summary?dateFrom=invalid-date&dateTo=2026-08-31')
+        .expect(400)
+        .expect(({ body }) => expect(body.code).toBe('INVALID_CLOSURE_REPORT_PARAMS'));
+
+      await authenticatedGet('/api/analytics/closure-control-summary')
+        .expect(400)
+        .expect(({ body }) => expect(body.code).toBe('INVALID_CLOSURE_REPORT_PARAMS'));
+    });
+
+    it('includes control summary section in XLSX export when in closureReport mode', async () => {
+      vi.spyOn(prisma.order, 'findMany').mockResolvedValue([
+        {
+          id: 'ord-1',
+          orderNumber: 'ZL-XLSX',
+          productName: 'Forma',
+          productCode: 'P-XLSX',
+          accountingAccount: 'K-900',
+          plannedHours: 50,
+          quantity: 2,
+          quantityUnit: 'szt.',
+          status: 'CLOSED',
+          completionDate: new Date('2026-08-20T00:00:00.000Z'),
+          deletedAt: null,
+          reports: [{ hours: 40, date: new Date('2026-08-15T00:00:00.000Z'), deletedAt: null }],
+        },
+      ] as any);
+
+      vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
+        { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+      ] as any);
+
+      vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
+        if (args?.where?.workTimeType?.isAbsence) {
+          return [{ workTimeTypeCode: 'UW', hours: 16 }] as any;
+        }
+        return [
+          {
+            employeeId: 'emp-1',
+            employee: { fullName: 'Jan Kowalski' },
+            hours: 40,
+            workTimeTypeCode: 'G',
+            workTimeType: { name: 'Standardowe' },
+          },
+          {
+            employeeId: 'emp-1',
+            employee: { fullName: 'Jan Kowalski' },
+            hours: 16,
+            workTimeTypeCode: 'UW',
+            workTimeType: { name: 'Urlop wypoczynkowy' },
+          },
+        ] as any;
+      });
+
+      const xlsxResponse = await authenticatedGet('/api/analytics/export/by-order?closureReport=true&dateFrom=2026-08-01&dateTo=2026-08-31')
+        .buffer(true)
+        .parse(binaryParser)
+        .expect(200)
+        .expect('Content-Type', /spreadsheetml/);
+
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(xlsxResponse.body);
+      const worksheet = workbook.getWorksheet('Zlecenia')!;
+
+      // Find control summary header in sheet
+      const allValues = worksheet.getSheetValues();
+      const hasControlHeader = allValues.some((row: any) => Array.isArray(row) && row.includes('Kontrola rozliczenia czasu'));
+      expect(hasControlHeader).toBe(true);
+
+      const hasOrdersRow = allValues.some((row: any) => Array.isArray(row) && row.includes('Godziny wg zleceń') && row.includes(40));
+      expect(hasOrdersRow).toBe(true);
+
+      const hasAbsenceRow = allValues.some((row: any) => Array.isArray(row) && row.includes('UW (Urlop wypoczynkowy)') && row.includes(16));
+      expect(hasAbsenceRow).toBe(true);
+
+      const hasSettledRow = allValues.some((row: any) => Array.isArray(row) && row.includes('Łącznie rozliczono') && row.includes(56));
+      expect(hasSettledRow).toBe(true);
+
+      const hasEmployeeRow = allValues.some((row: any) => Array.isArray(row) && row.includes('Suma godzin pracowników') && row.includes(56));
+      expect(hasEmployeeRow).toBe(true);
+
+      const hasDifferenceRow = allValues.some((row: any) => Array.isArray(row) && row.includes('Różnica') && row.includes(0));
+      expect(hasDifferenceRow).toBe(true);
+
+      const hasStatusRow = allValues.some((row: any) => Array.isArray(row) && row.includes('Status') && row.includes('Zgodne'));
+      expect(hasStatusRow).toBe(true);
     });
   });
 });

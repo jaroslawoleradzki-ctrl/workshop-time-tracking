@@ -3,13 +3,39 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.5.1] - 2026-09-03
+
+### Added
+
+- Dodano automatyczną sekcję „Kontrola rozliczenia czasu” w trybie Raportu zamknięcia w raporcie „Godziny wg zleceń”.
+- Logika dynamicznie agreguje godziny zleceń oraz wszystkie rodzaje nieobecności (`WorkTimeType.isAbsence=true`) występujące w okresie, porównując je z łączną sumą godzin pracowników z raportu miesięcznego.
+- Wprowadzono jednoznaczny wskaźnik statusu zgodności (ZGODNE / NIEZGODNE) oraz prezentację różnicy liczbowej.
+- Utworzono dedykowany endpoint backendowy `GET /api/analytics/closure-control-summary` oraz rozszerzono eksporty XLSX i CSV o sekcję kontrolną generowaną ze wspólnej logiki analitycznej.
+- Dodano zestaw testów jednostkowych i integracyjnych dla backendu (`analytics.test.ts`) oraz frontendu (`ReportsView.test.tsx`).
+
+### Fixed
+
+- Usunięto zależność developerskiego stosu Homelab od bind mountu konfiguracji Nginx z checkoutu Portainera; konfiguracja jest teraz wbudowana w obraz frontendu.
+- Raport okresów nieobecności korzysta teraz ze wspólnego kalendarza zakładowego przy pomijaniu dni wolnych i grupowaniu okresów.
+- Zakres wersji obejmuje niestandardowe typy nieobecności przez `WorkTimeType.isAbsence` (przyczyna braku typu art. 188 była konfiguracyjna), sumy kontrolne zamknięcia miesiąca, Company Work Calendar i walidację `G`/nieobecności/`NS` w dniach wolnych.
+- Ujednolicono kopiowanie ostatniego dnia z regułami kalendarza oraz poprawiono kompatybilność HomeLab DEV z Portainerem.
+
 ## [0.5.0] - 2026-08-25
+
+### Added
+
+- Dodano fundament kalendarza zakładowego z administracyjnymi wyjątkami dat, API `company-calendar` oraz ekranem kalendarza dla administratora.
+- Walidacja wpisów czasu i zakresów nieobecności korzysta ze wspólnej reguły dni roboczych i wolnych.
 
 ### Fixed
 
 - Naprawiono filtrowanie po zleceniu w Raporcie Szczegółowym (`GET /api/analytics/report-detailed`), dodając poprawną obsługę parametru `orderId` w zapytaniu bazy danych.
 - Poprawiono spójność filtrowania w tabeli Raportu Szczegółowego oraz w eksporcie XLSX i CSV (w tym dodano brakujące mapowanie `productCode`).
 - Dodano testy regresyjne backendu i frontendu pokrywające filtrowanie pojedynczego zlecenia, kombinacje z pracownikiem i zakresem dat oraz eksporty.
+
+### Added
+
+- Dodano test regresyjny dla raportu okresów nieobecności weryfikujący, że **dowolny** typ czasu z `isAbsence=true` (nie tylko standardowe UW/UOK/UŻ/L4) jest poprawnie uwzględniany w raporcie, łącząc kolejne dni robocze przez weekend, rozdzielając przerwami i pomijając typy `isAbsence=false`. Test używa kodu `ART188` jako przykładu niestandardowego typu nieobecności.
 
 ## [0.4.9] - 2026-08-06
 

@@ -18,7 +18,7 @@ flowchart LR
 - Nginx serwuje build SPA i przekazuje `/api` do backendu.
 - Express składa middleware CORS/JSON/logowania, uwierzytelnianie JWT, kontrolę ról i routery: auth, users, employees, orders, work-time-types, reports, analytics, imports.
 - Routery zawierają większość walidacji i logiki biznesowej oraz bezpośrednio wywołują Prisma. Krytyczna operacja kopiowania czasu ma wydzielony serwis transakcyjny; ogólnej warstwy repozytoriów nie ma.
-- Endpoint JSON i eksport XLSX raportu zleceń korzystają ze wspólnego generatora `getOrderReportRows`. W trybie zamknięcia zapytanie rozpoczyna się od nieusuniętych zleceń `OPEN` lub `CLOSED` w zakresie `completionDate`, a filtrowane wpisy czasu są opcjonalnie dołączane, dzięki czemu zachowane są również zlecenia z sumą zero.
+- Endpoint JSON i eksport XLSX raportu zleceń korzystają ze wspólnego generatora `getOrderReportRows`. W trybie zamknięcia zapytanie rozpoczyna się od nieusuniętych zleceń `OPEN` lub `CLOSED` w zakresie `completionDate`, a filtrowane wpisy czasu są opcjonalnie dołączane, dzięki czemu zachowane są również zlecenia z sumą zero. Logika sum kontrolnych zamknięcia (`getClosureControlSummary`) agreguje godziny wg zleceń, dynamiczne typy `WorkTimeType.isAbsence=true` oraz sumę godzin pracowników z raportu miesięcznego i jest współdzielona przez dedykowany endpoint `GET /api/analytics/closure-control-summary` oraz generator eksportu XLSX `GET /api/analytics/export/by-order`.
 - Prisma mapuje modele i migracje na PostgreSQL. Logger Pino zapisuje żądania i błędy na stdout/stderr.
 
 ## Model danych
@@ -35,6 +35,8 @@ erDiagram
 ```
 
 `User` nie jest powiązany z `Employee`. `WorkTimeReport` łączy pracownika, opcjonalne zlecenie, typ czasu i użytkowników tworzącego/modyfikującego. `WorkTimeType.isAbsence` klasyfikuje typ jako nieobecność niezależnie od `requiresOrder`; raport okresów nieobecności korzysta z relacji do tego słownika i nie przechowuje dodatkowego znacznika w samym wpisie. `Order` ma status, aktywność i plan godzin. `ImportHistory` przechowuje wynik importu, a `AuditLog` migawkę zmiany.
+
+`CompanyCalendarDay` przechowuje administracyjne wyjątki kalendarza z unikalną datą, statusem roboczym i opcjonalnym powodem. Serwis `getWorkingDayDecision` jest jedynym źródłem decyzji o dniu roboczym; korzystają z niego walidacja wpisów i zakresy nieobecności.
 
 ## Przepływy
 

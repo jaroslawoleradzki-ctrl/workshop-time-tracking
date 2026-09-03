@@ -4,6 +4,8 @@ import { AuthRequest, authenticateJWT } from '../middlewares/auth';
 import * as ExcelJS from 'exceljs';
 import { OrderStatus } from '@prisma/client';
 import logger from '../utils/logger';
+import { getWorkingDayDecision } from '../services/company-calendar';
+import { formatDateString, parseDateString } from '../utils/date';
 
 const router = Router();
 
@@ -105,15 +107,21 @@ export function formatEmployeeName(emp: {
 }
 
 function formatDateKey(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  return formatDateString(date);
 }
 
-function nextWorkingDate(dateKey: string): string {
-  const date = new Date(`${dateKey}T00:00:00.000Z`);
-  do {
+async function nextWorkingDate(
+  dateKey: string,
+  getDecision: (dateKey: string) => Promise<{ isWorkingDay: boolean }>,
+): Promise<string> {
+  const date = parseDateString(dateKey);
+  if (!date) throw new Error(`Invalid date key: ${dateKey}`);
+
+  while (true) {
     date.setUTCDate(date.getUTCDate() + 1);
-  } while (date.getUTCDay() === 0 || date.getUTCDay() === 6);
-  return formatDateKey(date);
+    const nextDateKey = formatDateKey(date);
+    if ((await getDecision(nextDateKey)).isWorkingDay) return nextDateKey;
+  }
 }
 
 export async function getAbsencePeriodRows(
@@ -152,9 +160,19 @@ export async function getAbsencePeriodRows(
     dates: Set<string>;
   }>();
 
+  const decisionCache = new Map<string, { isWorkingDay: boolean }>();
+  const getDecision = async (dateKey: string) => {
+    const cached = decisionCache.get(dateKey);
+    if (cached) return cached;
+    const decision = await getWorkingDayDecision(dateKey);
+    decisionCache.set(dateKey, decision);
+    return decision;
+  };
+
   for (const report of reports) {
     if (!report.workTimeType.isAbsence) continue;
-    if (report.date.getUTCDay() === 0 || report.date.getUTCDay() === 6) continue;
+    const dateKey = formatDateKey(report.date);
+    if (!(await getDecision(dateKey)).isWorkingDay) continue;
     const employeeName = formatEmployeeName(report.employee);
     const employeeSortKey = `${report.employee.lastName || ''} ${report.employee.firstName || ''} ${employeeName}`.trim();
     const key = `${report.employeeId}\u0000${report.workTimeTypeCode}`;
@@ -166,7 +184,7 @@ export async function getAbsencePeriodRows(
       absenceType: `${report.workTimeType.code} (${report.workTimeType.name})`,
       dates: new Set<string>(),
     };
-    group.dates.add(formatDateKey(report.date));
+    group.dates.add(dateKey);
     groupedDays.set(key, group);
   }
 
@@ -196,7 +214,7 @@ export async function getAbsencePeriodRows(
         periodStart = date;
         periodEnd = date;
         workingDays = 1;
-      } else if (date === nextWorkingDate(periodEnd)) {
+      } else if (date === await nextWorkingDate(periodEnd, getDecision)) {
         periodEnd = date;
         workingDays += 1;
       } else {
@@ -295,6 +313,8 @@ import {
   generateExcelResponse,
   ExcelReportMetadata,
   ReportFilterItem,
+  ClosureControlSummary,
+  AbsenceSummaryItem,
   formatDateISO,
   buildDateRangeText,
   formatGeneratedAt,
@@ -303,6 +323,8 @@ import {
 export {
   ReportFilterItem,
   ExcelReportMetadata,
+  ClosureControlSummary,
+  AbsenceSummaryItem,
   formatDateISO,
   buildDateRangeText,
   formatGeneratedAt,
@@ -507,6 +529,111 @@ export async function getOrderReportRows(filters: OrderReportFilters): Promise<O
   return rows;
 }
 
+export async function getClosureControlSummary(filters: {
+  dateFrom: string;
+  dateTo: string;
+}): Promise<ClosureControlSummary> {
+  const { dateFrom, dateTo } = filters;
+
+  // 1. Godziny wg zleceń w trybie raportu zamknięcia (wspólna logika)
+  const orderRows = await getOrderReportRows({
+    dateFrom,
+    dateTo,
+    closureReport: true,
+    onlyWithHours: false,
+  });
+  const ordersHours = Math.round(
+    orderRows.reduce((sum, row) => sum + (Number(row.actualHours) || 0), 0) * 100,
+  ) / 100;
+
+  // 2. Nieobecności dynamicznie wyznaczane ze słownika WorkTimeType (isAbsence: true)
+  const [absenceTypes, absenceReports] = await Promise.all([
+    prisma.workTimeType.findMany({
+      where: { isAbsence: true },
+      select: { code: true, name: true },
+      orderBy: [{ createdAt: 'asc' }, { code: 'asc' }],
+    }),
+    prisma.workTimeReport.findMany({
+      where: {
+        deletedAt: null,
+        date: {
+          gte: new Date(`${dateFrom}T00:00:00.000Z`),
+          lte: new Date(`${dateTo}T00:00:00.000Z`),
+        },
+        workTimeType: {
+          isAbsence: true,
+        },
+      },
+      select: {
+        workTimeTypeCode: true,
+        hours: true,
+      },
+    }),
+  ]);
+
+  const absenceHoursMap: Record<string, number> = {};
+  for (const report of absenceReports) {
+    const code = report.workTimeTypeCode;
+    absenceHoursMap[code] = (absenceHoursMap[code] || 0) + Number(report.hours);
+  }
+
+  const absences: AbsenceSummaryItem[] = [];
+  let totalAbsenceHours = 0;
+
+  for (const type of absenceTypes) {
+    const hours = absenceHoursMap[type.code] || 0;
+    if (hours > 0) {
+      const rounded = Math.round(hours * 100) / 100;
+      absences.push({
+        code: type.code,
+        name: type.name,
+        hours: rounded,
+      });
+      totalAbsenceHours += rounded;
+    }
+  }
+
+  // W przypadku wpisów z kodami isAbsence spoza aktywnego słownika
+  for (const [code, hours] of Object.entries(absenceHoursMap)) {
+    if (!absenceTypes.some((t) => t.code === code) && hours > 0) {
+      const rounded = Math.round(hours * 100) / 100;
+      absences.push({
+        code,
+        name: code,
+        hours: rounded,
+      });
+      totalAbsenceHours += rounded;
+    }
+  }
+
+  totalAbsenceHours = Math.round(totalAbsenceHours * 100) / 100;
+  const totalSettledHours = Math.round((ordersHours + totalAbsenceHours) * 100) / 100;
+
+  // 3. Suma godzin pracowników z miesięcznego raportu
+  const employeeRows = await getEmployeeReportRows({
+    dateFrom,
+    dateTo,
+  });
+  const totalEmployeeHours = Math.round(
+    employeeRows.reduce((sum, row) => sum + (Number(row.suma) || 0), 0) * 100,
+  ) / 100;
+
+  // 4. Różnica i status
+  const difference = Math.round((totalSettledHours - totalEmployeeHours) * 100) / 100;
+  const isMatched = Math.abs(difference) < 0.001;
+
+  return {
+    ordersHours,
+    absences,
+    totalAbsenceHours,
+    totalSettledHours,
+    totalEmployeeHours,
+    difference,
+    status: isMatched ? 'MATCHED' : 'MISMATCHED',
+    statusLabel: isMatched ? 'Zgodne' : 'Niezgodne',
+  };
+}
+
 // 2. Report by Order
 router.get('/report-by-order', async (req: AuthRequest, res: Response) => {
   const { dateFrom, dateTo, status, orderNumber, onlyWithHours } = req.query;
@@ -529,6 +656,24 @@ router.get('/report-by-order', async (req: AuthRequest, res: Response) => {
   } catch (error) {
     logger.error(error, 'Błąd podczas pobierania raportu wg zleceń');
     return res.status(500).json({ message: 'Błąd podczas pobierania raportu wg zleceń' });
+  }
+});
+
+// 2b. Closure Control Summary
+router.get('/closure-control-summary', async (req: AuthRequest, res: Response) => {
+  const { dateFrom, dateTo } = req.query;
+  const dateError = validateClosureDateRange(true, dateFrom, dateTo);
+  if (dateError) return res.status(400).json(dateError);
+
+  try {
+    const summary = await getClosureControlSummary({
+      dateFrom: dateFrom as string,
+      dateTo: dateTo as string,
+    });
+    return res.json(summary);
+  } catch (error) {
+    logger.error(error, 'Błąd podczas pobierania sum kontrolnych zamknięcia');
+    return res.status(500).json({ message: 'Błąd podczas pobierania sum kontrolnych zamknięcia' });
   }
 });
 
@@ -712,6 +857,13 @@ router.get('/export/by-order', async (req: AuthRequest, res: Response) => {
     const orderNumVal = orderNumber && (orderNumber as string).trim() ? (orderNumber as string).trim() : 'Wszystkie';
     const onlyHoursVal = closureReport ? 'Nie dotyczy (raport zamknięcia)' : onlyWithHours === 'true' || onlyWithHours === '1' ? 'Tak' : 'Nie';
 
+    const controlSummary = closureReport && dateFrom && dateTo
+      ? await getClosureControlSummary({
+          dateFrom: dateFrom as string,
+          dateTo: dateTo as string,
+        })
+      : undefined;
+
     await generateExcelResponse({
       res,
       filename: 'Raport_zlecen.xlsx',
@@ -728,6 +880,7 @@ router.get('/export/by-order', async (req: AuthRequest, res: Response) => {
           { label: 'Tylko z wypracowanymi godzinami', value: onlyHoursVal },
           { label: 'Raport zamknięcia', value: closureReport ? 'Tak' : 'Nie' },
         ],
+        controlSummary,
       },
       numberColumns: [6, 7, 8, 9],
     });

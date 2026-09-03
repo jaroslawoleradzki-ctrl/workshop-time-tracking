@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ReportsView from '../components/ReportsView';
 
@@ -128,6 +128,23 @@ describe('ReportsView — miesięczny raport pracowników', () => {
           dateTo: '2026-07-06',
           workingDays: 2,
         }]);
+      }
+      if (url.startsWith('/api/analytics/closure-control-summary')) {
+        return response({
+          ordersHours: 3168,
+          absences: [
+            { code: 'L4', name: 'Zwolnienie lekarskie', hours: 232 },
+            { code: 'UW', name: 'Urlop wypoczynkowy', hours: 832 },
+            { code: 'UŻ', name: 'Urlop na żądanie', hours: 8 },
+            { code: 'OP', name: 'Art. 188', hours: 16 },
+          ],
+          totalAbsenceHours: 1088,
+          totalSettledHours: 4256,
+          totalEmployeeHours: 4256,
+          difference: 0,
+          status: 'MATCHED',
+          statusLabel: 'Zgodne',
+        });
       }
 
       throw new Error(`Nieobsłużone żądanie testowe: ${url}`);
@@ -504,6 +521,18 @@ describe('ReportsView — miesięczny raport pracowników', () => {
         if (url.startsWith('/api/analytics/export/by-order')) {
           return { ok: true, blob: async () => new Blob(['xlsx']) } as Response;
         }
+        if (url.startsWith('/api/analytics/closure-control-summary')) {
+          return response({
+            ordersHours: 0,
+            absences: [],
+            totalAbsenceHours: 0,
+            totalSettledHours: 0,
+            totalEmployeeHours: 0,
+            difference: 0,
+            status: 'MATCHED',
+            statusLabel: 'Zgodne',
+          });
+        }
         return response([]);
       }));
       vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:closure-report');
@@ -523,11 +552,24 @@ describe('ReportsView — miesięczny raport pracowników', () => {
 
     it('renders a closed order with zero hours and its completion date', async () => {
       vi.spyOn(global, 'fetch').mockImplementation(async (input) => {
-        if (String(input).startsWith('/api/analytics/report-by-order')) return response([{
+        const url = String(input);
+        if (url.startsWith('/api/analytics/report-by-order')) return response([{
           orderNumber: 'ZL-ZERO', productName: 'Zamknięte', productCode: 'P-0', quantity: 1,
           quantityUnit: 'szt.', plannedHours: 10, actualHours: 0, deviation: 10, percent: 0,
           status: 'CLOSED', completionDate: '2026-08-10',
         }]) as any;
+        if (url.startsWith('/api/analytics/closure-control-summary')) {
+          return response({
+            ordersHours: 0,
+            absences: [],
+            totalAbsenceHours: 0,
+            totalSettledHours: 0,
+            totalEmployeeHours: 0,
+            difference: 0,
+            status: 'MATCHED',
+            statusLabel: 'Zgodne',
+          }) as any;
+        }
         return response([]) as any;
       });
       renderReports();
@@ -576,6 +618,67 @@ describe('ReportsView — miesięczny raport pracowników', () => {
       await waitFor(() => expect(requestedUrls.some(url =>
         url.startsWith('/api/analytics/report-by-order?') && !url.includes('closureReport='),
       )).toBe(true));
+    });
+
+    it('does not display control summary section when closureReport mode is inactive', () => {
+      renderReports();
+      expect(screen.queryByTestId('closure-control-summary')).not.toBeInTheDocument();
+    });
+
+    it('renders control summary with orders, absences, total settled, total employee hours, difference, and MATCHED status', async () => {
+      renderReports();
+
+      fireEvent.change(screen.getByLabelText('Data od'), { target: { value: '2026-08-01' } });
+      fireEvent.change(screen.getByLabelText('Data do'), { target: { value: '2026-08-31' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Raport zamknięcia' }));
+
+      const summaryCard = await screen.findByTestId('closure-control-summary');
+
+      expect(within(summaryCard).getByText('Kontrola rozliczenia czasu')).toBeInTheDocument();
+      expect(within(summaryCard).getByTestId('control-summary-status-badge')).toHaveTextContent('Status: Zgodne');
+      expect(within(summaryCard).getByTestId('control-orders-hours')).toHaveTextContent('3168.00 h');
+      expect(within(summaryCard).getByText('232.00 h')).toBeInTheDocument();
+      expect(within(summaryCard).getByText('832.00 h')).toBeInTheDocument();
+      expect(within(summaryCard).getByText('8.00 h')).toBeInTheDocument();
+      expect(within(summaryCard).getByText('16.00 h')).toBeInTheDocument();
+      expect(within(summaryCard).getByTestId('control-total-settled')).toHaveTextContent('4256.00 h');
+      expect(within(summaryCard).getByTestId('control-employee-hours')).toHaveTextContent('4256.00 h');
+      expect(within(summaryCard).getByTestId('control-difference')).toHaveTextContent('0.00 h');
+    });
+
+    it('renders MISMATCHED status and difference when settled hours do not equal employee hours', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === '/api/employees') return response(employees);
+        if (url === '/api/orders') return response(orders);
+        if (url === '/api/work-time-types') return response(workTimeTypes);
+        if (url.startsWith('/api/analytics/report-by-order')) return response([{
+          orderNumber: 'ZL-001', productName: 'P1', plannedHours: 100, actualHours: 100,
+          deviation: 0, percent: 100, status: 'OPEN',
+        }]);
+        if (url.startsWith('/api/analytics/closure-control-summary')) {
+          return response({
+            ordersHours: 100,
+            absences: [{ code: 'L4', name: 'Zwolnienie', hours: 16 }],
+            totalAbsenceHours: 16,
+            totalSettledHours: 116,
+            totalEmployeeHours: 124,
+            difference: -8,
+            status: 'MISMATCHED',
+            statusLabel: 'Niezgodne',
+          });
+        }
+        return response([]);
+      }));
+
+      renderReports();
+      fireEvent.change(screen.getByLabelText('Data od'), { target: { value: '2026-08-01' } });
+      fireEvent.change(screen.getByLabelText('Data do'), { target: { value: '2026-08-31' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Raport zamknięcia' }));
+
+      await screen.findByTestId('closure-control-summary');
+      expect(screen.getByTestId('control-summary-status-badge')).toHaveTextContent('Status: Niezgodne');
+      expect(screen.getByTestId('control-difference')).toHaveTextContent('-8.00 h');
     });
   });
 

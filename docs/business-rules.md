@@ -1,6 +1,6 @@
 # Reguły biznesowe
 
-Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.5.0.
+Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.5.1.
 
 ## Role i dostęp
 
@@ -22,6 +22,9 @@ Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.5.0.
 - `plannedHours` jest zawsze wyliczane jako `quantity * hoursPerUnit`. Ilość musi być większa od zera, a godziny na jednostkę nieujemne.
 
 ## Rejestrowanie czasu
+
+- Kalendarz zakładowy stosuje regułę bazową: poniedziałek–piątek są robocze, a sobota i niedziela wolne. Administrator może zapisać jeden jawny wyjątek dla konkretnej daty; wyjątek ma pierwszeństwo i może oznaczyć dzień weekendowy jako roboczy albo dzień tygodnia jako wolny. Usunięcie wyjątku przywraca regułę bazową. Kalendarz nie zawiera automatycznej bazy świąt.
+- W dniu wolnym nie można zapisać typu `G` ani typu oznaczonego `isAbsence=true`. Dozwolona pozostaje praca nad zleceniem z typem niebędącym nieobecnością, np. istniejący `NS`.
 
 - Wpis wymaga daty, pracownika, liczby godzin większej od zera i istniejącego kodu rodzaju czasu pracy.
 - Wpis raportu czasu może zostać oznaczony jako „Brak karty” (`missingCard`) w sytuacji, gdy pracownik nie posiadał lub nie użył karty podczas rejestracji czasu pracy. Wartość ta jest przechowywana w bazie danych jako pole logiczne (domyślnie `false`).
@@ -61,9 +64,10 @@ Odpowiedź sukcesu (`201`) zawiera co najmniej `employeeId`, `sourceDate`, `targ
 ## Raport okresów nieobecności
 
 - Raport uwzględnia wyłącznie aktywne wpisy (`deletedAt=null`) powiązane z typem czasu, dla którego `isAbsence=true`.
-- Kolejne dni robocze jednego pracownika i jednego typu są łączone w okres; sobota i niedziela nie przerywają okresu i nie zwiększają liczby dni.
+- Kolejne dni robocze jednego pracownika i jednego typu są łączone w okres; dni oznaczone przez kalendarz zakładowy jako wolne nie przerywają okresu i nie zwiększają liczby dni. Obejmuje to zarówno bazowe weekendy, jak i jawne wyjątki administratora.
 - Brak wpisu w dniu roboczym rozdziela okres, a wielokrotne wpisy tego samego typu w tym samym dniu są liczone jako jeden dzień.
-- Filtr dat przycina dane przed grupowaniem. Wersja nie uwzględnia świąt ani indywidualnych harmonogramów pracowników.
+- Filtr dat przycina dane przed grupowaniem. Raport korzysta z kalendarza zakładowego, ale nie zawiera automatycznej bazy polskich świąt ani indywidualnych harmonogramów pracowników; dzień świąteczny przypadający w dzień tygodnia wymaga jawnego wyjątku administratora.
+- **Ważne**: Automatycznie jako nieobecność sklasyfikowano wyłącznie kody standardowe `UW`, `UOK`, `UŻ`, `L4` (wersja 0.4.7). Wszelkie niestandardowe typy nieobecności (np. „art. 188”, „CH”, „OPIEKA” itp.) muszą zostać ręcznie oznaczone przez administratora w **Administracja → Słownik Rodzajów Czasu Pracy** (pole „Nieobecność” = Tak). Kod raportu **nie hardkoduje** listy kodów — filtruje dynamicznie po `isAbsence=true`.
 
 ## Raport zamknięcia zleceń
 
@@ -72,6 +76,7 @@ Odpowiedź sukcesu (`201`) zawiera co najmniej `employeeId`, `sourceDate`, `targ
 - Godziny sprzed lub po zakresie nie są uwzględniane. Usunięte wpisy nie zwiększają sumy, a usunięte zlecenia, zlecenia `SUSPENDED` i zlecenia zamknięte poza zakresem są wykluczone.
 - W trybie zamknięcia wyszukiwanie numeru zlecenia pozostaje aktywne. Filtry statusu oraz „tylko z godzinami” są sprzeczne z definicją trybu, dlatego interfejs je wyłącza, a API ignoruje.
 - `completionDate` jest porównywana jako data biznesowa w UTC, od początku `dateFrom` do końca `dateTo`, bez konwersji przez lokalną strefę czasową.
+- W trybie raportu zamknięcia dostępna jest automatyczna sekcja **„Kontrola rozliczenia czasu”** (zarówno w interfejsie pod tabelą zleceń, jak i w eksporcie XLSX/CSV), która porównuje łączny rozliczony czas (`Godziny wg zleceń` + dynamicznie zagregowane godziny wszystkich typów ze słownika oznaczonych jako `isAbsence=true`) z sumą godzin pracowników z raportu miesięcznego (`totalEmployeeHours`). Różnica równa zero oznacza status **ZGODNE** (`MATCHED`), natomiast różnica różna od zera oznacza status **NIEZGODNE** (`MISMATCHED`).
 
 ## Audyt i daty
 

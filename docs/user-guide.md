@@ -29,7 +29,7 @@ Zakładka Raporty udostępnia zestawienia według zleceń, pracowników, kont ks
 
 Każda zakładka raportu zapamiętuje własny zakres dat i pozostałe filtry w bieżącej sesji karty. Filtry pozostają ustawione po przejściu do innego raportu lub modułu i po odświeżeniu strony. Przycisk **Wyczyść filtry** przywraca wartości domyślne tylko w aktywnym raporcie. Zamknięcie karty przeglądarki kończy sesję i usuwa zapamiętane filtry.
 
-W raporcie **Godziny wg zleceń** ustaw obie daty i wybierz **Raport zamknięcia**, aby zobaczyć otwarte zlecenia z godzinami w okresie oraz wszystkie zlecenia zamknięte w tym okresie — także te z wartością `0,0 h`. Aktywny przycisk jest wyróżniony i zapamiętywany w bieżącej sesji. Filtry statusu oraz „Pokaż tylko zlecenia z zaraportowanymi godzinami” są wtedy wyłączone, ponieważ wynik celowo łączy statusy i zawiera zlecenia bez godzin. Ponowne kliknięcie przywraca zwykły raport.
+W raporcie **Godziny wg zleceń** ustaw obie daty i wybierz **Raport zamknięcia**, aby zobaczyć otwarte zlecenia z godzinami w okresie oraz wszystkie zlecenia zamknięte w tym okresie — także te z wartością `0,0 h`. Aktywny przycisk jest wyróżniony i zapamiętywany w bieżącej sesji. Filtry statusu oraz „Pokaż tylko zlecenia z zaraportowanymi godzinami” są wtedy wyłączone, ponieważ wynik celowo łączy statusy i zawiera zlecenia bez godzin. Ponowne kliknięcie przywraca zwykły raport. W trybie raportu zamknięcia pod tabelą prezentowana jest automatyczna sekcja **„Kontrola rozliczenia czasu”**, zestawiająca godziny przypisane do zleceń, poszczególne występujące typy nieobecności, łączny rozliczony czas, sumę godzin z raportu miesięcznego pracowników, różnicę oraz jednoznaczny status zgodności (**Zgodne** / **Niezgodne**). Sekcja kontrolna trafia również do generowanego pliku Excel (XLSX) oraz CSV.
 
 Raport **Okresy Nieobecności** uwzględnia wyłącznie typy oznaczone w słowniku jako „Nieobecność”. Filtry obejmują zakres dat, pracownika i rodzaj nieobecności. Kolejne dni robocze są łączone w okres, weekendy nie przerywają okresu ani nie zwiększają liczby dni, a brakujący dzień roboczy rozpoczyna kolejny okres. Wynik można pobrać w formacie XLSX.
 
@@ -38,6 +38,8 @@ Raport **Okresy Nieobecności** uwzględnia wyłącznie typy oznaczone w słowni
 ## Administrator
 
 Administrator ma wszystkie funkcje lidera oraz poniższe ekrany.
+
+- **Kalendarz zakładowy**: w sekcji Administracja wybierz zakres dat, aby zobaczyć dni i ich wynikową klasyfikację. Wybierz datę, ustaw „Dzień roboczy” albo „Dzień wolny” i opcjonalnie wpisz opis, a następnie zapisz wyjątek. Usunięcie wyjątku przywraca automatyczną regułę poniedziałek–piątek robocze, sobota–niedziela wolne. System nie wylicza automatycznie polskich świąt.
 
 - **Dashboard**: liczniki otwartych/zamkniętych zleceń, godziny dziś i w miesiącu oraz zlecenia z wykorzystaniem planu od 80% i ponad 100%.
 - **Zlecenia**: dodawanie, edycja, zmiana statusu/aktywności i miękkie usuwanie; plan godzin wylicza się z ilości i godzin na jednostkę. Opcjonalne pole „Uwagi” można uzupełnić w formularzu dodawania lub edycji, a jego wartość jest widoczna w kolumnie listy zleceń. Wyszukiwarka Bazy Zleceń obsługuje częściowe dopasowanie bez rozróżniania wielkości liter, między innymi po numerze zlecenia, zamawiającym, numerze produktu i koncie księgowym.

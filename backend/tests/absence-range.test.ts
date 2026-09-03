@@ -61,6 +61,7 @@ describe('Absence Range API (/api/reports/absence-range)', () => {
     });
 
     vi.spyOn(prisma.auditLog, 'create').mockResolvedValue({} as any);
+    vi.spyOn(prisma.companyCalendarDay, 'findUnique').mockResolvedValue(null);
   });
 
   afterEach(() => {
