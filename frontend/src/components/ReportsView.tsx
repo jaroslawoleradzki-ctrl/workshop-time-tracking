@@ -29,6 +29,23 @@ interface WorkTimeType {
   isAbsence: boolean;
 }
 
+export interface AbsenceSummaryItem {
+  code: string;
+  name: string;
+  hours: number;
+}
+
+export interface ClosureControlSummary {
+  ordersHours: number;
+  absences: AbsenceSummaryItem[];
+  totalAbsenceHours: number;
+  totalSettledHours: number;
+  totalEmployeeHours: number;
+  difference: number;
+  status: 'MATCHED' | 'MISMATCHED';
+  statusLabel: 'Zgodne' | 'Niezgodne';
+}
+
 type ReportTab = 'by-order' | 'by-employee' | 'by-account' | 'detailed' | 'absence-periods';
 
 interface ReportFilters extends Record<string, string | boolean> {
@@ -97,6 +114,8 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
   // Report Data
   const [reportData, setReportData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [controlSummary, setControlSummary] = useState<ClosureControlSummary | null>(null);
+  const [loadingControlSummary, setLoadingControlSummary] = useState(false);
 
   // Load filter dictionaries
   useEffect(() => {
@@ -140,6 +159,12 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
   const fetchReportData = async () => {
     setReportData([]); // Clear previous data to prevent rendering crashes
     setLoading(true);
+    if (activeReportTab === 'by-order' && filterClosureReport && dateFrom && dateTo) {
+      setLoadingControlSummary(true);
+    } else {
+      setControlSummary(null);
+    }
+
     try {
       const headers = { 'Authorization': `Bearer ${token}` };
       let url = '';
@@ -176,15 +201,42 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
           break;
       }
 
-      const res = await fetch(`${url}?${params.toString()}`, { headers });
+      const fetchTablePromise = fetch(`${url}?${params.toString()}`, { headers });
+      const fetchControlPromise =
+        activeReportTab === 'by-order' && filterClosureReport && dateFrom && dateTo
+          ? fetch(`/api/analytics/closure-control-summary?dateFrom=${dateFrom}&dateTo=${dateTo}`, { headers })
+          : Promise.resolve(null);
+
+      const [res, controlRes] = await Promise.all([fetchTablePromise, fetchControlPromise]);
+
       if (!res.ok) throw new Error();
       const data = await res.json();
       setReportData(Array.isArray(data) ? data : []);
+
+      if (controlRes) {
+        if (controlRes.ok) {
+          const summaryData = await controlRes.json();
+          if (
+            summaryData &&
+            typeof summaryData === 'object' &&
+            !Array.isArray(summaryData) &&
+            typeof summaryData.ordersHours === 'number'
+          ) {
+            setControlSummary(summaryData);
+          } else {
+            setControlSummary(null);
+          }
+        } else {
+          setControlSummary(null);
+        }
+      }
     } catch (err) {
       console.error('Błąd wczytywania raportu:', err);
       setReportData([]);
+      setControlSummary(null);
     } finally {
       setLoading(false);
+      setLoadingControlSummary(false);
     }
   };
 
@@ -384,6 +436,20 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
       ...rows.map(row => row.map(escapeCsvValue).join(';'))
     ];
 
+    if (activeReportTab === 'by-order' && filterClosureReport && controlSummary) {
+      tableLines.push('');
+      tableLines.push(escapeCsvValue('Kontrola rozliczenia czasu'));
+      tableLines.push(`${escapeCsvValue('Godziny wg zleceń')};${escapeCsvValue(controlSummary.ordersHours.toFixed(2))}`);
+      controlSummary.absences.forEach((abs) => {
+        tableLines.push(`${escapeCsvValue(`${abs.code} (${abs.name})`)};${escapeCsvValue(abs.hours.toFixed(2))}`);
+      });
+      tableLines.push(`${escapeCsvValue('Łącznie rozliczono')};${escapeCsvValue(controlSummary.totalSettledHours.toFixed(2))}`);
+      tableLines.push('');
+      tableLines.push(`${escapeCsvValue('Suma godzin pracowników')};${escapeCsvValue(controlSummary.totalEmployeeHours.toFixed(2))}`);
+      tableLines.push(`${escapeCsvValue('Różnica')};${escapeCsvValue(controlSummary.difference.toFixed(2))}`);
+      tableLines.push(`${escapeCsvValue('Status')};${escapeCsvValue(controlSummary.statusLabel)}`);
+    }
+
     const csvContent = "\uFEFF" + [...metadataLines, ...tableLines].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -417,7 +483,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
       {/* Tytuł */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', flexShrink: 0 }}>
         <FileDown size={28} />
@@ -826,6 +892,117 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                 ))}
               </tbody>
             </ScrollableTable>
+          )}
+        </div>
+      )}
+
+      {/* Sekcja kontroli rozliczenia czasu (widoczna wyłącznie w trybie Raport zamknięcia) */}
+      {activeReportTab === 'by-order' && filterClosureReport && (
+        <div
+          className="card"
+          data-testid="closure-control-summary"
+          style={{ marginTop: '1.25rem', padding: '1.25rem', flexShrink: 0 }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <CheckCircle size={20} style={{ color: 'var(--primary-color)' }} />
+              Kontrola rozliczenia czasu
+            </h3>
+            {controlSummary && (
+              <span
+                data-testid="control-summary-status-badge"
+                className={`badge ${controlSummary.status === 'MATCHED' ? 'badge-open' : 'badge-danger'}`}
+                style={{
+                  fontSize: '0.95rem',
+                  padding: '0.35rem 0.75rem',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                }}
+              >
+                Status: {controlSummary.statusLabel}
+              </span>
+            )}
+          </div>
+
+          {loadingControlSummary ? (
+            <div style={{ color: 'var(--text-muted)', padding: '1rem 0', textAlign: 'center' }}>
+              Obliczanie sum kontrolnych...
+            </div>
+          ) : !dateFrom || !dateTo ? (
+            <div style={{ color: 'var(--text-muted)', padding: '1rem 0' }}>
+              Wybierz prawidłowy zakres dat (od i do), aby obliczyć sumy kontrolne.
+            </div>
+          ) : !controlSummary ? (
+            <div style={{ color: 'var(--text-muted)', padding: '1rem 0' }}>
+              Brak danych kontrolnych dla wybranego okresu.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', marginTop: '0.5rem' }}>
+              {/* Kolumna 1: Rozliczenie czasu (Zlecenia + Nieobecności) */}
+              <div style={{ background: 'var(--bg-primary)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  Składniki rozliczonego czasu
+                </h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.9rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.25rem' }}>
+                    <span>Godziny wg zleceń:</span>
+                    <strong data-testid="control-orders-hours">{(Number(controlSummary.ordersHours) || 0).toFixed(2)} h</strong>
+                  </div>
+                  {Array.isArray(controlSummary.absences) && controlSummary.absences.length > 0 && (
+                    <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '0.5rem', marginTop: '0.25rem' }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.35rem', fontWeight: 600 }}>
+                        Nieobecności:
+                      </div>
+                      {controlSummary.absences.map((abs) => (
+                        <div key={abs.code} style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '0.5rem', marginBottom: '0.25rem' }}>
+                          <span>{abs.code} <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>({abs.name})</span>:</span>
+                          <span>{(Number(abs.hours) || 0).toFixed(2)} h</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-color)', paddingTop: '0.5rem', marginTop: '0.5rem', fontSize: '1rem' }}>
+                    <strong>Łącznie rozliczono:</strong>
+                    <strong data-testid="control-total-settled">{(Number(controlSummary.totalSettledHours) || 0).toFixed(2)} h</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Kolumna 2: Porównanie i weryfikacja */}
+              <div style={{ background: 'var(--bg-primary)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  Zgodność z raportem miesięcznym
+                </h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.9rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.25rem' }}>
+                    <span>Suma godzin pracowników:</span>
+                    <strong data-testid="control-employee-hours">{(Number(controlSummary.totalEmployeeHours) || 0).toFixed(2)} h</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.25rem' }}>
+                    <span>Łącznie rozliczono:</span>
+                    <span>{(Number(controlSummary.totalSettledHours) || 0).toFixed(2)} h</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-color)', paddingTop: '0.5rem', marginTop: '0.5rem', fontSize: '1rem' }}>
+                    <strong>Różnica:</strong>
+                    <strong
+                      data-testid="control-difference"
+                      style={{
+                        color: (Number(controlSummary.difference) || 0) === 0 ? 'var(--success-color)' : 'var(--danger-color)',
+                      }}
+                    >
+                      {(Number(controlSummary.difference) || 0) > 0 ? `+${(Number(controlSummary.difference) || 0).toFixed(2)}` : (Number(controlSummary.difference) || 0).toFixed(2)} h
+                    </strong>
+                  </div>
+                  <div style={{ marginTop: '0.75rem', padding: '0.5rem 0.75rem', borderRadius: 'var(--radius-sm)', backgroundColor: controlSummary.status === 'MATCHED' ? 'rgba(46, 125, 50, 0.08)' : 'rgba(198, 40, 40, 0.08)', border: `1px solid ${controlSummary.status === 'MATCHED' ? 'var(--success-border)' : 'var(--danger-border)'}` }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: controlSummary.status === 'MATCHED' ? 'var(--success-color)' : 'var(--danger-color)' }}>
+                      {controlSummary.status === 'MATCHED'
+                        ? '✓ Całkowity czas pracowników został w 100% rozliczony na zlecenia i usprawiedliwione nieobecności.'
+                        : `⚠ Wykryto niezgodność rozliczenia czasu (${(Number(controlSummary.difference) || 0).toFixed(2)} h). Sprawdź nieprzypisane wpisy lub brakujące zlecenia.`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       )}

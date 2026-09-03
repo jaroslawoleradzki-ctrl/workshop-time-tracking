@@ -7,7 +7,25 @@
 - Aktualna wersja development: `0.5.0`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: v0.5.0 — naprawa filtrowania po zleceniu w Raporcie Szczegółowym zaimplementowana, przetestowana automatycznie i zaakceptowana; analiza bugu „art. 188” w raporcie nieobecności — problem w konfiguracji danych, nie w kodzie; dodano test regresyjny.
+- Stan prac: v0.5.0 — naprawa filtrowania po zleceniu w Raporcie Szczegółowym zaimplementowana, przetestowana automatycznie i zaakceptowana; analiza bugu „art. 188” w raporcie nieobecności (problem w konfiguracji danych, dodano test regresyjny); automatyczne sumy kontrolne zamknięcia miesiąca (Pakiet 2) zaimplementowane i przetestowane automatycznie w backendzie i frontendzie
+
+Zakres prac Pakietu 2 (Sumy kontrolne zamknięcia miesiąca):
+
+- Dodano automatyczną sekcję „Kontrola rozliczenia czasu” w trybie Raportu zamknięcia w widoku „Godziny wg zleceń”.
+- Zaimplementowano backendową logikę analityczną `getClosureControlSummary` oraz dedykowany endpoint `GET /api/analytics/closure-control-summary`.
+- Logika dynamicznie agreguje godziny zleceń oraz wszystkie rodzaje nieobecności ze słownika `WorkTimeType` (`isAbsence=true`) występujące w okresie, bez sztywnej listy kodów, i porównuje je z łączną sumą godzin pracowników z miesięcznego raportu czasu pracy.
+- Dodano prezentację statusu zgodności (ZGODNE / NIEZGODNE) oraz różnicy w UI, eksporcie XLSX (`GET /api/analytics/export/by-order`) oraz CSV.
+- Dodano zestaw testów regresyjnych dla backendu (`analytics.test.ts`) i frontendu (`ReportsView.test.tsx`).
+- Zmiana nie wymaga migracji bazy danych.
+
+## Weryfikacja Pakietu 2
+
+- backend: 131 testów zakończonych powodzeniem, w tym 38 testów `analytics.test.ts`,
+- backend: build (`npm run build`) zakończony powodzeniem,
+- backend: walidacja schematu Prisma (`npx prisma validate`) zakończona powodzeniem,
+- frontend: 77 testów zakończonych powodzeniem, w tym 34 testy `ReportsView.test.tsx`,
+- frontend: build (`npm run build`) zakończony powodzeniem,
+- frontend: lint (`npm run lint`) zakończony powodzeniem z wynikiem 0 ostrzeżeń.
 
 Zakres wersji `0.5.0`:
 

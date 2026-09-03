@@ -73,6 +73,7 @@ Odpowiedź sukcesu (`201`) zawiera co najmniej `employeeId`, `sourceDate`, `targ
 - Godziny sprzed lub po zakresie nie są uwzględniane. Usunięte wpisy nie zwiększają sumy, a usunięte zlecenia, zlecenia `SUSPENDED` i zlecenia zamknięte poza zakresem są wykluczone.
 - W trybie zamknięcia wyszukiwanie numeru zlecenia pozostaje aktywne. Filtry statusu oraz „tylko z godzinami” są sprzeczne z definicją trybu, dlatego interfejs je wyłącza, a API ignoruje.
 - `completionDate` jest porównywana jako data biznesowa w UTC, od początku `dateFrom` do końca `dateTo`, bez konwersji przez lokalną strefę czasową.
+- W trybie raportu zamknięcia dostępna jest automatyczna sekcja **„Kontrola rozliczenia czasu”** (zarówno w interfejsie pod tabelą zleceń, jak i w eksporcie XLSX/CSV), która porównuje łączny rozliczony czas (`Godziny wg zleceń` + dynamicznie zagregowane godziny wszystkich typów ze słownika oznaczonych jako `isAbsence=true`) z sumą godzin pracowników z raportu miesięcznego (`totalEmployeeHours`). Różnica równa zero oznacza status **ZGODNE** (`MATCHED`), natomiast różnica różna od zera oznacza status **NIEZGODNE** (`MISMATCHED`).
 
 ## Audyt i daty
 

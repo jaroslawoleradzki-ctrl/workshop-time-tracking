@@ -5,6 +5,14 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Dodano automatyczną sekcję „Kontrola rozliczenia czasu” w trybie Raportu zamknięcia w raporcie „Godziny wg zleceń”.
+- Logika dynamicznie agreguje godziny zleceń oraz wszystkie rodzaje nieobecności (`WorkTimeType.isAbsence=true`) występujące w okresie, porównując je z łączną sumą godzin pracowników z raportu miesięcznego.
+- Wprowadzono jednoznaczny wskaźnik statusu zgodności (ZGODNE / NIEZGODNE) oraz prezentację różnicy liczbowej.
+- Utworzono dedykowany endpoint backendowy `GET /api/analytics/closure-control-summary` oraz rozszerzono eksporty XLSX i CSV o sekcję kontrolną generowaną ze wspólnej logiki analitycznej.
+- Dodano zestaw testów jednostkowych i integracyjnych dla backendu (`analytics.test.ts`) oraz frontendu (`ReportsView.test.tsx`).
+
 ### Fixed
 
 - Usunięto zależność developerskiego stosu Homelab od bind mountu konfiguracji Nginx z checkoutu Portainera; konfiguracja jest teraz wbudowana w obraz frontendu.

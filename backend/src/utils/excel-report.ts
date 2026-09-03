@@ -1,6 +1,23 @@
 import { Response } from 'express';
 import * as ExcelJS from 'exceljs';
 
+export interface AbsenceSummaryItem {
+  code: string;
+  name: string;
+  hours: number;
+}
+
+export interface ClosureControlSummary {
+  ordersHours: number;
+  absences: AbsenceSummaryItem[];
+  totalAbsenceHours: number;
+  totalSettledHours: number;
+  totalEmployeeHours: number;
+  difference: number;
+  status: 'MATCHED' | 'MISMATCHED';
+  statusLabel: 'Zgodne' | 'Niezgodne';
+}
+
 export interface ReportFilterItem {
   label: string;
   value: string;
@@ -11,6 +28,7 @@ export interface ExcelReportMetadata {
   dateFrom?: string;
   dateTo?: string;
   filters?: ReportFilterItem[];
+  controlSummary?: ClosureControlSummary;
 }
 
 export function formatDateISO(dateStr?: string): string {
@@ -149,6 +167,56 @@ export async function generateExcelResponse(params: {
   dateColumns.forEach((colIdx) => {
     worksheet.getColumn(colIdx).numFmt = 'YYYY-MM-DD';
   });
+
+  // 8. Sekcja kontroli rozliczenia czasu (opcjonalna, np. dla raportu zamknięcia)
+  if (metadata.controlSummary) {
+    const summary = metadata.controlSummary;
+    worksheet.addRow([]);
+    worksheet.addRow([]);
+
+    const ctrlHeaderRow = worksheet.addRow(['Kontrola rozliczenia czasu', '']);
+    ctrlHeaderRow.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FF1E293B' } };
+    ctrlHeaderRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE2E8F0' },
+    };
+
+    const addCtrlRow = (label: string, value: number | string, isBold = false) => {
+      const row = worksheet.addRow([label, value]);
+      row.font = { name: 'Arial', size: 10, bold: isBold };
+      if (typeof value === 'number') {
+        const cell = row.getCell(2);
+        cell.numFmt = '#,##0.00';
+        cell.alignment = { horizontal: 'right' };
+      }
+      return row;
+    };
+
+    addCtrlRow('Godziny wg zleceń', summary.ordersHours);
+    summary.absences.forEach((abs) => {
+      addCtrlRow(`${abs.code} (${abs.name})`, abs.hours);
+    });
+
+    const settledRow = addCtrlRow('Łącznie rozliczono', summary.totalSettledHours, true);
+    settledRow.getCell(1).border = { top: { style: 'thin', color: { argb: 'FF94A3B8' } }, bottom: { style: 'thin', color: { argb: 'FF94A3B8' } } };
+    settledRow.getCell(2).border = { top: { style: 'thin', color: { argb: 'FF94A3B8' } }, bottom: { style: 'thin', color: { argb: 'FF94A3B8' } } };
+
+    worksheet.addRow([]);
+
+    addCtrlRow('Suma godzin pracowników', summary.totalEmployeeHours, true);
+    addCtrlRow('Różnica', summary.difference, true);
+
+    const statusRow = worksheet.addRow(['Status', summary.statusLabel]);
+    statusRow.font = {
+      name: 'Arial',
+      size: 11,
+      bold: true,
+      color: {
+        argb: summary.status === 'MATCHED' ? 'FF166534' : 'FF991B1B',
+      },
+    };
+  }
 
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
