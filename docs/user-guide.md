@@ -39,6 +39,8 @@ Raport **Okresy Nieobecności** uwzględnia wyłącznie typy oznaczone w słowni
 
 Administrator ma wszystkie funkcje lidera oraz poniższe ekrany.
 
+- **Kalendarz zakładowy**: w sekcji Administracja wybierz zakres dat, aby zobaczyć dni i ich wynikową klasyfikację. Wybierz datę, ustaw „Dzień roboczy” albo „Dzień wolny” i opcjonalnie wpisz opis, a następnie zapisz wyjątek. Usunięcie wyjątku przywraca automatyczną regułę poniedziałek–piątek robocze, sobota–niedziela wolne. System nie wylicza automatycznie polskich świąt.
+
 - **Dashboard**: liczniki otwartych/zamkniętych zleceń, godziny dziś i w miesiącu oraz zlecenia z wykorzystaniem planu od 80% i ponad 100%.
 - **Zlecenia**: dodawanie, edycja, zmiana statusu/aktywności i miękkie usuwanie; plan godzin wylicza się z ilości i godzin na jednostkę. Opcjonalne pole „Uwagi” można uzupełnić w formularzu dodawania lub edycji, a jego wartość jest widoczna w kolumnie listy zleceń. Wyszukiwarka Bazy Zleceń obsługuje częściowe dopasowanie bez rozróżniania wielkości liter, między innymi po numerze zlecenia, zamawiającym, numerze produktu i koncie księgowym.
 - **Pracownicy**: dodawanie, edycja, aktywacja/dezaktywacja i miękkie usuwanie.

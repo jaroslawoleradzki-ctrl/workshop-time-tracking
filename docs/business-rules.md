@@ -23,6 +23,9 @@ Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.5.0.
 
 ## Rejestrowanie czasu
 
+- Kalendarz zakładowy stosuje regułę bazową: poniedziałek–piątek są robocze, a sobota i niedziela wolne. Administrator może zapisać jeden jawny wyjątek dla konkretnej daty; wyjątek ma pierwszeństwo i może oznaczyć dzień weekendowy jako roboczy albo dzień tygodnia jako wolny. Usunięcie wyjątku przywraca regułę bazową. Kalendarz nie zawiera automatycznej bazy świąt.
+- W dniu wolnym nie można zapisać typu `G` ani typu oznaczonego `isAbsence=true`. Dozwolona pozostaje praca nad zleceniem z typem niebędącym nieobecnością, np. istniejący `NS`.
+
 - Wpis wymaga daty, pracownika, liczby godzin większej od zera i istniejącego kodu rodzaju czasu pracy.
 - Wpis raportu czasu może zostać oznaczony jako „Brak karty” (`missingCard`) w sytuacji, gdy pracownik nie posiadał lub nie użył karty podczas rejestracji czasu pracy. Wartość ta jest przechowywana w bazie danych jako pole logiczne (domyślnie `false`).
 - Zlecenie jest wymagane tylko wtedy, gdy `WorkTimeType.requiresOrder=true`. Dla pozostałych typów API zapisuje `orderId=null`.

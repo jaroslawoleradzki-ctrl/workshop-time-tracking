@@ -3,7 +3,8 @@ import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '../utils/prisma';
 import { logChange } from '../utils/audit';
-import { getDatesInRange, isWeekend, parseDateString } from '../utils/date';
+import { getDatesInRange, parseDateString } from '../utils/date';
+import { getWorkingDayDecision } from './company-calendar';
 
 export const absenceRangeRequestSchema = z
   .object({
@@ -141,8 +142,9 @@ export async function validateAndAnalyzeRange(
     );
   }
 
-  const weekendsCount = allDates.filter((d) => isWeekend(d)).length;
-  const workingDates = allDates.filter((d) => !isWeekend(d));
+  const dayDecisions = await Promise.all(allDates.map((date) => getWorkingDayDecision(date, client)));
+  const weekendsCount = dayDecisions.filter((decision) => !decision.isWorkingDay).length;
+  const workingDates = dayDecisions.filter((decision) => decision.isWorkingDay).map((decision) => decision.date);
 
   // Find existing reports for working days
   const workingDateObjects = workingDates.map((d) => new Date(`${d}T00:00:00.000Z`));

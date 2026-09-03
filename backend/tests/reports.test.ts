@@ -53,6 +53,7 @@ describe('Weekend report entry validations', () => {
     } as any);
 
     vi.spyOn(prisma.auditLog, 'create').mockResolvedValue({} as any);
+    vi.spyOn(prisma.companyCalendarDay, 'findUnique').mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -113,9 +114,9 @@ describe('Weekend report entry validations', () => {
     expect(res.body.message).toMatch(/W dni wolne \(sobota, niedziela\) dozwolona jest wyłącznie rejestracja pracy nad zleceniem/i);
   });
 
-  it('allows work entry on Saturday when requiresOrder=true AND orderId is provided', async () => {
+  it('allows overtime work entry on Saturday when requiresOrder=true AND orderId is provided', async () => {
     vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue({
-      code: 'G',
+      code: 'NS',
       name: 'Godziny pracy',
       requiresOrder: true,
     } as any);
@@ -127,7 +128,7 @@ describe('Weekend report entry validations', () => {
       employeeId: EMPLOYEE_ID,
       orderId: ORDER_ID,
       hours: 8,
-      workTimeTypeCode: 'G',
+      workTimeTypeCode: 'NS',
       missingCard: false,
       createdByUserId: USER_ID,
     } as any);
@@ -158,10 +159,30 @@ describe('Weekend report entry validations', () => {
       employeeId: EMPLOYEE_ID,
       orderId: ORDER_ID,
       hours: 8,
-      workTimeTypeCode: 'G',
+      workTimeTypeCode: 'NS',
     }).expect(201);
 
     expect(res.body.report).toBeDefined();
     expect(res.body.report.hours).toBe(8);
+  });
+
+  it('rejects G on a non-working day even when an order is provided', async () => {
+    vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue({
+      code: 'G', name: 'Godziny pracy', requiresOrder: true, isAbsence: false,
+    } as any);
+    const res = await authenticatedPost('/api/reports', {
+      date: '2026-08-01', employeeId: EMPLOYEE_ID, orderId: ORDER_ID, hours: 8, workTimeTypeCode: 'G',
+    }).expect(400);
+    expect(res.body.code).toBe('NON_WORKING_DAY_ENTRY_NOT_ALLOWED');
+  });
+
+  it('rejects an absence type on a non-working day even when it requires an order', async () => {
+    vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue({
+      code: 'ABS', name: 'Nieobecność', requiresOrder: true, isAbsence: true,
+    } as any);
+    const res = await authenticatedPost('/api/reports', {
+      date: '2026-08-01', employeeId: EMPLOYEE_ID, orderId: ORDER_ID, hours: 8, workTimeTypeCode: 'ABS',
+    }).expect(400);
+    expect(res.body.code).toBe('NON_WORKING_DAY_ENTRY_NOT_ALLOWED');
   });
 });

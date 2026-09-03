@@ -79,6 +79,10 @@ Zapewnia administratorom syntetyczne spojrzenie na statusy produkcyjne:
 * Każdy raport zachowuje własne filtry w bieżącej sesji karty przeglądarki; wartości są odtwarzane po zmianie widoku i odświeżeniu strony, a zamknięcie karty usuwa je automatycznie.
 * Eksport raportów do arkuszy Excel z automatycznym formatowaniem szerokości kolumn, autofiltrami i zamrożonym pierwszym wierszem nagłówkowym w celu wygodnej pracy w arkuszu.
 
+### 5. Kalendarz zakładowy
+* Administrator może definiować wyjątki dla konkretnych dat: dzień roboczy albo dzień wolny, z opcjonalnym opisem.
+* Bez wyjątku obowiązuje kalendarz poniedziałek–piątek robocze, sobota–niedziela wolne. Automatyczna baza świąt nie jest częścią systemu.
+
 ### 5. Administracja i Konfiguracja
 * **Pracownicy**: Zarządzanie danymi pracowników (imię, nazwisko, unikalny numer ewidencyjny). Wspiera masowy import z plików Excel.
 * **Użytkownicy**: Zarządzanie kontami użytkowników z uprawnieniami logowania do systemu.

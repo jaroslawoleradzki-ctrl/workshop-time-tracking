@@ -36,6 +36,8 @@ erDiagram
 
 `User` nie jest powiązany z `Employee`. `WorkTimeReport` łączy pracownika, opcjonalne zlecenie, typ czasu i użytkowników tworzącego/modyfikującego. `WorkTimeType.isAbsence` klasyfikuje typ jako nieobecność niezależnie od `requiresOrder`; raport okresów nieobecności korzysta z relacji do tego słownika i nie przechowuje dodatkowego znacznika w samym wpisie. `Order` ma status, aktywność i plan godzin. `ImportHistory` przechowuje wynik importu, a `AuditLog` migawkę zmiany.
 
+`CompanyCalendarDay` przechowuje administracyjne wyjątki kalendarza z unikalną datą, statusem roboczym i opcjonalnym powodem. Serwis `getWorkingDayDecision` jest jedynym źródłem decyzji o dniu roboczym; korzystają z niego walidacja wpisów i zakresy nieobecności.
+
 ## Przepływy
 
 Logowanie: React wysyła login i hasło do `/api/auth/login`; API wyszukuje aktywnego użytkownika, porównuje bcrypt i zwraca JWT ważny 12 godzin. Każde chronione żądanie weryfikuje podpis oraz aktualną aktywność konta w bazie.

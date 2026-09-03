@@ -27,6 +27,8 @@ Zakres prac Pakietu 2 (Sumy kontrolne zamknięcia miesiąca):
 - frontend: build (`npm run build`) zakończony powodzeniem,
 - frontend: lint (`npm run lint`) zakończony powodzeniem z wynikiem 0 ostrzeżeń.
 
+Zakres Pakietu 3 (worktree `feature/work-calendar`): fundament kalendarza zakładowego został zaimplementowany na osobnej gałęzi do przeglądu; nie obejmuje automatycznej bazy polskich świąt.
+
 Zakres wersji `0.5.0`:
 
 - Naprawiono filtrowanie po zleceniu w Raporcie Szczegółowym (`GET /api/analytics/report-detailed`), uwzględniając parametr `orderId` w zapytaniu bazy danych.

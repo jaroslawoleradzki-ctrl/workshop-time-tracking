@@ -19,6 +19,11 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.5.0] - 2026-08-25
 
+### Added
+
+- Dodano fundament kalendarza zakładowego z administracyjnymi wyjątkami dat, API `company-calendar` oraz ekranem kalendarza dla administratora.
+- Walidacja wpisów czasu i zakresów nieobecności korzysta ze wspólnej reguły dni roboczych i wolnych.
+
 ### Fixed
 
 - Naprawiono filtrowanie po zleceniu w Raporcie Szczegółowym (`GET /api/analytics/report-detailed`), dodając poprawną obsługę parametru `orderId` w zapytaniu bazy danych.
