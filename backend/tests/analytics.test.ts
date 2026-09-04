@@ -58,6 +58,19 @@ const closureOrders = [
 }));
 
 const mockOrderReportQuery = () => vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+  // Diagnostic query for closure control summary - only selects id, no include
+  if (args?.select?.id && !args?.include?.reports) {
+    return closureOrders
+      .filter(order => order.deletedAt === null)
+      .filter(order => order.status === 'OPEN' || (
+        order.status === 'CLOSED' &&
+        order.completionDate &&
+        order.completionDate >= new Date('2026-08-01T00:00:00.000Z') &&
+        order.completionDate <= new Date('2026-08-31T23:59:59.999Z')
+      ))
+      .map(order => ({ id: order.id })) as any;
+  }
+
   const reportRange = args.include.reports.where.date;
   const closureBranches = args.where.OR as any[] | undefined;
   const completionRange = closureBranches?.[1]?.completionDate;
@@ -1142,6 +1155,22 @@ describe('Analytics reports', () => {
           return [{ workTimeTypeCode: 'L4', hours: 16 }] as any;
         }
 
+        // Diagnostic query - has include with employee, order, workTimeType
+        if (args?.include?.employee && args?.include?.order && args?.include?.workTimeType) {
+          return [
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+              hours: 8,
+              workTimeTypeCode: 'SZK',
+              workTimeType: { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+              orderId: null,
+              order: null,
+              date: new Date('2026-08-15T00:00:00.000Z'),
+            },
+          ] as any;
+        }
+
         return [
           {
             employeeId: 'emp-1',
@@ -1192,6 +1221,11 @@ describe('Analytics reports', () => {
       vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
         if (args?.where?.workTimeType?.isAbsence) {
           return [{ workTimeTypeCode: 'DELEGACJA_URLOP', hours: 24 }] as any;
+        }
+
+        // Diagnostic query - has include with employee, order, workTimeType
+        if (args?.include?.employee && args?.include?.order && args?.include?.workTimeType) {
+          return [] as any;
         }
 
         return [
