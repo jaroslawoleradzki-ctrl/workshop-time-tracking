@@ -6,6 +6,17 @@ import { OrderStatus } from '@prisma/client';
 import logger from '../utils/logger';
 import { getWorkingDayDecision } from '../services/company-calendar';
 import { formatDateString, parseDateString } from '../utils/date';
+import {
+  generateExcelResponse,
+  ExcelReportMetadata,
+  ReportFilterItem,
+  ClosureControlSummary,
+  ClosureControlSummaryWithDiagnostics,
+  AbsenceSummaryItem,
+  formatDateISO,
+  buildDateRangeText,
+  formatGeneratedAt,
+} from '../utils/excel-report';
 
 const router = Router();
 
@@ -324,7 +335,9 @@ export {
   ReportFilterItem,
   ExcelReportMetadata,
   ClosureControlSummary,
+  ClosureControlSummaryWithDiagnostics,
   AbsenceSummaryItem,
+  ReconciliationDiagnosticRecord,
   formatDateISO,
   buildDateRangeText,
   formatGeneratedAt,
@@ -529,6 +542,106 @@ export async function getOrderReportRows(filters: OrderReportFilters): Promise<O
   return rows;
 }
 
+export async function getReconciliationDiagnostics(filters: {
+  dateFrom: string;
+  dateTo: string;
+}): Promise<ReconciliationDiagnosticRecord[]> {
+  const { dateFrom, dateTo } = filters;
+
+  // Get all work time reports in the date range
+  const allReports = await prisma.workTimeReport.findMany({
+    where: {
+      deletedAt: null,
+      date: {
+        gte: new Date(`${dateFrom}T00:00:00.000Z`),
+        lte: new Date(`${dateTo}T00:00:00.000Z`),
+      },
+    },
+    include: {
+      employee: true,
+      order: {
+        select: { orderNumber: true },
+      },
+      workTimeType: {
+        select: { code: true, name: true, isAbsence: true, requiresOrder: true },
+      },
+    },
+    orderBy: [{ employee: { lastName: 'asc' } }, { date: 'asc' }, { createdAt: 'asc' }],
+  });
+
+  // Get orders included in closure report (OPEN or CLOSED with completionDate in range)
+  const ordersInClosure = await prisma.order.findMany({
+    where: {
+      deletedAt: null,
+      OR: [
+        { status: OrderStatus.OPEN },
+        {
+          status: OrderStatus.CLOSED,
+          completionDate: {
+            gte: new Date(`${dateFrom}T00:00:00.000Z`),
+            lte: new Date(`${dateTo}T23:59:59.999Z`),
+          },
+        },
+      ],
+    },
+    select: { id: true },
+  });
+  const orderIdsInClosure = new Set(ordersInClosure.map((o) => o.id));
+
+  // Get absence type codes
+  const absenceTypes = await prisma.workTimeType.findMany({
+    where: { isAbsence: true },
+    select: { code: true },
+  });
+  const absenceTypeCodes = new Set(absenceTypes.map((t) => t.code));
+
+  // Find reports NOT accounted for in reconciliation
+  // Reconciliation includes: reports linked to orders in closure report + absence reports
+  // Reports NOT in reconciliation: 
+  // - Non-absence reports with no orderId, or with orderId not in closure report
+  // - Reports with orderId in closure but the order has no hours in date range (edge case)
+  const diagnostics: ReconciliationDiagnosticRecord[] = [];
+
+  for (const report of allReports) {
+    const isAbsence = report.workTimeType.isAbsence;
+    const orderId = report.orderId;
+    const orderInClosure = orderId ? orderIdsInClosure.has(orderId) : false;
+
+    let reason: string | null = null;
+
+    if (isAbsence) {
+      // Absence reports ARE included in reconciliation (via absenceHoursMap)
+      // But if they have an orderId that's not in closure, that's odd
+      // Actually, absences don't require orders typically
+      // They should be in reconciliation via the absence aggregation
+    } else if (!orderId) {
+      // Non-absence report without order - not in reconciliation
+      reason = 'Brak zlecenia';
+    } else if (!orderInClosure) {
+      // Non-absence report with order not in closure report
+      reason = 'Zlecenie nieobjęte raportem zamknięcia';
+    }
+
+    if (reason) {
+      diagnostics.push({
+        employeeId: report.employeeId,
+        employeeName: report.employee?.lastName && report.employee?.firstName
+          ? `${report.employee.lastName} ${report.employee.firstName}`
+          : report.employee?.fullName || 'Nieznany pracownik',
+        date: formatDateString(report.date),
+        workTimeTypeCode: report.workTimeTypeCode,
+        workTimeTypeName: report.workTimeType?.name || report.workTimeTypeCode,
+        hours: Number(report.hours),
+        orderId: report.orderId,
+        orderNumber: report.order?.orderNumber || null,
+        reason,
+      });
+    }
+  }
+
+  return diagnostics;
+}
+
 export async function getClosureControlSummary(filters: {
   dateFrom: string;
   dateTo: string;
@@ -622,6 +735,12 @@ export async function getClosureControlSummary(filters: {
   const difference = Math.round((totalSettledHours - totalEmployeeHours) * 100) / 100;
   const isMatched = Math.abs(difference) < 0.001;
 
+  // 5. Diagnostyka (tylko gdy NIEZGODNE)
+  let diagnostics: ReconciliationDiagnosticRecord[] | undefined;
+  if (!isMatched) {
+    diagnostics = await getReconciliationDiagnostics({ dateFrom, dateTo });
+  }
+
   return {
     ordersHours,
     absences,
@@ -631,7 +750,8 @@ export async function getClosureControlSummary(filters: {
     difference,
     status: isMatched ? 'MATCHED' : 'MISMATCHED',
     statusLabel: isMatched ? 'Zgodne' : 'Niezgodne',
-  };
+    diagnostics,
+  } as ClosureControlSummaryWithDiagnostics;
 }
 
 // 2. Report by Order

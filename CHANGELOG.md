@@ -3,6 +3,25 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.5.2] - 2026-09-04
+
+### Fixed
+
+- Naprawiono błąd zapisu wpisów NS (Nadgodziny sobota/niedziela) w dni wolne (sobota/niedziela) przy podaniu prawidłowego zlecenia – wpisy są teraz poprawnie akceptowane zgodnie z regułą biznesową dopuszczającą pracę nad zleceniem w dni wolne.
+- Poprawiono obsługę błędów frontendu przy zapisie wpisów czasu – użytkownik otrzymuje czytelny komunikat w przypadku odrzucenia przez backend.
+
+### Added
+
+- Automatyczny domyślny typ czasu pracy w formularzu raportowania: dni robocze (poniedziałek–piątek) → G, sobota i niedziela → NS.
+- Wyświetlanie skrótu dnia tygodnia (pn, wt, śr, czw, pt, sob, nd) przy polu daty raportowania.
+- Diagnostyka niezgodności sum kontrolnych zamknięcia miesiąca: przy statusie NIEZGODNE pokazuje konkretne wpisy powodujące różnicę (pracownik, data, typ, godziny, zlecenie, przyczyna).
+- Rozszerzono eksport XLSX raportu zamknięcia o sekcję diagnostyki przy statusie NIEZGODNE.
+
+### Changed
+
+- Logika resetowania formularza nowego wpisu uwzględnia dzień tygodnia dla domyślnego typu czasu pracy.
+- Edycja istniejącego wpisu nie zmienia już automatycznie jego typu czasu pracy.
+
 ## [0.5.1] - 2026-09-03
 
 ### Added

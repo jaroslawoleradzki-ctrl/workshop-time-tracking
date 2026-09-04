@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   ArrowLeft, 
   ArrowRight, 
@@ -14,6 +14,37 @@ import {
 } from 'lucide-react';
 import type { UserSession } from '../App';
 import AbsenceRangeModal from './AbsenceRangeModal';
+
+const WEEKDAY_ABBREVIATIONS = ['nd', 'pn', 'wt', 'śr', 'czw', 'pt', 'sob'];
+
+function getDayOfWeekAbbreviation(dateStr: string): string {
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return '';
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  const date = new Date(year, month, day);
+  return WEEKDAY_ABBREVIATIONS[date.getDay()];
+}
+
+function isWeekend(dateStr: string): boolean {
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return false;
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  const date = new Date(year, month, day);
+  const dayOfWeek = date.getDay();
+  return dayOfWeek === 0 || dayOfWeek === 6;
+}
+
+function getDefaultWorkType(dateStr: string, workTypes: WorkTimeType[]): string {
+  if (isWeekend(dateStr)) {
+    const nsType = workTypes.find(t => t.code === 'NS');
+    if (nsType) return 'NS';
+  }
+  return 'G';
+}
 
 interface Employee {
   id: string;
@@ -289,17 +320,19 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
   };
 
   // Reset Form
-  const resetForm = () => {
+  const resetForm = useCallback((preserveWorkType = false) => {
     setSearchOrderQuery('');
     setSelectedOrder(null);
     setHoursInput('8.00');
-    setSelectedWorkType('G');
+    if (!preserveWorkType) {
+      setSelectedWorkType(getDefaultWorkType(currentDate, workTypes));
+    }
     setMissingCard(false);
     setValidationError('');
     setEditingReportId(null);
     setAutocompleteHighlightIdx(-1);
     setShowOrderAutocomplete(false);
-  };
+  }, [currentDate, workTypes]);
 
   // Navigation handlers
   const handlePrevEmployee = () => {
@@ -731,14 +764,25 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
         >
           ◀
         </button>
-        <input 
-          id="dateInput"
-          type="date" 
-          className="form-control" 
-          style={{ width: '170px', padding: '0.5rem 0.75rem' }}
-          value={currentDate}
-          onChange={e => setCurrentDate(e.target.value)}
-        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <input 
+            id="dateInput"
+            type="date" 
+            className="form-control" 
+            style={{ width: '170px', padding: '0.5rem 0.75rem' }}
+            value={currentDate}
+            onChange={e => setCurrentDate(e.target.value)}
+          />
+          <span style={{ 
+            fontWeight: 600, 
+            color: isWeekend(currentDate) ? 'var(--warning-color)' : 'var(--text-secondary)',
+            fontSize: '0.9rem',
+            minWidth: '36px',
+            textAlign: 'center'
+          }}>
+            ({getDayOfWeekAbbreviation(currentDate)})
+          </span>
+        </div>
         <button
           type="button"
           className="btn btn-secondary"

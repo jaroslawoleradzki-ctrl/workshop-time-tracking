@@ -284,6 +284,106 @@ describe('ReportingPanel — Brak karty (missingCard) form interaction', () => {
   });
 });
 
+describe('ReportingPanel — domyślny typ czasu pracy w zależności od dnia tygodnia', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url === '/api/employees?activeOnly=true') {
+        return response([{
+          id: EMPLOYEE_ID,
+          fullName: 'Jan Kowalski',
+          firstName: 'Jan',
+          lastName: 'Kowalski',
+          isActive: true,
+        }]);
+      }
+      if (url === '/api/orders/active') return response([]);
+      if (url === '/api/work-time-types') {
+        return response([
+          { code: 'G', name: 'Godziny standardowe', requiresOrder: false },
+          { code: 'NS', name: 'Nadgodziny sobota/niedziela', requiresOrder: true },
+        ]);
+      }
+      if (url.startsWith('/api/reports/by-employee-date')) return response([]);
+      if (url === '/api/reports/check-warnings') {
+        return response({
+          warnStandard: false,
+          warnTotal12: false,
+          warnTotal24: false,
+          totalStandard: 8,
+          totalHours: 8,
+        });
+      }
+
+      throw new Error(`Nieobsłużone żądanie testowe: ${url}`);
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('ustawia G jako domyślny w poniedziałek', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-07T12:00:00Z')); // Poniedziałek
+
+    render(
+      <ReportingPanel
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    await screen.findByDisplayValue('Jan Kowalski');
+    const select = screen.getByRole('combobox', { name: /Rodzaj czasu pracy/i }) as HTMLSelectElement;
+    expect(select.value).toBe('G');
+
+    vi.useRealTimers();
+  });
+
+  it('ustawia NS jako domyślny w sobotę', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-05T12:00:00Z')); // Sobota
+
+    render(
+      <ReportingPanel
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    await screen.findByDisplayValue('Jan Kowalski');
+    const select = screen.getByRole('combobox', { name: /Rodzaj czasu pracy/i }) as HTMLSelectElement;
+    expect(select.value).toBe('NS');
+
+    vi.useRealTimers();
+  });
+
+  it('ustawia NS jako domyślny w niedzielę', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-06T12:00:00Z')); // Niedziela
+
+    render(
+      <ReportingPanel
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    await screen.findByDisplayValue('Jan Kowalski');
+    const select = screen.getByRole('combobox', { name: /Rodzaj czasu pracy/i }) as HTMLSelectElement;
+    expect(select.value).toBe('NS');
+
+    vi.useRealTimers();
+  });
+});
+
 describe('ReportingPanel — nawigacja dat strzałkami ◀ i ▶', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 

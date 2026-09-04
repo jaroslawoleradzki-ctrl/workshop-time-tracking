@@ -4,12 +4,34 @@
 
 - Projekt: Workshop Time Tracking
 - Aktualna wersja produkcyjna: `0.3.8`
-- Aktualna wersja development: `0.5.1`
+- Aktualna wersja development: `0.5.2`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: v0.5.1 — zakończono Pakiety 1–3 oraz follow-up integrujący raport okresów nieobecności z Company Calendar; zakres obejmuje również kompatybilność HomeLab DEV z Portainerem
+- Stan prac: v0.5.2 — produkcja follow-up: naprawa zapisu NS w dni wolne, domyślny typ czasu wg dnia tygodnia, dzień tygodnia przy dacie, diagnostyka niezgodności sum kontrolnych
 
-Zakres prac Pakietu 2 (Sumy kontrolne zamknięcia miesiąca):
+Zakres wersji `0.5.2`:
+
+- Naprawiono błąd zapisu wpisów NS (Nadgodziny sobota/niedziela) w dni wolne (sobota/niedziela) przy podaniu prawidłowego zlecenia – wpisy są teraz poprawnie akceptowane zgodnie z regułą biznesową dopuszczającą pracę nad zleceniem w dni wolne.
+- Poprawiono obsługę błędów frontendu przy zapisie wpisów czasu – użytkownik otrzymuje czytelny komunikat w przypadku odrzucenia przez backend.
+- Automatyczny domyślny typ czasu pracy w formularzu raportowania: dni robocze (poniedziałek–piątek) → G, sobota i niedziela → NS.
+- Wyświetlanie skrótu dnia tygodnia (pn, wt, śr, czw, pt, sob, nd) przy polu daty raportowania.
+- Diagnostyka niezgodności sum kontrolnych zamknięcia miesiąca: przy statusie NIEZGODNE pokazuje konkretne wpisy powodujące różnicę (pracownik, data, typ, godziny, zlecenie, przyczyna).
+- Rozszerzono eksport XLSX raportu zamknięcia o sekcję diagnostyki przy statusie NIEZGODNE.
+- Logika resetowania formularza nowego wpisu uwzględnia dzień tygodnia dla domyślnego typu czasu pracy.
+- Edycja istniejącego wpisu nie zmienia już automatycznie jego typu czasu pracy.
+- Zmiana nie wymaga migracji bazy danych.
+
+## Weryfikacja wersji 0.5.2
+
+- backend: 147 testów zakończonych powodzeniem,
+- backend: build (`npm run build`) zakończony powodzeniem,
+- backend: walidacja schematu Prisma (`npx prisma validate`) — schemat poprawny (DATABASE_URL nieustawione w środowisku testowym),
+- frontend: 78 testów zakończonych powodzeniem,
+- frontend: build (`npm run build`) zakończony powodzeniem,
+- frontend: lint (`npm run lint`) zakończony powodzeniem z wynikiem 0 ostrzeżeń,
+- verify-release.sh: PASS.
+
+Zakres Pakietu 2 (Sumy kontrolne zamknięcia miesiąca):
 
 - Dodano automatyczną sekcję „Kontrola rozliczenia czasu” w trybie Raportu zamknięcia w widoku „Godziny wg zleceń”.
 - Zaimplementowano backendową logikę analityczną `getClosureControlSummary` oraz dedykowany endpoint `GET /api/analytics/closure-control-summary`.

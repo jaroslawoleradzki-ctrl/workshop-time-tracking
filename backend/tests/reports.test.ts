@@ -185,4 +185,68 @@ describe('Weekend report entry validations', () => {
     }).expect(400);
     expect(res.body.code).toBe('NON_WORKING_DAY_ENTRY_NOT_ALLOWED');
   });
+
+  it('allows NS entry on Sunday with valid order - reproduces production bug scenario', async () => {
+    vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue({
+      code: 'NS',
+      name: 'Nadgodziny sobota/niedziela',
+      requiresOrder: true,
+      isAbsence: false,
+    } as any);
+
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([]);
+    
+    let capturedReport: any = null;
+    vi.spyOn(prisma.workTimeReport, 'create').mockImplementation(async (args: any) => {
+      capturedReport = args.data;
+      return {
+        id: 'r1',
+        date: new Date('2026-09-06T00:00:00.000Z'),
+        employeeId: EMPLOYEE_ID,
+        orderId: ORDER_ID,
+        hours: 8,
+        workTimeTypeCode: 'NS',
+        missingCard: false,
+        createdByUserId: USER_ID,
+      } as any;
+    });
+
+    vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => {
+      const tx = {
+        $executeRaw: vi.fn(),
+        workTimeReport: {
+          create: vi.fn().mockImplementation(async (args: any) => {
+            capturedReport = args.data;
+            return {
+              id: 'r1',
+              date: new Date('2026-09-06T00:00:00.000Z'),
+              employeeId: EMPLOYEE_ID,
+              orderId: ORDER_ID,
+              hours: 8,
+              workTimeTypeCode: 'NS',
+              missingCard: false,
+              createdByUserId: USER_ID,
+            } as any;
+          }),
+        },
+      };
+      return callback(tx);
+    });
+
+    // 2026-09-06 is Sunday
+    const res = await authenticatedPost('/api/reports', {
+      date: '2026-09-06',
+      employeeId: EMPLOYEE_ID,
+      orderId: ORDER_ID,
+      hours: 8,
+      workTimeTypeCode: 'NS',
+    }).expect(201);
+
+    expect(res.body.report).toBeDefined();
+    expect(res.body.report.hours).toBe(8);
+    expect(res.body.report.workTimeTypeCode).toBe('NS');
+    expect(capturedReport).toBeDefined();
+    expect(capturedReport.workTimeTypeCode).toBe('NS');
+    expect(capturedReport.orderId).toBe(ORDER_ID);
+  });
 });
