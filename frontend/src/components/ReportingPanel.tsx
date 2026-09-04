@@ -1007,7 +1007,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                 <button 
                   type="button" 
                   className="btn btn-secondary" 
-                  onClick={resetForm}
+                  onClick={() => resetForm()}
                 >
                   Anuluj
                 </button>
