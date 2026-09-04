@@ -13,6 +13,7 @@ import {
   ClosureControlSummary,
   ClosureControlSummaryWithDiagnostics,
   AbsenceSummaryItem,
+  ReconciliationDiagnosticRecord,
   formatDateISO,
   buildDateRangeText,
   formatGeneratedAt,
@@ -319,17 +320,6 @@ async function getEmployeeReportTypes(): Promise<EmployeeReportType[]> {
     orderBy: [{ createdAt: 'asc' }, { code: 'asc' }],
   });
 }
-
-import {
-  generateExcelResponse,
-  ExcelReportMetadata,
-  ReportFilterItem,
-  ClosureControlSummary,
-  AbsenceSummaryItem,
-  formatDateISO,
-  buildDateRangeText,
-  formatGeneratedAt,
-} from '../utils/excel-report';
 
 export {
   ReportFilterItem,
