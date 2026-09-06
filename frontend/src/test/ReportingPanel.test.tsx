@@ -277,7 +277,7 @@ describe('ReportingPanel — Brak karty (missingCard) form interaction', () => {
     const saveButton = screen.getByRole('button', { name: /Zapisz zmiany/ });
     fireEvent.click(saveButton);
 
-await waitFor(() => {
+    await waitFor(() => {
       expect(savedRequestBody).not.toBeNull();
       expect(savedRequestBody.missingCard).toBe(false);
     });

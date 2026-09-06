@@ -195,7 +195,7 @@ describe('Weekend report entry validations', () => {
     } as any);
 
     vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([]);
-    
+
     let capturedReport: any = null;
     vi.spyOn(prisma.workTimeReport, 'create').mockImplementation(async (args: any) => {
       capturedReport = args.data;

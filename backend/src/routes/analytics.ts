@@ -587,7 +587,7 @@ export async function getReconciliationDiagnostics(filters: {
 
   // Find reports NOT accounted for in reconciliation
   // Reconciliation includes: reports linked to orders in closure report + absence reports
-  // Reports NOT in reconciliation: 
+  // Reports NOT in reconciliation:
   // - Non-absence reports with no orderId, or with orderId not in closure report
   // - Reports with orderId in closure but the order has no hours in date range (edge case)
   const diagnostics: ReconciliationDiagnosticRecord[] = [];
