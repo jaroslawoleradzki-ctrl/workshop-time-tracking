@@ -440,6 +440,15 @@ describe('Analytics reports', () => {
     const freeWeekdayResponse = await run([report('2026-08-13'), report('2026-08-17')]);
     expect(freeWeekdayResponse.body).toHaveLength(1);
     expect(freeWeekdayResponse.body[0]).toMatchObject({ dateFrom: '2026-08-13', dateTo: '2026-08-17', workingDays: 2 });
+
+    // A statutory Polish public holiday (e.g. Boże Ciało on 2026-06-04) bridges absence without an override
+    calendarSpy.mockResolvedValue(null);
+    reportSpy.mockResolvedValue([report('2026-06-03'), report('2026-06-05')] as any);
+    const holidayResponse = await authenticatedGet(
+      `/api/analytics/report-absence-periods?dateFrom=2026-06-01&dateTo=2026-06-10&employeeId=${EMPLOYEE_ID}&workTimeTypeCode=L4`,
+    ).expect(200);
+    expect(holidayResponse.body).toHaveLength(1);
+    expect(holidayResponse.body[0]).toMatchObject({ dateFrom: '2026-06-03', dateTo: '2026-06-05', workingDays: 2 });
   });
 
   it('exports the same clipped absence periods to XLSX with report metadata', async () => {

@@ -460,6 +460,7 @@ describe('ReportsView — miesięczny raport pracowników', () => {
     ]);
     expect(screen.getByRole('columnheader', { name: 'Liczba dni nieobecności' })).toBeInTheDocument();
     expect(screen.getByText('L4 (Zwolnienie chorobowe)')).toBeInTheDocument();
+    expect(screen.getByText('Łącznie dni nieobecności:')).toBeInTheDocument();
   });
 
   describe('Raport zamknięcia', () => {
