@@ -4,6 +4,7 @@ import prisma from '../utils/prisma';
 import { AuthRequest, authenticateJWT, requireRole } from '../middlewares/auth';
 import { formatDateString, getDatesInRange, parseDateString } from '../utils/date';
 import { getWorkingDayDecision } from '../services/company-calendar';
+import { getPolishHolidayName } from '../utils/holidays';
 
 const router = Router();
 router.use(authenticateJWT);
@@ -32,13 +33,32 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     const overrideByDate = new Map(overrides.map((item) => [formatDateString(item.date), item]));
     return res.json(dates.map((date) => {
       const item = overrideByDate.get(date);
+      if (item) {
+        return {
+          date,
+          isWorkingDay: item.isWorkingDay,
+          source: 'company override',
+          reason: item.reason ?? null,
+          overrideId: item.id,
+        };
+      }
+      const holidayName = getPolishHolidayName(date);
+      if (holidayName) {
+        return {
+          date,
+          isWorkingDay: false,
+          source: 'public holiday',
+          reason: holidayName,
+          overrideId: null,
+        };
+      }
       const dayOfWeek = parseDateString(date)!.getUTCDay();
       return {
         date,
-        isWorkingDay: item?.isWorkingDay ?? (dayOfWeek !== 0 && dayOfWeek !== 6),
-        source: item ? 'company override' : (dayOfWeek === 0 || dayOfWeek === 6 ? 'weekend' : 'standard weekday'),
-        reason: item?.reason ?? null,
-        overrideId: item?.id ?? null,
+        isWorkingDay: dayOfWeek !== 0 && dayOfWeek !== 6,
+        source: dayOfWeek === 0 || dayOfWeek === 6 ? 'weekend' : 'standard weekday',
+        reason: null,
+        overrideId: null,
       };
     }));
   } catch {
