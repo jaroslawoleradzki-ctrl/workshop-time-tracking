@@ -1341,3 +1341,163 @@ describe('Analytics reports', () => {
     });
   });
 });
+
+describe('getReconciliationDiagnostics — math verification', () => {
+  const EMPLOYEE_ID = '20000000-0000-4000-8000-000000000001';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('sum of contributions equals totalSettledHours - totalEmployeeHours for MISMATCHED case', async () => {
+    // Test case setup:
+    // Orders in closure: ord-1, ord-2
+    // Reports in date range:
+    //   emp-1: 40h G on ord-1 (in closure) → contribution = 0
+    //   emp-1: 16h UW on ord-1 (in closure) → contribution = +16 (double counted)
+    //   emp-1: 10h G on ord-2 (in closure) → contribution = 0
+    //   emp-1: 8h G no order → contribution = -8
+    //   emp-1: 4h UW no order → contribution = 0
+    //
+    // ordersHours = 40 + 16 + 10 = 66 (ALL reports on orders in closure)
+    // absenceHours = 16 + 4 = 20 (ALL absences)
+    // totalSettledHours = 66 + 20 = 86
+    // totalEmployeeHours = 40 + 16 + 10 + 8 + 4 = 78
+    // difference = 86 - 78 = 8
+    //
+    // Diagnostics sum = 0 + 16 + 0 + (-8) + 0 = 8 = difference ✓
+
+    const { getReconciliationDiagnostics } = await import('../src/routes/analytics');
+
+    // Mock orders in closure
+    vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+      if (args?.where?.OR) {
+        // ordersInClosure query
+        return [{ id: 'ord-1' }, { id: 'ord-2' }] as any;
+      }
+      return [] as any;
+    });
+
+    // Mock absence types
+    vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
+      { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false },
+      { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+    ] as any);
+
+    // Mock workTimeReports
+    const allReports = [
+      { employeeId: 'emp-1', employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' }, date: new Date('2026-08-15T00:00:00.000Z'), hours: 40, workTimeTypeCode: 'G', workTimeType: { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false }, orderId: 'ord-1', order: { orderNumber: 'ZL-1' } },
+      { employeeId: 'emp-1', employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' }, date: new Date('2026-08-15T00:00:00.000Z'), hours: 16, workTimeTypeCode: 'UW', workTimeType: { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false }, orderId: 'ord-1', order: { orderNumber: 'ZL-1' } },
+      { employeeId: 'emp-1', employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' }, date: new Date('2026-08-20T00:00:00.000Z'), hours: 10, workTimeTypeCode: 'G', workTimeType: { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false }, orderId: 'ord-2', order: { orderNumber: 'ZL-2' } },
+      { employeeId: 'emp-1', employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' }, date: new Date('2026-08-22T00:00:00.000Z'), hours: 8, workTimeTypeCode: 'G', workTimeType: { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false }, orderId: null, order: null },
+      { employeeId: 'emp-1', employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' }, date: new Date('2026-08-22T00:00:00.000Z'), hours: 4, workTimeTypeCode: 'UW', workTimeType: { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false }, orderId: null, order: null },
+    ];
+
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
+      if (args?.where?.workTimeType?.isAbsence) {
+        // absenceReports for absenceHours calculation
+        return [
+          { workTimeTypeCode: 'UW', hours: 16 },
+          { workTimeTypeCode: 'UW', hours: 4 },
+        ] as any;
+      }
+      if (args?.where?.date?.gte && args?.where?.date?.lte) {
+        // allReports for diagnostics
+        return allReports as any;
+      }
+      return [] as any;
+    });
+
+    const diagnostics = await getReconciliationDiagnostics({ dateFrom: '2026-08-01', dateTo: '2026-08-31' });
+    
+    expect(diagnostics).toBeDefined();
+    expect(diagnostics.length).toBeGreaterThan(0);
+
+    const sumContributions = diagnostics.reduce((sum, d) => sum + d.contribution, 0);
+    
+    // Verify against the expected difference
+    // totalSettledHours = 86, totalEmployeeHours = 78, difference = 8
+    const expectedDifference = 8;
+    expect(Math.round(sumContributions * 100) / 100).toBe(expectedDifference);
+  });
+
+  it('returns empty diagnostics for MATCHED case when no double-counted absences', async () => {
+    const { getReconciliationDiagnostics } = await import('../src/routes/analytics');
+    
+    // Mock orders in closure
+    vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+      if (args?.where?.OR) {
+        return [{ id: 'ord-1' }] as any;
+      }
+      return [] as any;
+    });
+
+    // Mock absence types
+    vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
+      { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false },
+      { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+    ] as any);
+
+    // Mock workTimeReports - all matched (no double-counted absences)
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
+      if (args?.where?.workTimeType?.isAbsence) {
+        return [{ workTimeTypeCode: 'UW', hours: 10 }] as any;
+      }
+      if (args?.where?.date?.gte && args?.where?.date?.lte) {
+        // All reports are on orders in closure, no double-counted absences
+        return [
+          { employeeId: 'emp-1', employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' }, date: new Date('2026-08-15T00:00:00.000Z'), hours: 40, workTimeTypeCode: 'G', workTimeType: { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false }, orderId: 'ord-1', order: { orderNumber: 'ZL-1' } },
+          { employeeId: 'emp-1', employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' }, date: new Date('2026-08-15T00:00:00.000Z'), hours: 10, workTimeTypeCode: 'UW', workTimeType: { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false }, orderId: null, order: null }, // absence without order in closure
+        ] as any;
+      }
+      return [] as any;
+    });
+
+    const diagnostics = await getReconciliationDiagnostics({ dateFrom: '2026-08-01', dateTo: '2026-08-31' });
+    
+    // Should be empty because:
+    // - 40h G on ord-1 (in closure): contribution = 0
+    // - 10h UW no order (not in closure): contribution = 0 (absence without order in closure)
+    expect(diagnostics.length).toBe(0);
+  });
+
+  it('diagnostics include double-counted absences (Direction B)', async () => {
+    const { getReconciliationDiagnostics } = await import('../src/routes/analytics');
+    
+    // Mock orders in closure
+    vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+      if (args?.where?.OR) {
+        return [{ id: 'ord-1' }] as any;
+      }
+      return [] as any;
+    });
+
+    // Mock absence types
+    vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
+      { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false },
+      { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+    ] as any);
+
+    // Mock workTimeReports - absence WITH order in closure (Direction B: double counted)
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
+      if (args?.where?.workTimeType?.isAbsence) {
+        return [{ workTimeTypeCode: 'UW', hours: 10 }] as any;
+      }
+      if (args?.where?.date?.gte && args?.where?.date?.lte) {
+        return [
+          { employeeId: 'emp-1', employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' }, date: new Date('2026-08-15T00:00:00.000Z'), hours: 40, workTimeTypeCode: 'G', workTimeType: { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false }, orderId: 'ord-1', order: { orderNumber: 'ZL-1' } },
+          { employeeId: 'emp-1', employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' }, date: new Date('2026-08-15T00:00:00.000Z'), hours: 10, workTimeTypeCode: 'UW', workTimeType: { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false }, orderId: 'ord-1', order: { orderNumber: 'ZL-1' } }, // absence WITH order in closure → double counted
+        ] as any;
+      }
+      return [] as any;
+    });
+
+    const diagnostics = await getReconciliationDiagnostics({ dateFrom: '2026-08-01', dateTo: '2026-08-31' });
+    
+    // Should include the double-counted absence
+    expect(diagnostics.length).toBe(1);
+    expect(diagnostics[0].workTimeTypeCode).toBe('UW');
+    expect(diagnostics[0].contribution).toBe(10);
+    expect(diagnostics[0].reason).toContain('podwójne naliczenie');
+  });
+});
