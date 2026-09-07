@@ -569,9 +569,9 @@ describe('ReportingPanel — default work type logic', () => {
       />,
     );
 
-    await screen.findByDisplayValue('Jan Kowalski');
+await screen.findByDisplayValue('Jan Kowalski');
     await screen.findByPlaceholderText('np. 8.00');
-    
+
     // Resolve work types
     workTypesDeferred.resolve(response(baseWorkTypes));
 
