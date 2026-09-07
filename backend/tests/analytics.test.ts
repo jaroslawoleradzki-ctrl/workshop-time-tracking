@@ -1409,12 +1409,12 @@ describe('getReconciliationDiagnostics — math verification', () => {
     });
 
     const diagnostics = await getReconciliationDiagnostics({ dateFrom: '2026-08-01', dateTo: '2026-08-31' });
-    
+
     expect(diagnostics).toBeDefined();
     expect(diagnostics.length).toBeGreaterThan(0);
 
     const sumContributions = diagnostics.reduce((sum, d) => sum + d.contribution, 0);
-    
+
     // Verify against the expected difference
     // totalSettledHours = 86, totalEmployeeHours = 78, difference = 8
     const expectedDifference = 8;
@@ -1423,7 +1423,7 @@ describe('getReconciliationDiagnostics — math verification', () => {
 
   it('returns empty diagnostics for MATCHED case when no double-counted absences', async () => {
     const { getReconciliationDiagnostics } = await import('../src/routes/analytics');
-    
+
     // Mock orders in closure
     vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
       if (args?.where?.OR) {
@@ -1454,7 +1454,7 @@ describe('getReconciliationDiagnostics — math verification', () => {
     });
 
     const diagnostics = await getReconciliationDiagnostics({ dateFrom: '2026-08-01', dateTo: '2026-08-31' });
-    
+
     // Should be empty because:
     // - 40h G on ord-1 (in closure): contribution = 0
     // - 10h UW no order (not in closure): contribution = 0 (absence without order in closure)
@@ -1463,7 +1463,7 @@ describe('getReconciliationDiagnostics — math verification', () => {
 
   it('diagnostics include double-counted absences (Direction B)', async () => {
     const { getReconciliationDiagnostics } = await import('../src/routes/analytics');
-    
+
     // Mock orders in closure
     vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
       if (args?.where?.OR) {
@@ -1493,7 +1493,7 @@ describe('getReconciliationDiagnostics — math verification', () => {
     });
 
     const diagnostics = await getReconciliationDiagnostics({ dateFrom: '2026-08-01', dateTo: '2026-08-31' });
-    
+
     // Should include the double-counted absence
     expect(diagnostics.length).toBe(1);
     expect(diagnostics[0].workTimeTypeCode).toBe('UW');
