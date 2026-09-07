@@ -28,6 +28,7 @@ export interface ReconciliationDiagnosticRecord {
   orderId: string | null;
   orderNumber: string | null;
   reason: string;
+  contribution: number;
 }
 
 export interface ClosureControlSummaryWithDiagnostics extends ClosureControlSummary {
@@ -246,7 +247,7 @@ export async function generateExcelResponse(params: {
         fgColor: { argb: 'FFFEF3C7' },
       };
 
-      const diagColHeaders = ['Pracownik', 'Data', 'Typ', 'Godziny', 'Zlecenie', 'Przyczyna'];
+      const diagColHeaders = ['Pracownik', 'Data', 'Typ', 'Godziny', 'Zlecenie', 'Przyczyna', 'Wkład w różnicę'];
       const diagHeaderRow2 = worksheet.addRow(diagColHeaders);
       diagHeaderRow2.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
       diagHeaderRow2.fill = {
@@ -271,6 +272,7 @@ export async function generateExcelResponse(params: {
           diag.hours,
           diag.orderNumber || '—',
           diag.reason,
+          diag.contribution,
         ]);
         row.eachCell((cell) => {
           cell.border = {
@@ -282,6 +284,8 @@ export async function generateExcelResponse(params: {
         });
         row.getCell(4).numFmt = '#,##0.00';
         row.getCell(4).alignment = { horizontal: 'right' };
+        row.getCell(7).numFmt = '+#,##0.00;-#,##0.00;0.00';
+        row.getCell(7).alignment = { horizontal: 'right' };
       });
     }
   }

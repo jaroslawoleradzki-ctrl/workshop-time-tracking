@@ -585,34 +585,47 @@ export async function getReconciliationDiagnostics(filters: {
   });
   const absenceTypeCodes = new Set(absenceTypes.map((t) => t.code));
 
-  // Find reports NOT accounted for in reconciliation
-  // Reconciliation includes: reports linked to orders in closure report + absence reports
-  // Reports NOT in reconciliation:
-  // - Non-absence reports with no orderId, or with orderId not in closure report
-  // - Reports with orderId in closure but the order has no hours in date range (edge case)
+  // Compute signed contribution for each report to the difference (settledHours - employeeHours)
+  // settledHours = ordersHours + absenceHours
+  // employeeHours = sum of all reports
+  // For each report:
+  // - absence + orderInClosure: counted in both absenceHours AND ordersHours → contribution = +hours
+  // - absence + no orderInClosure: counted in absenceHours only → contribution = 0
+  // - non-absence + orderInClosure: counted in ordersHours only → contribution = 0
+  // - non-absence + no order OR order not in closure: counted in employeeHours only → contribution = -hours
   const diagnostics: ReconciliationDiagnosticRecord[] = [];
 
   for (const report of allReports) {
     const isAbsence = report.workTimeType.isAbsence;
     const orderId = report.orderId;
     const orderInClosure = orderId ? orderIdsInClosure.has(orderId) : false;
+    const hours = Number(report.hours);
 
+    let contribution = 0;
     let reason: string | null = null;
 
     if (isAbsence) {
-      // Absence reports ARE included in reconciliation (via absenceHoursMap)
-      // But if they have an orderId that's not in closure, that's odd
-      // Actually, absences don't require orders typically
-      // They should be in reconciliation via the absence aggregation
-    } else if (!orderId) {
-      // Non-absence report without order - not in reconciliation
-      reason = 'Brak zlecenia';
-    } else if (!orderInClosure) {
-      // Non-absence report with order not in closure report
-      reason = 'Zlecenie nieobjęte raportem zamknięcia';
+      if (orderInClosure) {
+        // Double-counted: in absenceHours AND ordersHours
+        contribution = hours;
+        reason = 'Nieobecność z zleceniem w rozliczeniu (podwójne naliczenie)';
+      } else {
+        // Counted only in absenceHours, matches employee hours
+        contribution = 0;
+      }
+    } else {
+      if (orderInClosure) {
+        // Counted in ordersHours, matches employee hours
+        contribution = 0;
+      } else {
+        // Not in reconciliation at all
+        contribution = -hours;
+        reason = !orderId ? 'Brak zlecenia' : 'Zlecenie nieobjęte raportem zamknięcia';
+      }
     }
 
-    if (reason) {
+    // Only include records with non-zero contribution or explicit reason
+    if (contribution !== 0 || reason) {
       diagnostics.push({
         employeeId: report.employeeId,
         employeeName: report.employee?.lastName && report.employee?.firstName
@@ -621,10 +634,11 @@ export async function getReconciliationDiagnostics(filters: {
         date: formatDateString(report.date),
         workTimeTypeCode: report.workTimeTypeCode,
         workTimeTypeName: report.workTimeType?.name || report.workTimeTypeCode,
-        hours: Number(report.hours),
+        hours,
         orderId: report.orderId,
         orderNumber: report.order?.orderNumber || null,
-        reason,
+        reason: reason || (contribution > 0 ? 'Dodatkowy wkład w rozliczenie' : 'Wkład wyjaśniający różnicę'),
+        contribution,
       });
     }
   }

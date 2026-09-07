@@ -35,6 +35,19 @@ export interface AbsenceSummaryItem {
   hours: number;
 }
 
+export interface ReconciliationDiagnosticRecord {
+  employeeId: string;
+  employeeName: string;
+  date: string;
+  workTimeTypeCode: string;
+  workTimeTypeName: string;
+  hours: number;
+  orderId: string | null;
+  orderNumber: string | null;
+  reason: string;
+  contribution: number;
+}
+
 export interface ClosureControlSummary {
   ordersHours: number;
   absences: AbsenceSummaryItem[];
@@ -44,6 +57,7 @@ export interface ClosureControlSummary {
   difference: number;
   status: 'MATCHED' | 'MISMATCHED';
   statusLabel: 'Zgodne' | 'Niezgodne';
+  diagnostics?: ReconciliationDiagnosticRecord[];
 }
 
 type ReportTab = 'by-order' | 'by-employee' | 'by-account' | 'detailed' | 'absence-periods';
@@ -1000,6 +1014,58 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                         : `⚠ Wykryto niezgodność rozliczenia czasu (${(Number(controlSummary.difference) || 0).toFixed(2)} h). Sprawdź nieprzypisane wpisy lub brakujące zlecenia.`}
                     </span>
                   </div>
+                  
+                  {/* Diagnostyka niezgodności - wyświetlana tylko gdy status MISMATCHED i są dane diagnostyczne */}
+                  {controlSummary.status === 'MISMATCHED' && controlSummary.diagnostics && controlSummary.diagnostics.length > 0 && (
+                    <div style={{ marginTop: '1rem', padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--danger-border)', backgroundColor: 'rgba(198, 40, 40, 0.05)' }}>
+                      <h5 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', fontWeight: 700, color: 'var(--danger-color)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <span>🔍</span>
+                        Diagnostyka niezgodności ({controlSummary.diagnostics.length} rekordów)
+                      </h5>
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                          <thead>
+                            <tr style={{ backgroundColor: 'var(--danger-color)', color: 'white' }}>
+                              <th style={{ padding: '0.35rem', textAlign: 'left' }}>Pracownik</th>
+                              <th style={{ padding: '0.35rem', textAlign: 'left' }}>Data</th>
+                              <th style={{ padding: '0.35rem', textAlign: 'left' }}>Typ</th>
+                              <th style={{ padding: '0.35rem', textAlign: 'right' }}>Godziny</th>
+                              <th style={{ padding: '0.35rem', textAlign: 'left' }}>Zlecenie</th>
+                              <th style={{ padding: '0.35rem', textAlign: 'left' }}>Przyczyna</th>
+                              <th style={{ padding: '0.35rem', textAlign: 'right' }}>Wkład</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {controlSummary.diagnostics.map((diag, idx) => (
+                              <tr key={`${diag.employeeId}-${diag.date}-${diag.workTimeTypeCode}-${idx}`} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                                <td style={{ padding: '0.35rem' }}>{diag.employeeName}</td>
+                                <td style={{ padding: '0.35rem', whiteSpace: 'nowrap' }}>{diag.date}</td>
+                                <td style={{ padding: '0.35rem' }}>{diag.workTimeTypeCode} <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>({diag.workTimeTypeName})</span></td>
+                                <td style={{ padding: '0.35rem', textAlign: 'right', fontWeight: 600 }}>{(Number(diag.hours) || 0).toFixed(2)} h</td>
+                                <td style={{ padding: '0.35rem' }}>{diag.orderNumber || '—'}</td>
+                                <td style={{ padding: '0.35rem' }}>{diag.reason}</td>
+                                <td style={{ padding: '0.35rem', textAlign: 'right', fontWeight: 600, color: diag.contribution > 0 ? 'var(--danger-color)' : 'var(--success-color)' }}>
+                                  {diag.contribution > 0 ? '+' : ''}{(Number(diag.contribution) || 0).toFixed(2)} h
+                                </td>
+                              </tr>
+                            ))}
+                            <tr style={{ fontWeight: 700, backgroundColor: 'rgba(0,0,0,0.02)' }}>
+                              <td style={{ padding: '0.35rem' }} colSpan={6}>Suma wkładów:</td>
+                              <td style={{ padding: '0.35rem', textAlign: 'right' }}>
+                                {controlSummary.diagnostics.reduce((sum, d) => sum + (Number(d.contribution) || 0), 0) > 0 ? '+' : ''}
+                                {controlSummary.diagnostics.reduce((sum, d) => sum + (Number(d.contribution) || 0), 0).toFixed(2)} h
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                      <p style={{ marginTop: '0.5rem', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                        Suma wkładów powinna równać się różnicy: <strong>{(Number(controlSummary.difference) || 0).toFixed(2)} h</strong>.
+                        Wkład dodatni = rozliczono więcej niż pracownik (np. nieobecność z zleceniem).
+                        Wkład ujemny = pracownik ma więcej niż rozliczono (np. brak zlecenia).
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

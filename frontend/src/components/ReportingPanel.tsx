@@ -17,7 +17,7 @@ import AbsenceRangeModal from './AbsenceRangeModal';
 
 const WEEKDAY_ABBREVIATIONS = ['nd', 'pn', 'wt', 'śr', 'czw', 'pt', 'sob'];
 
-function getDayOfWeekAbbreviation(dateStr: string): string {
+export function getDayOfWeekAbbreviation(dateStr: string): string {
   const parts = dateStr.split('-');
   if (parts.length !== 3) return '';
   const year = parseInt(parts[0], 10);
@@ -27,7 +27,7 @@ function getDayOfWeekAbbreviation(dateStr: string): string {
   return WEEKDAY_ABBREVIATIONS[date.getDay()];
 }
 
-function isWeekend(dateStr: string): boolean {
+export function isWeekend(dateStr: string): boolean {
   const parts = dateStr.split('-');
   if (parts.length !== 3) return false;
   const year = parseInt(parts[0], 10);
@@ -38,7 +38,7 @@ function isWeekend(dateStr: string): boolean {
   return dayOfWeek === 0 || dayOfWeek === 6;
 }
 
-function getDefaultWorkType(dateStr: string, workTypes: WorkTimeType[]): string {
+export function getDefaultWorkType(dateStr: string, workTypes: WorkTimeType[]): string {
   if (isWeekend(dateStr)) {
     const nsType = workTypes.find(t => t.code === 'NS');
     if (nsType) return 'NS';
@@ -108,17 +108,21 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [activeOrders, setActiveOrders] = useState<Order[]>([]);
   const [workTypes, setWorkTypes] = useState<WorkTimeType[]>([]);
+  const [dictionariesLoaded, setDictionariesLoaded] = useState(false);
+
+  // Helper to get local date string (YYYY-MM-DD) without timezone shift
+  const getLocalDateString = useCallback((date: Date = new Date()): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
 
   // Selection states
-  const [currentDate, setCurrentDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
-  );
+  const [currentDate, setCurrentDate] = useState<string>(() => getLocalDateString());
 
   const handleSetToday = () => {
-    const today = new Date();
-    const offset = today.getTimezoneOffset();
-    const localToday = new Date(today.getTime() - (offset * 60 * 1000));
-    setCurrentDate(localToday.toISOString().split('T')[0]);
+    setCurrentDate(getLocalDateString());
   };
 
   const handlePrevDay = () => {
@@ -260,21 +264,31 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
         } else {
           setWorkTypes([]);
         }
+
+        // Mark dictionaries as loaded after all fetches complete
+        setDictionariesLoaded(true);
       } catch (err: any) {
         console.error('Błąd podczas ładowania słowników:', err);
         setValidationError('Wystąpił problem z połączeniem lub pobieraniem słowników.');
         setActiveOrders([]);
+        setDictionariesLoaded(true);
       }
     };
 
     fetchDictionaries();
   }, [token]);
 
-  // 2. Load Day Entries when date or employee changes
+  // 2. Initialize form when dictionaries are loaded (fixes race condition on first render)
+  useEffect(() => {
+    if (dictionariesLoaded && currentEmployee) {
+      resetForm();
+    }
+  }, [dictionariesLoaded, currentEmployee, currentDate, workTypes]);
+
+  // 3. Load Day Entries when date or employee changes
   useEffect(() => {
     if (currentEmployee) {
       fetchDayEntries(currentEmployee.id, currentDate);
-      resetForm();
     }
   }, [currentEmployeeIdx, currentDate, employees]);
 
