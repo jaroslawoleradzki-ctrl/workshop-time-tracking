@@ -898,4 +898,123 @@ describe('ReportsView — miesięczny raport pracowników', () => {
       expect(csv).toContain('2026-08-10;Jan Kowalski;ZL-001;P-001;Produkt testowy;K-001;8;G;Admin');
     });
   });
+
+  describe('v0.5.5 — ochrona widoczności zakładek raportów po wybraniu raportu zamknięcia', () => {
+    const roles = ['leader', 'admin'] as const;
+
+    roles.forEach((userRole) => {
+      it(`[rola: ${userRole}] przechodzi pełny scenariusz 7 kroków bez ukrywania ani kompresji zakładek`, async () => {
+        // Krok 1: Renderuje widok Raportów
+        render(
+          <ReportsView
+            token="test-token"
+            user={{
+              id: userRole === 'admin' ? 'admin-1' : 'leader-1',
+              username: userRole,
+              role: userRole,
+              fullName: userRole === 'admin' ? 'Admin Testowy' : 'Lider Testowy',
+            }}
+          />,
+        );
+
+        await screen.findByText('Centrum Raportów');
+        await screen.findByRole('table', { name: 'Raport według zleceń' });
+
+        const tabNames = [
+          'Godziny wg Zleceń',
+          'Wg Pracowników (Miesięczny)',
+          'Wg Kont Księgowych',
+          'Raport Szczegółowy',
+          'Okresy Nieobecności',
+        ];
+
+        // Krok 2: Weryfikuje widoczność wszystkich dozwolonych etykiet zakładek
+        const getTabButtons = () => tabNames.map((name) => screen.getByRole('button', { name }));
+
+        let tabButtons = getTabButtons();
+        expect(tabButtons).toHaveLength(5);
+        tabButtons.forEach((btn) => {
+          expect(btn).toBeVisible();
+          expect(btn.style.whiteSpace).toBe('nowrap');
+          expect(btn.style.flexShrink).toBe('0');
+        });
+
+        // Weryfikacja początkowego stanu aktywności (Godziny wg Zleceń aktywne, pozostałe nieaktywne)
+        expect(tabButtons[0]).toHaveClass('active');
+        for (let i = 1; i < tabButtons.length; i++) {
+          expect(tabButtons[i]).not.toHaveClass('active');
+        }
+
+        // Krok 3: Wybiera opcję "Raport zamknięcia"
+        const closureButton = screen.getByRole('button', { name: /Raport zamknięcia/i });
+        expect(closureButton).toBeVisible();
+        expect(closureButton).toHaveAttribute('aria-pressed', 'false');
+
+        fireEvent.click(closureButton);
+        expect(closureButton).toHaveAttribute('aria-pressed', 'true');
+
+        // Krok 4: Weryfikuje, że wszystkie dozwolone etykiety zakładek są NADAL widoczne
+        tabButtons = getTabButtons();
+        expect(tabButtons).toHaveLength(5);
+        tabButtons.forEach((btn) => {
+          expect(btn).toBeVisible();
+          expect(btn.style.whiteSpace).toBe('nowrap');
+          expect(btn.style.flexShrink).toBe('0');
+        });
+        expect(tabButtons[0]).toHaveClass('active');
+
+        // Krok 5: Przełącza na inną zakładkę raportową (np. by-employee)
+        fireEvent.click(tabButtons[1]);
+
+        // Krok 6: Weryfikuje wyrenderowanie docelowego raportu
+        await screen.findByRole('table', { name: 'Raport według pracowników' });
+
+        // Krok 7: Weryfikuje poprawną zmianę stanu aktywnej/nieaktywnej zakładki
+        tabButtons = getTabButtons();
+        expect(tabButtons[1]).toHaveClass('active');
+        expect(tabButtons[0]).not.toHaveClass('active');
+        for (let i = 0; i < tabButtons.length; i++) {
+          expect(tabButtons[i]).toBeVisible();
+          if (i === 1) {
+            expect(tabButtons[i]).toHaveClass('active');
+          } else {
+            expect(tabButtons[i]).not.toHaveClass('active');
+          }
+        }
+      });
+    });
+
+    it('przełącza się na Raport Szczegółowy po włączeniu raportu zamknięcia i zachowuje wszystkie etykiety zakładek', async () => {
+      renderReports();
+      await screen.findByRole('table', { name: 'Raport według zleceń' });
+
+      const closureBtn = screen.getByRole('button', { name: /Raport zamknięcia/i });
+      fireEvent.click(closureBtn);
+      expect(closureBtn).toHaveAttribute('aria-pressed', 'true');
+
+      // Przełączenie na Raport Szczegółowy
+      const detailedTab = screen.getByRole('button', { name: 'Raport Szczegółowy' });
+      fireEvent.click(detailedTab);
+
+      // Docelowy raport szczegółowy wyrenderowany
+      await screen.findByRole('table', { name: 'Raport szczegółowy' });
+      expect(detailedTab).toHaveClass('active');
+      expect(screen.getByRole('button', { name: 'Godziny wg Zleceń' })).not.toHaveClass('active');
+
+      // Wszystkie zakładki nadal widoczne i nieskompresowane
+      const tabs = [
+        'Godziny wg Zleceń',
+        'Wg Pracowników (Miesięczny)',
+        'Wg Kont Księgowych',
+        'Raport Szczegółowy',
+        'Okresy Nieobecności',
+      ];
+      tabs.forEach((name) => {
+        const btn = screen.getByRole('button', { name });
+        expect(btn).toBeVisible();
+        expect(btn.style.whiteSpace).toBe('nowrap');
+        expect(btn.style.flexShrink).toBe('0');
+      });
+    });
+  });
 });
