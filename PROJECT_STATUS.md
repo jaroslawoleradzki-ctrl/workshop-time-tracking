@@ -11,22 +11,23 @@
 
 Zakres wersji `0.5.2`:
 
-- Zweryfikowano i pokryto testami integracyjnymi backendu oraz komponentów frontendu regułę zapisu wpisów NS (Nadgodziny sobota/niedziela) w dni wolne (sobota/niedziela) przy podaniu prawidłowego zlecenia oraz obsługę błędów odrzucenia (ostateczna identyfikacja specyficznego incydentu produkcyjnego wymaga weryfikacji bazy produkcyjnej w trybie READ-ONLY).
+- Zapewniono pełną spójność migawki bazy danych (Prisma interactive transaction z `isolationLevel: RepeatableRead`) dla wyliczania sum kontrolnych i diagnostyki rozliczenia oraz wprowadzono serwerowego strażnika niezmiennika (`round(SUM(diagnostics.contribution), 2) === round(totalSettledHours - totalEmployeeHours, 2)`).
+- Zweryfikowano i pokryto testami integracyjnymi backendu oraz komponentów frontendu regułę zapisu wpisów NS (Nadgodziny sobota/niedziela) w dni wolne (sobota/niedziela) przy podaniu prawidłowego zlecenia oraz obsługę błędów odrzucenia (historyczny incydent ze środowiska produkcyjnego nadal wymaga weryfikacji bazy produkcyjnej w trybie READ-ONLY).
 - Poprawiono obsługę błędów frontendu przy zapisie wpisów czasu – użytkownik otrzymuje czytelny komunikat w przypadku odrzucenia przez backend.
 - Automatyczny domyślny typ czasu pracy w formularzu raportowania: dni robocze (poniedziałek–piątek) → G, sobota i niedziela → NS.
 - Wyświetlanie skrótu dnia tygodnia (pn, wt, śr, czw, pt, sob, nd) przy polu daty raportowania.
 - Diagnostyka niezgodności sum kontrolnych zamknięcia miesiąca: przy statusie NIEZGODNE pokazuje konkretne wpisy powodujące różnicę (pracownik, data, typ, godziny, zlecenie, przyczyna, podpisany wkład w różnicę rozliczenia) zarówno dla kierunku ujemnego (Direction A), dodatniego (Direction B), jak i mieszanego.
-- Rozszerzono eksport XLSX raportu zamknięcia o pełną 7-kolumnową sekcję diagnostyki przy statusie NIEZGODNE.
+- Rozszerzono eksport XLSX raportu zamknięcia o pełną 7-kolumnową sekcję diagnostyki przy statusie NIEZGODNE z formatowaniem numerycznym.
 - Logika resetowania formularza nowego wpisu uwzględnia dzień tygodnia dla domyślnego typu czasu pracy.
 - Edycja istniejącego wpisu zachowuje jego typ czasu pracy.
 - Zmiana nie wymaga migracji bazy danych.
 
 ## Weryfikacja wersji 0.5.2
 
-- backend: 156 testów zakończonych powodzeniem (12 plików testowych),
+- backend: 160 testów zakończonych powodzeniem (12 plików testowych), w tym testy spójności migawki transakcyjnej, strażnika niezmiennika oraz deterministyczne parsowanie XLSX przez ExcelJS,
 - backend: build (`npm run build`) zakończony powodzeniem,
 - backend: walidacja schematu Prisma (`npx prisma validate`) — schemat poprawny (z lokalnym parse-only DATABASE_URL),
-- frontend: 88 testów zakończonych powodzeniem (10 plików testowych),
+- frontend: 88 testów zakończonych powodzeniem (10 plików testowych), w tym szczegółowe testy renderowania pól diagnostyki w UI,
 - frontend: build (`npm run build`) zakończony powodzeniem,
 - frontend: lint (`npm run lint`) zakończony powodzeniem z wynikiem 0 ostrzeżeń,
 - verify-release.sh: zatrzymany przez feature branch guard na gałęzi `feature/v0.5.2-production-followup` (zgodnie z przeznaczeniem skryptu).

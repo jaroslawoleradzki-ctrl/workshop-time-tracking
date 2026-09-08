@@ -7,7 +7,8 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
-- Naprawiono błąd zapisu wpisów NS (Nadgodziny sobota/niedziela) w dni wolne (sobota/niedziela) przy podaniu prawidłowego zlecenia – wpisy są teraz poprawnie akceptowane zgodnie z regułą biznesową dopuszczającą pracę nad zleceniem w dni wolne.
+- Wzmocniono obsługę zapisu NS oraz pokrycie regresyjne ścieżki aplikacyjnej (zapis NS w weekend z wymaganym zleceniem); historyczny incydent produkcyjny nadal wymaga weryfikacji na danych produkcyjnych w trybie tylko do odczytu.
+- Zapewniono spójność migawki transakcyjnej (`RepeatableRead`) dla wyliczania sum kontrolnych i diagnostyki rozliczenia oraz wprowadzono serwerowego strażnika niezmiennika spójności odpowiedzi.
 - Poprawiono obsługę błędów frontendu przy zapisie wpisów czasu – użytkownik otrzymuje czytelny komunikat w przypadku odrzucenia przez backend.
 
 ### Added

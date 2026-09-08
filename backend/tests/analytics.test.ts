@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as jwt from 'jsonwebtoken';
 import * as ExcelJS from 'exceljs';
 import request from 'supertest';
-import { formatEmployeeName } from '../src/routes/analytics';
+import { Prisma } from '@prisma/client';
+import {
+  formatEmployeeName,
+  getClosureControlSummary,
+  ReconciliationConsistencyError,
+} from '../src/routes/analytics';
 import app from '../src/app';
 import prisma from '../src/utils/prisma';
 import { TEST_JWT_SECRET } from './setup-env';
@@ -111,6 +116,12 @@ describe('Analytics reports', () => {
     vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([]);
     vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([]);
     vi.spyOn(prisma.companyCalendarDay, 'findUnique').mockResolvedValue(null);
+    vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => {
+      if (typeof callback === 'function') {
+        return callback(prisma);
+      }
+      return callback;
+    });
   });
 
   afterEach(() => {
@@ -598,6 +609,31 @@ describe('Analytics reports', () => {
 
     it('exports exactly the JSON rows, including zero-hour closed orders', async () => {
       mockOrderReportQuery();
+      vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
+        if (args?.where?.workTimeType?.isAbsence) {
+          return [];
+        }
+        return [
+          {
+            employeeId: EMPLOYEE_ID,
+            employee: { fullName: 'Jan Kowalski' },
+            hours: 5,
+            workTimeTypeCode: 'G',
+            workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+            orderId: 'open-hours',
+            date: new Date('2026-08-10T00:00:00.000Z'),
+          },
+          {
+            employeeId: EMPLOYEE_ID,
+            employee: { fullName: 'Jan Kowalski' },
+            hours: 4,
+            workTimeTypeCode: 'G',
+            workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+            orderId: 'closed-hours',
+            date: new Date('2026-08-12T00:00:00.000Z'),
+          },
+        ] as any;
+      });
 
       const jsonResponse = await authenticatedGet(`/api/analytics/report-by-order?${closureRange}`).expect(200);
       const xlsxResponse = await authenticatedGet(`/api/analytics/export/by-order?${closureRange}`)
@@ -1630,36 +1666,70 @@ describe('Analytics reports', () => {
 
       const allValues = worksheet.getSheetValues();
 
-      // 1. Verify header exists
+      // 1. Verify diagnostics header section title exists
       const hasDiagnosticsHeader = allValues.some((row: any) => Array.isArray(row) && row.includes('Diagnostyka niezgodności'));
       expect(hasDiagnosticsHeader).toBe(true);
 
-      // 2. Verify column headers
+      // Find the header row index
+      let diagHeaderRowIdx = -1;
+      worksheet.eachRow((row, rowNumber) => {
+        const vals = Array.isArray(row.values) ? (row.values as any[]).slice(1) : [];
+        if (vals.includes('Diagnostyka niezgodności')) {
+          diagHeaderRowIdx = rowNumber + 1;
+        }
+      });
+      expect(diagHeaderRowIdx).toBeGreaterThan(0);
+
+      // 2. Verify exact 7 columns in exact order
       const expectedColHeaders = ['Pracownik', 'Data', 'Typ', 'Godziny', 'Zlecenie', 'Przyczyna', 'Wkład w różnicę'];
-      const hasColHeaders = allValues.some((row: any) =>
-        Array.isArray(row) && expectedColHeaders.every((h) => row.includes(h)),
-      );
-      expect(hasColHeaders).toBe(true);
+      const headerRow = worksheet.getRow(diagHeaderRowIdx);
+      const actualHeaders = (headerRow.values as any[]).slice(1);
+      expect(actualHeaders).toHaveLength(7);
+      expect(actualHeaders).toEqual(expectedColHeaders);
 
-      // 3. Find diagnostic rows
-      const szkRow = allValues.find((row: any) => Array.isArray(row) && row.includes('SZK (Szkolenie)')) as any[];
-      expect(szkRow).toBeDefined();
-      expect(szkRow).toContain('Kowalski Jan');
-      expect(szkRow).toContain('2026-08-15');
-      expect(szkRow).toContain(8); // hours
-      expect(szkRow).toContain('—'); // no order
-      expect(szkRow).toContain('Brak zlecenia');
-      expect(szkRow).toContain(-8); // negative contribution
+      // 3. Find and verify diagnostic rows (including numeric types and numFmt)
+      let szkRowExcel: ExcelJS.Row | undefined;
+      let uwRowExcel: ExcelJS.Row | undefined;
 
-      const uwRow = allValues.find((row: any) => Array.isArray(row) && row.includes('Nieobecność z zleceniem w rozliczeniu (podwójne naliczenie)')) as any[];
-      expect(uwRow).toBeDefined();
-      expect(uwRow).toContain('Kowalski Jan');
-      expect(uwRow).toContain('2026-08-18');
-      expect(uwRow).toContain('UW (Urlop wypoczynkowy)');
-      expect(uwRow).toContain(16); // hours
-      expect(uwRow).toContain('ZL-XLSX'); // order
-      expect(uwRow).toContain('Nieobecność z zleceniem w rozliczeniu (podwójne naliczenie)');
-      expect(uwRow).toContain(16); // positive contribution
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber > diagHeaderRowIdx) {
+          const vals = Array.isArray(row.values) ? (row.values as any[]).slice(1) : [];
+          if (vals.includes('SZK (Szkolenie)')) {
+            szkRowExcel = row;
+          }
+          if (vals.includes('Nieobecność z zleceniem w rozliczeniu (podwójne naliczenie)')) {
+            uwRowExcel = row;
+          }
+        }
+      });
+
+      expect(szkRowExcel).toBeDefined();
+      const szkValues = (szkRowExcel!.values as any[]).slice(1);
+      expect(szkValues[0]).toBe('Kowalski Jan');
+      expect(szkValues[1]).toBe('2026-08-15');
+      expect(szkValues[2]).toBe('SZK (Szkolenie)');
+      expect(szkValues[3]).toBe(8);
+      expect(typeof szkValues[3]).toBe('number');
+      expect(szkValues[4]).toBe('—');
+      expect(szkValues[5]).toBe('Brak zlecenia');
+      expect(szkValues[6]).toBe(-8);
+      expect(typeof szkValues[6]).toBe('number');
+      expect(szkRowExcel!.getCell(4).numFmt).toBe('#,##0.00');
+      expect(szkRowExcel!.getCell(7).numFmt).toBe('+#,##0.00;-#,##0.00;0.00');
+
+      expect(uwRowExcel).toBeDefined();
+      const uwValues = (uwRowExcel!.values as any[]).slice(1);
+      expect(uwValues[0]).toBe('Kowalski Jan');
+      expect(uwValues[1]).toBe('2026-08-18');
+      expect(uwValues[2]).toBe('UW (Urlop wypoczynkowy)');
+      expect(uwValues[3]).toBe(16);
+      expect(typeof uwValues[3]).toBe('number');
+      expect(uwValues[4]).toBe('ZL-XLSX');
+      expect(uwValues[5]).toBe('Nieobecność z zleceniem w rozliczeniu (podwójne naliczenie)');
+      expect(uwValues[6]).toBe(16);
+      expect(typeof uwValues[6]).toBe('number');
+      expect(uwRowExcel!.getCell(4).numFmt).toBe('#,##0.00');
+      expect(uwRowExcel!.getCell(7).numFmt).toBe('+#,##0.00;-#,##0.00;0.00');
     });
   });
 });
@@ -1821,5 +1891,367 @@ describe('getReconciliationDiagnostics — math verification', () => {
     expect(diagnostics[0].workTimeTypeCode).toBe('UW');
     expect(diagnostics[0].contribution).toBe(10);
     expect(diagnostics[0].reason).toContain('podwójne naliczenie');
+  });
+});
+
+describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(prisma.user, 'findUnique').mockResolvedValue({
+      id: USER_ID,
+      username: 'test-admin',
+      passwordHash: 'unused',
+      fullName: 'Test Administrator',
+      role: 'admin',
+      isActive: true,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('executes closure control summary inside RepeatableRead transaction and passes tx client to all reads', async () => {
+    const txMock = {
+      order: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.select?.id) {
+            return [{ id: 'ord-1' }];
+          }
+          return [
+            {
+              id: 'ord-1',
+              orderNumber: 'ZL-SNAP',
+              productName: 'P1',
+              productCode: 'C1',
+              accountingAccount: 'A1',
+              plannedHours: 40,
+              quantity: 1,
+              quantityUnit: 'szt.',
+              status: 'CLOSED',
+              completionDate: new Date('2026-08-20T00:00:00.000Z'),
+              deletedAt: null,
+              reports: [{ hours: 40, date: new Date('2026-08-10T00:00:00.000Z'), deletedAt: null }],
+            },
+          ];
+        }),
+      },
+      workTimeType: {
+        findMany: vi.fn().mockResolvedValue([
+          { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
+          { code: 'UW', name: 'Urlop', isAbsence: true, requiresOrder: false },
+        ]),
+      },
+      workTimeReport: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.where?.workTimeType?.isAbsence) {
+            return [];
+          }
+          if (args?.include?.employee && args?.include?.order) {
+            return [];
+          }
+          return [
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Jan Kowalski' },
+              hours: 40,
+              workTimeTypeCode: 'G',
+              workTimeType: { name: 'Standardowe' },
+            },
+          ];
+        }),
+      },
+    };
+
+    const transactionSpy = vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any, options?: any) => {
+      expect(options).toMatchObject({
+        isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+      });
+      return callback(txMock);
+    });
+
+    const summary = await getClosureControlSummary({ dateFrom: '2026-08-01', dateTo: '2026-08-31' });
+
+    expect(transactionSpy).toHaveBeenCalledTimes(1);
+    expect(txMock.order.findMany).toHaveBeenCalled();
+    expect(txMock.workTimeType.findMany).toHaveBeenCalled();
+    expect(txMock.workTimeReport.findMany).toHaveBeenCalled();
+    expect(summary.status).toBe('MATCHED');
+  });
+
+  it('enforces server-side invariant guard and throws ReconciliationConsistencyError when invariant is violated', async () => {
+    // Simulate inconsistent reads where totals show difference = -8, but diagnostics returns empty (0)
+    const txMock = {
+      order: {
+        findMany: vi.fn().mockResolvedValue([]), // 0 order hours
+      },
+      workTimeType: {
+        findMany: vi.fn().mockResolvedValue([
+          { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
+        ]),
+      },
+      workTimeReport: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.where?.workTimeType?.isAbsence) {
+            return []; // 0 absence hours
+          }
+          if (args?.include?.employee && args?.include?.order) {
+            // Diagnostics query returns empty (0 contribution)
+            return [];
+          }
+          // Employee query returns 8h (totalEmployeeHours = 8)
+          // Difference = 0 - 8 = -8, but diagnostics sum = 0 -> INVARIANT VIOLATION!
+          return [
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Jan Kowalski' },
+              hours: 8,
+              workTimeTypeCode: 'G',
+              workTimeType: { name: 'Standardowe' },
+            },
+          ];
+        }),
+      },
+    };
+
+    vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => callback(txMock));
+
+    // Direct helper call must throw ReconciliationConsistencyError
+    await expect(
+      getClosureControlSummary({ dateFrom: '2026-08-01', dateTo: '2026-08-31' }),
+    ).rejects.toThrow(ReconciliationConsistencyError);
+
+    // Endpoint call must return 500 RECONCILIATION_CONSISTENCY_ERROR
+    const response = await authenticatedGet(
+      '/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31',
+    ).expect(500);
+
+    expect(response.body).toEqual({
+      code: 'RECONCILIATION_CONSISTENCY_ERROR',
+      message: 'Błąd spójności danych raportu rozliczenia. Spróbuj ponownie wygenerować raport.',
+    });
+  });
+
+  it('guarantees invariant round(sum(diagnostics.contribution),2) === round(difference,2) across concurrency edge cases', async () => {
+    // Representative concurrency cases testing that inconsistent state transitions trigger the invariant guard:
+    // Case 1: An unassigned report appeared (INSERT) between totals calculation and diagnostics
+    // Case 2: A report hours value was modified (UPDATE) between totals and diagnostics
+    // Case 3: A report was soft-deleted (DELETE) between totals and diagnostics
+    // Case 4: An order status/completion changed (entering/leaving closure) between totals and diagnostics
+
+    const testConcurrencyViolation = async (inconsistentDiagnostics: any[]) => {
+      const txMock = {
+        order: {
+          findMany: vi.fn().mockImplementation(async (args: any) => {
+            if (args?.select?.id) return [{ id: 'ord-1' }];
+            return [
+              {
+                id: 'ord-1',
+                orderNumber: 'ZL-1',
+                productName: 'P',
+                productCode: 'C',
+                accountingAccount: 'A',
+                plannedHours: 40,
+                quantity: 1,
+                quantityUnit: 'szt.',
+                status: 'OPEN',
+                completionDate: null,
+                deletedAt: null,
+                reports: [{ hours: 40, date: new Date('2026-08-10T00:00:00.000Z'), deletedAt: null }],
+              },
+            ];
+          }),
+        },
+        workTimeType: {
+          findMany: vi.fn().mockResolvedValue([
+            { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
+          ]),
+        },
+        workTimeReport: {
+          findMany: vi.fn().mockImplementation(async (args: any) => {
+            if (args?.where?.workTimeType?.isAbsence) return [];
+            if (args?.include?.employee && args?.include?.order) {
+              return inconsistentDiagnostics;
+            }
+            return [
+              {
+                employeeId: 'emp-1',
+                employee: { fullName: 'Jan Kowalski' },
+                hours: 48,
+                workTimeTypeCode: 'G',
+                workTimeType: { name: 'Standardowe' },
+              },
+            ];
+          }),
+        },
+      };
+
+      // Settled = 40h, Employee = 48h -> Difference = -8h
+      vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => callback(txMock));
+
+      await expect(
+        getClosureControlSummary({ dateFrom: '2026-08-01', dateTo: '2026-08-31' }),
+      ).rejects.toThrow(ReconciliationConsistencyError);
+    };
+
+    // Case 1: Diagnostics sees an extra 8h missing-order report (-16 total contribution instead of -8)
+    await testConcurrencyViolation([
+      {
+        employeeId: 'emp-1',
+        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+        date: new Date('2026-08-10T00:00:00.000Z'),
+        hours: 8,
+        workTimeTypeCode: 'G',
+        workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
+        orderId: null,
+        order: null,
+      },
+      {
+        employeeId: 'emp-1',
+        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+        date: new Date('2026-08-11T00:00:00.000Z'),
+        hours: 8,
+        workTimeTypeCode: 'G',
+        workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
+        orderId: null,
+        order: null,
+      },
+    ]);
+
+    // Case 2: Diagnostics sees 0 reports (empty instead of -8)
+    await testConcurrencyViolation([]);
+  });
+
+  it('endpoint returns consistent MISMATCHED response where sum(diagnostics.contribution) === difference', async () => {
+    // Consistent snapshot with both Direction A and Direction B records:
+    // ord-1 in closure
+    // emp-1: 40h G on ord-1 -> 0
+    // emp-1: 16h UW on ord-1 -> +16 (in closure orders & absence)
+    // emp-1: 8h G without order -> -8
+    // Settled: 40 + 16 (orders) + 16 (absence) = 72h
+    // Employee total: 40 + 16 + 8 = 64h
+    // Difference: 72 - 64 = +8h
+    // Diagnostics: +16 (UW on ord-1) and -8 (G no order) -> sum = +8h
+
+    const txMock = {
+      order: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.select?.id) return [{ id: 'ord-1' }];
+          return [
+            {
+              id: 'ord-1',
+              orderNumber: 'ZL-SNAP-1',
+              productName: 'Produkt 1',
+              productCode: 'P-1',
+              accountingAccount: 'K-1',
+              plannedHours: 100,
+              quantity: 1,
+              quantityUnit: 'szt.',
+              status: 'OPEN',
+              completionDate: null,
+              deletedAt: null,
+              reports: [
+                { hours: 40, date: new Date('2026-08-10T00:00:00.000Z'), deletedAt: null },
+                { hours: 16, date: new Date('2026-08-11T00:00:00.000Z'), deletedAt: null },
+              ],
+            },
+          ];
+        }),
+      },
+      workTimeType: {
+        findMany: vi.fn().mockResolvedValue([
+          { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
+          { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+        ]),
+      },
+      workTimeReport: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.where?.workTimeType?.isAbsence) {
+            return [{ workTimeTypeCode: 'UW', hours: 16 }];
+          }
+          if (args?.include?.employee && args?.include?.order) {
+            return [
+              {
+                employeeId: 'emp-1',
+                employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+                hours: 40,
+                workTimeTypeCode: 'G',
+                workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
+                orderId: 'ord-1',
+                order: { orderNumber: 'ZL-SNAP-1' },
+                date: new Date('2026-08-10T00:00:00.000Z'),
+              },
+              {
+                employeeId: 'emp-1',
+                employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+                hours: 16,
+                workTimeTypeCode: 'UW',
+                workTimeType: { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+                orderId: 'ord-1',
+                order: { orderNumber: 'ZL-SNAP-1' },
+                date: new Date('2026-08-11T00:00:00.000Z'),
+              },
+              {
+                employeeId: 'emp-1',
+                employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+                hours: 8,
+                workTimeTypeCode: 'G',
+                workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
+                orderId: null,
+                order: null,
+                date: new Date('2026-08-12T00:00:00.000Z'),
+              },
+            ];
+          }
+          return [
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Jan Kowalski' },
+              hours: 40,
+              workTimeTypeCode: 'G',
+              workTimeType: { name: 'Standardowe' },
+            },
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Jan Kowalski' },
+              hours: 16,
+              workTimeTypeCode: 'UW',
+              workTimeType: { name: 'Urlop wypoczynkowy' },
+            },
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Jan Kowalski' },
+              hours: 8,
+              workTimeTypeCode: 'G',
+              workTimeType: { name: 'Standardowe' },
+            },
+          ];
+        }),
+      },
+    };
+
+    vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => callback(txMock));
+
+    const response = await authenticatedGet(
+      '/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31',
+    ).expect(200);
+
+    expect(response.body.status).toBe('MISMATCHED');
+    expect(response.body.ordersHours).toBe(56);
+    expect(response.body.totalAbsenceHours).toBe(16);
+    expect(response.body.totalSettledHours).toBe(72);
+    expect(response.body.totalEmployeeHours).toBe(64);
+    expect(response.body.difference).toBe(8);
+
+    expect(response.body.diagnostics).toHaveLength(2);
+    expect(response.body.diagnostics[0].contribution).toBe(16);
+    expect(response.body.diagnostics[1].contribution).toBe(-8);
+
+    const sumContributions = Math.round(
+      response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0) * 100,
+    ) / 100;
+    expect(sumContributions).toBe(response.body.difference);
   });
 });

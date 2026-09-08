@@ -709,7 +709,7 @@ describe('ReportsView — miesięczny raport pracowników', () => {
       // Diagnostics header
       expect(within(summaryCard).getByText(/Diagnostyka niezgodności \(2 rekordów\)/)).toBeInTheDocument();
 
-      // Diagnostic table headers
+      // Diagnostic table headers (all 7 headers in order)
       expect(within(summaryCard).getByRole('columnheader', { name: 'Pracownik' })).toBeInTheDocument();
       expect(within(summaryCard).getByRole('columnheader', { name: 'Data' })).toBeInTheDocument();
       expect(within(summaryCard).getByRole('columnheader', { name: 'Typ' })).toBeInTheDocument();
@@ -718,14 +718,38 @@ describe('ReportsView — miesięczny raport pracowników', () => {
       expect(within(summaryCard).getByRole('columnheader', { name: 'Przyczyna' })).toBeInTheDocument();
       expect(within(summaryCard).getByRole('columnheader', { name: 'Wkład' })).toBeInTheDocument();
 
-      // Diagnostic rows
-      expect(within(summaryCard).getByText('Nieobecność z zleceniem w rozliczeniu (podwójne naliczenie)')).toBeInTheDocument();
-      expect(within(summaryCard).getByText('+16.00 h')).toBeInTheDocument();
-      expect(within(summaryCard).getByText('Brak zlecenia')).toBeInTheDocument();
-      expect(within(summaryCard).getByText('-8.00 h')).toBeInTheDocument();
+      const diagTable = summaryCard.querySelector('table')!;
+      expect(diagTable).toBeInTheDocument();
+      const rows = diagTable.querySelectorAll('tbody tr');
+      expect(rows).toHaveLength(3); // 2 data rows + 1 sum row
 
-      // Diagnostics sum row
-      expect(within(summaryCard).getByText('Suma wkładów:')).toBeInTheDocument();
+      // Row 1 concrete assertions: Kowalski Jan, 2026-08-18, UW (Urlop wypoczynkowy), 16.00 h, ZL-001, reason, +16.00 h
+      const row1 = within(rows[0] as HTMLElement);
+      expect(row1.getByText('Kowalski Jan')).toBeInTheDocument();
+      expect(row1.getByText('2026-08-18')).toBeInTheDocument();
+      expect(row1.getByText(/UW/)).toBeInTheDocument();
+      expect(row1.getByText(/\(Urlop wypoczynkowy\)/)).toBeInTheDocument();
+      expect(row1.getByText('16.00 h')).toBeInTheDocument();
+      expect(row1.getByText('ZL-001')).toBeInTheDocument();
+      expect(row1.getByText('Nieobecność z zleceniem w rozliczeniu (podwójne naliczenie)')).toBeInTheDocument();
+      expect(row1.getByText('+16.00 h')).toBeInTheDocument();
+
+      // Row 2 concrete assertions: Kowalski Jan, 2026-08-15, SZK (Szkolenie), 8.00 h, —, Brak zlecenia, -8.00 h
+      const row2 = within(rows[1] as HTMLElement);
+      expect(row2.getByText('Kowalski Jan')).toBeInTheDocument();
+      expect(row2.getByText('2026-08-15')).toBeInTheDocument();
+      expect(row2.getByText(/SZK/)).toBeInTheDocument();
+      expect(row2.getByText(/\(Szkolenie\)/)).toBeInTheDocument();
+      expect(row2.getByText('8.00 h')).toBeInTheDocument();
+      expect(row2.getByText('—')).toBeInTheDocument();
+      expect(row2.getByText('Brak zlecenia')).toBeInTheDocument();
+      expect(row2.getByText('-8.00 h')).toBeInTheDocument();
+
+      // Row 3: Diagnostics sum row and explanatory difference text
+      const row3 = within(rows[2] as HTMLElement);
+      expect(row3.getByText('Suma wkładów:')).toBeInTheDocument();
+      expect(row3.getByText('+8.00 h')).toBeInTheDocument();
+      expect(within(summaryCard).getByText(/Suma wkładów powinna równać się różnicy:/)).toBeInTheDocument();
     });
   });
 

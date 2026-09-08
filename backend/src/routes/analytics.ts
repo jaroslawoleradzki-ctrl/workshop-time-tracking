@@ -2,10 +2,19 @@ import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
 import { AuthRequest, authenticateJWT } from '../middlewares/auth';
 import * as ExcelJS from 'exceljs';
-import { OrderStatus } from '@prisma/client';
+import { Prisma, PrismaClient, OrderStatus } from '@prisma/client';
 import logger from '../utils/logger';
 import { getWorkingDayDecision } from '../services/company-calendar';
 import { formatDateString, parseDateString } from '../utils/date';
+
+export type DbClient = PrismaClient | Prisma.TransactionClient;
+
+export class ReconciliationConsistencyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ReconciliationConsistencyError';
+  }
+}
 import {
   generateExcelResponse,
   ExcelReportMetadata,
@@ -138,8 +147,9 @@ async function nextWorkingDate(
 
 export async function getAbsencePeriodRows(
   filters: AbsencePeriodFilters,
+  db: DbClient = prisma,
 ): Promise<AbsencePeriodRow[]> {
-  const reports = await prisma.workTimeReport.findMany({
+  const reports = await db.workTimeReport.findMany({
     where: {
       deletedAt: null,
       employeeId: filters.employeeId || undefined,
@@ -248,14 +258,17 @@ export async function getAbsencePeriodRows(
     .map(({ employeeSortKey: _employeeSortKey, ...row }) => row);
 }
 
-async function getEmployeeReportRows(filters: EmployeeReportFilters): Promise<EmployeeReportRow[]> {
-  const reports = await prisma.workTimeReport.findMany({
+export async function getEmployeeReportRows(
+  filters: EmployeeReportFilters,
+  db: DbClient = prisma,
+): Promise<EmployeeReportRow[]> {
+  const reports = await db.workTimeReport.findMany({
     where: {
       deletedAt: null,
       employeeId: filters.employeeId || undefined,
       date: {
-        gte: filters.dateFrom ? new Date(filters.dateFrom) : undefined,
-        lte: filters.dateTo ? new Date(filters.dateTo) : undefined,
+        gte: filters.dateFrom ? new Date(`${filters.dateFrom}T00:00:00.000Z`) : undefined,
+        lte: filters.dateTo ? new Date(`${filters.dateTo}T00:00:00.000Z`) : undefined,
       },
     },
     include: {
@@ -465,7 +478,10 @@ const validateClosureDateRange = (closureReport: boolean, dateFrom: unknown, dat
   return null;
 };
 
-export async function getOrderReportRows(filters: OrderReportFilters): Promise<OrderReportRow[]> {
+export async function getOrderReportRows(
+  filters: OrderReportFilters,
+  db: DbClient = prisma,
+): Promise<OrderReportRow[]> {
   const reportDateRange = {
     gte: filters.dateFrom ? new Date(`${filters.dateFrom}T00:00:00.000Z`) : undefined,
     lte: filters.dateTo ? new Date(`${filters.dateTo}T00:00:00.000Z`) : undefined,
@@ -475,7 +491,7 @@ export async function getOrderReportRows(filters: OrderReportFilters): Promise<O
     lte: new Date(`${filters.dateTo}T23:59:59.999Z`),
   } : undefined;
 
-  const orders = await prisma.order.findMany({
+  const orders = await db.order.findMany({
     where: {
       deletedAt: null,
       orderNumber: filters.orderNumber
@@ -532,14 +548,17 @@ export async function getOrderReportRows(filters: OrderReportFilters): Promise<O
   return rows;
 }
 
-export async function getReconciliationDiagnostics(filters: {
-  dateFrom: string;
-  dateTo: string;
-}): Promise<ReconciliationDiagnosticRecord[]> {
+export async function getReconciliationDiagnostics(
+  filters: {
+    dateFrom: string;
+    dateTo: string;
+  },
+  db: DbClient = prisma,
+): Promise<ReconciliationDiagnosticRecord[]> {
   const { dateFrom, dateTo } = filters;
 
   // Get all work time reports in the date range
-  const allReports = await prisma.workTimeReport.findMany({
+  const allReports = await db.workTimeReport.findMany({
     where: {
       deletedAt: null,
       date: {
@@ -560,7 +579,7 @@ export async function getReconciliationDiagnostics(filters: {
   });
 
   // Get orders included in closure report (OPEN or CLOSED with completionDate in range)
-  const ordersInClosure = await prisma.order.findMany({
+  const ordersInClosure = await db.order.findMany({
     where: {
       deletedAt: null,
       OR: [
@@ -639,116 +658,165 @@ export async function getReconciliationDiagnostics(filters: {
   return diagnostics;
 }
 
-export async function getClosureControlSummary(filters: {
-  dateFrom: string;
-  dateTo: string;
-}): Promise<ClosureControlSummary> {
-  const { dateFrom, dateTo } = filters;
+export async function getClosureControlSummary(
+  filters: {
+    dateFrom: string;
+    dateTo: string;
+  },
+  client: DbClient = prisma,
+): Promise<ClosureControlSummaryWithDiagnostics> {
+  const runCalculation = async (tx: DbClient): Promise<ClosureControlSummaryWithDiagnostics> => {
+    const { dateFrom, dateTo } = filters;
 
-  // 1. Godziny wg zleceń w trybie raportu zamknięcia (wspólna logika)
-  const orderRows = await getOrderReportRows({
-    dateFrom,
-    dateTo,
-    closureReport: true,
-    onlyWithHours: false,
-  });
-  const ordersHours = Math.round(
-    orderRows.reduce((sum, row) => sum + (Number(row.actualHours) || 0), 0) * 100,
-  ) / 100;
-
-  // 2. Nieobecności dynamicznie wyznaczane ze słownika WorkTimeType (isAbsence: true)
-  const [absenceTypes, absenceReports] = await Promise.all([
-    prisma.workTimeType.findMany({
-      where: { isAbsence: true },
-      select: { code: true, name: true },
-      orderBy: [{ createdAt: 'asc' }, { code: 'asc' }],
-    }),
-    prisma.workTimeReport.findMany({
-      where: {
-        deletedAt: null,
-        date: {
-          gte: new Date(`${dateFrom}T00:00:00.000Z`),
-          lte: new Date(`${dateTo}T00:00:00.000Z`),
-        },
-        workTimeType: {
-          isAbsence: true,
-        },
+    // 1. Godziny wg zleceń w trybie raportu zamknięcia (wspólna logika przez tx)
+    const orderRows = await getOrderReportRows(
+      {
+        dateFrom,
+        dateTo,
+        closureReport: true,
+        onlyWithHours: false,
       },
-      select: {
-        workTimeTypeCode: true,
-        hours: true,
+      tx,
+    );
+    const ordersHours =
+      Math.round(
+        orderRows.reduce((sum, row) => sum + (Number(row.actualHours) || 0), 0) * 100,
+      ) / 100;
+
+    // 2. Nieobecności dynamicznie wyznaczane ze słownika WorkTimeType (isAbsence: true) przez tx
+    const [absenceTypes, absenceReports] = await Promise.all([
+      tx.workTimeType.findMany({
+        where: { isAbsence: true },
+        select: { code: true, name: true },
+        orderBy: [{ createdAt: 'asc' }, { code: 'asc' }],
+      }),
+      tx.workTimeReport.findMany({
+        where: {
+          deletedAt: null,
+          date: {
+            gte: new Date(`${dateFrom}T00:00:00.000Z`),
+            lte: new Date(`${dateTo}T00:00:00.000Z`),
+          },
+          workTimeType: {
+            isAbsence: true,
+          },
+        },
+        select: {
+          workTimeTypeCode: true,
+          hours: true,
+        },
+      }),
+    ]);
+
+    const absenceHoursMap: Record<string, number> = {};
+    for (const report of absenceReports) {
+      const code = report.workTimeTypeCode;
+      absenceHoursMap[code] = (absenceHoursMap[code] || 0) + Number(report.hours);
+    }
+
+    const absences: AbsenceSummaryItem[] = [];
+    let totalAbsenceHours = 0;
+
+    for (const type of absenceTypes) {
+      const hours = absenceHoursMap[type.code] || 0;
+      if (hours > 0) {
+        const rounded = Math.round(hours * 100) / 100;
+        absences.push({
+          code: type.code,
+          name: type.name,
+          hours: rounded,
+        });
+        totalAbsenceHours += rounded;
+      }
+    }
+
+    // W przypadku wpisów z kodami isAbsence spoza aktywnego słownika
+    for (const [code, hours] of Object.entries(absenceHoursMap)) {
+      if (!absenceTypes.some((t) => t.code === code) && hours > 0) {
+        const rounded = Math.round(hours * 100) / 100;
+        absences.push({
+          code,
+          name: code,
+          hours: rounded,
+        });
+        totalAbsenceHours += rounded;
+      }
+    }
+
+    totalAbsenceHours = Math.round(totalAbsenceHours * 100) / 100;
+    const totalSettledHours = Math.round((ordersHours + totalAbsenceHours) * 100) / 100;
+
+    // 3. Suma godzin pracowników z miesięcznego raportu przez tx
+    const employeeRows = await getEmployeeReportRows(
+      {
+        dateFrom,
+        dateTo,
       },
-    }),
-  ]);
+      tx,
+    );
+    const totalEmployeeHours =
+      Math.round(
+        employeeRows.reduce((sum, row) => sum + (Number(row.suma) || 0), 0) * 100,
+      ) / 100;
 
-  const absenceHoursMap: Record<string, number> = {};
-  for (const report of absenceReports) {
-    const code = report.workTimeTypeCode;
-    absenceHoursMap[code] = (absenceHoursMap[code] || 0) + Number(report.hours);
-  }
+    // 4. Różnica i status
+    const difference = Math.round((totalSettledHours - totalEmployeeHours) * 100) / 100;
+    const isMatched = Math.abs(difference) < 0.001;
 
-  const absences: AbsenceSummaryItem[] = [];
-  let totalAbsenceHours = 0;
+    // 5. Diagnostyka (tylko gdy NIEZGODNE) przez tx
+    let diagnostics: ReconciliationDiagnosticRecord[] | undefined;
+    if (!isMatched) {
+      diagnostics = await getReconciliationDiagnostics({ dateFrom, dateTo }, tx);
 
-  for (const type of absenceTypes) {
-    const hours = absenceHoursMap[type.code] || 0;
-    if (hours > 0) {
-      const rounded = Math.round(hours * 100) / 100;
-      absences.push({
-        code: type.code,
-        name: type.name,
-        hours: rounded,
-      });
-      totalAbsenceHours += rounded;
+      // Server-side Invariant Guard
+      const diagnosticsContributionTotal =
+        Math.round(diagnostics.reduce((sum, d) => sum + d.contribution, 0) * 100) / 100;
+      const expectedDifference = difference;
+
+      if (diagnosticsContributionTotal !== expectedDifference) {
+        logger.error(
+          {
+            dateFrom,
+            dateTo,
+            totalSettledHours,
+            totalEmployeeHours,
+            difference,
+            diagnosticsContributionTotal,
+            diagnosticsCount: diagnostics.length,
+          },
+          'Naruszenie niezmiennika spójności diagnostyki rozliczenia (reconciliation invariant violation)',
+        );
+        throw new ReconciliationConsistencyError(
+          'Błąd spójności danych raportu rozliczenia: suma wkładów diagnostyki nie odpowiada wyliczonej różnicy kontrolnej.',
+        );
+      }
     }
+
+    return {
+      ordersHours,
+      absences,
+      totalAbsenceHours,
+      totalSettledHours,
+      totalEmployeeHours,
+      difference,
+      status: isMatched ? 'MATCHED' : 'MISMATCHED',
+      statusLabel: isMatched ? 'Zgodne' : 'Niezgodne',
+      diagnostics,
+    } as ClosureControlSummaryWithDiagnostics;
+  };
+
+  if ('$transaction' in client && typeof client.$transaction === 'function') {
+    return (client as PrismaClient).$transaction(
+      async (tx) => runCalculation(tx),
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+        maxWait: 10_000,
+        timeout: 30_000,
+      },
+    );
   }
 
-  // W przypadku wpisów z kodami isAbsence spoza aktywnego słownika
-  for (const [code, hours] of Object.entries(absenceHoursMap)) {
-    if (!absenceTypes.some((t) => t.code === code) && hours > 0) {
-      const rounded = Math.round(hours * 100) / 100;
-      absences.push({
-        code,
-        name: code,
-        hours: rounded,
-      });
-      totalAbsenceHours += rounded;
-    }
-  }
-
-  totalAbsenceHours = Math.round(totalAbsenceHours * 100) / 100;
-  const totalSettledHours = Math.round((ordersHours + totalAbsenceHours) * 100) / 100;
-
-  // 3. Suma godzin pracowników z miesięcznego raportu
-  const employeeRows = await getEmployeeReportRows({
-    dateFrom,
-    dateTo,
-  });
-  const totalEmployeeHours = Math.round(
-    employeeRows.reduce((sum, row) => sum + (Number(row.suma) || 0), 0) * 100,
-  ) / 100;
-
-  // 4. Różnica i status
-  const difference = Math.round((totalSettledHours - totalEmployeeHours) * 100) / 100;
-  const isMatched = Math.abs(difference) < 0.001;
-
-  // 5. Diagnostyka (tylko gdy NIEZGODNE)
-  let diagnostics: ReconciliationDiagnosticRecord[] | undefined;
-  if (!isMatched) {
-    diagnostics = await getReconciliationDiagnostics({ dateFrom, dateTo });
-  }
-
-  return {
-    ordersHours,
-    absences,
-    totalAbsenceHours,
-    totalSettledHours,
-    totalEmployeeHours,
-    difference,
-    status: isMatched ? 'MATCHED' : 'MISMATCHED',
-    statusLabel: isMatched ? 'Zgodne' : 'Niezgodne',
-    diagnostics,
-  } as ClosureControlSummaryWithDiagnostics;
+  return runCalculation(client);
 }
 
 // 2. Report by Order
@@ -789,6 +857,13 @@ router.get('/closure-control-summary', async (req: AuthRequest, res: Response) =
     });
     return res.json(summary);
   } catch (error) {
+    if (error instanceof ReconciliationConsistencyError) {
+      logger.error(error, 'Błąd spójności danych raportu rozliczenia');
+      return res.status(500).json({
+        code: 'RECONCILIATION_CONSISTENCY_ERROR',
+        message: 'Błąd spójności danych raportu rozliczenia. Spróbuj ponownie wygenerować raport.',
+      });
+    }
     logger.error(error, 'Błąd podczas pobierania sum kontrolnych zamknięcia');
     return res.status(500).json({ message: 'Błąd podczas pobierania sum kontrolnych zamknięcia' });
   }
