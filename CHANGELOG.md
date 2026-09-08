@@ -3,6 +3,26 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.5.2] - 2026-09-04
+
+### Fixed
+
+- Wzmocniono obsługę zapisu NS oraz pokrycie regresyjne ścieżki aplikacyjnej (zapis NS w weekend z wymaganym zleceniem); historyczny incydent produkcyjny nadal wymaga weryfikacji na danych produkcyjnych w trybie tylko do odczytu.
+- Zapewniono spójność migawki transakcyjnej (`RepeatableRead`) dla wyliczania sum kontrolnych i diagnostyki rozliczenia oraz wprowadzono serwerowego strażnika niezmiennika spójności odpowiedzi.
+- Poprawiono obsługę błędów frontendu przy zapisie wpisów czasu – użytkownik otrzymuje czytelny komunikat w przypadku odrzucenia przez backend.
+
+### Added
+
+- Automatyczny domyślny typ czasu pracy w formularzu raportowania: dni robocze (poniedziałek–piątek) → G, sobota i niedziela → NS.
+- Wyświetlanie skrótu dnia tygodnia (pn, wt, śr, czw, pt, sob, nd) przy polu daty raportowania.
+- Diagnostyka niezgodności sum kontrolnych zamknięcia miesiąca: przy statusie NIEZGODNE pokazuje konkretne wpisy powodujące różnicę (pracownik, data, typ, godziny, zlecenie, przyczyna).
+- Rozszerzono eksport XLSX raportu zamknięcia o sekcję diagnostyki przy statusie NIEZGODNE.
+
+### Changed
+
+- Logika resetowania formularza nowego wpisu uwzględnia dzień tygodnia dla domyślnego typu czasu pracy.
+- Edycja istniejącego wpisu nie zmienia już automatycznie jego typu czasu pracy.
+
 ## [0.5.1] - 2026-09-03
 
 ### Added
