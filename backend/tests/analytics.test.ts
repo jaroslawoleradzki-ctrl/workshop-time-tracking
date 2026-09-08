@@ -1124,7 +1124,7 @@ describe('Analytics reports', () => {
       });
     });
 
-    it('returns MISMATCHED status when settled hours differ from employee total hours', async () => {
+    it('returns MISMATCHED status and negative diagnostics for Direction A (employee > settled, difference < 0)', async () => {
       // Orders: 100h
       vi.spyOn(prisma.order, 'findMany').mockResolvedValue([
         {
@@ -1208,6 +1208,203 @@ describe('Analytics reports', () => {
       expect(response.body.difference).toBe(-8);
       expect(response.body.status).toBe('MISMATCHED');
       expect(response.body.statusLabel).toBe('Niezgodne');
+
+      // Assert diagnostics array is returned and explains difference
+      expect(response.body.diagnostics).toBeDefined();
+      expect(response.body.diagnostics.length).toBe(1);
+      expect(response.body.diagnostics[0]).toMatchObject({
+        employeeName: 'Kowalski Jan',
+        date: '2026-08-15',
+        workTimeTypeCode: 'SZK',
+        hours: 8,
+        orderNumber: null,
+        reason: 'Brak zlecenia',
+        contribution: -8,
+      });
+
+      const sumContributions = response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0);
+      expect(sumContributions).toBe(response.body.difference);
+    });
+
+    it('returns MISMATCHED status and positive diagnostics for Direction B (settled > employee, difference > 0)', async () => {
+      // Order in closure: 100h
+      vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+        if (args?.where?.OR || !args?.where?.orderNumber) {
+          return [
+            {
+              id: 'ord-1',
+              orderNumber: 'ZL-100',
+              productName: 'Produkt',
+              productCode: 'P-1',
+              accountingAccount: 'K-1',
+              plannedHours: 100,
+              quantity: 1,
+              quantityUnit: 'szt.',
+              status: 'OPEN',
+              completionDate: null,
+              deletedAt: null,
+              reports: [{ hours: 100, date: new Date('2026-08-10T00:00:00.000Z'), deletedAt: null }],
+            },
+          ] as any;
+        }
+        return [] as any;
+      });
+
+      // WorkTimeTypes: UW (absence)
+      vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
+        { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+      ] as any);
+
+      // Reports: 16h UW tied to ord-1 (counted in orders AND in absence -> double counted)
+      vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
+        if (args?.where?.workTimeType?.isAbsence) {
+          return [{ workTimeTypeCode: 'UW', hours: 16 }] as any;
+        }
+
+        // Diagnostic query
+        if (args?.include?.employee && args?.include?.order && args?.include?.workTimeType) {
+          return [
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+              hours: 16,
+              workTimeTypeCode: 'UW',
+              workTimeType: { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+              orderId: 'ord-1',
+              order: { orderNumber: 'ZL-100' },
+              date: new Date('2026-08-18T00:00:00.000Z'),
+            },
+          ] as any;
+        }
+
+        return [
+          {
+            employeeId: 'emp-1',
+            employee: { fullName: 'Jan Kowalski' },
+            hours: 100,
+            workTimeTypeCode: 'G',
+            workTimeType: { name: 'Standardowe' },
+          },
+        ] as any;
+      });
+
+      const response = await authenticatedGet('/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31').expect(200);
+
+      // Settled: 100 orders + 16 UW = 116
+      // Employee total: 100
+      // Difference: 116 - 100 = +16
+      expect(response.body.ordersHours).toBe(100);
+      expect(response.body.totalAbsenceHours).toBe(16);
+      expect(response.body.totalSettledHours).toBe(116);
+      expect(response.body.totalEmployeeHours).toBe(100);
+      expect(response.body.difference).toBe(16);
+      expect(response.body.status).toBe('MISMATCHED');
+      expect(response.body.statusLabel).toBe('Niezgodne');
+
+      expect(response.body.diagnostics).toBeDefined();
+      expect(response.body.diagnostics.length).toBe(1);
+      expect(response.body.diagnostics[0]).toMatchObject({
+        employeeName: 'Kowalski Jan',
+        date: '2026-08-18',
+        workTimeTypeCode: 'UW',
+        hours: 16,
+        orderNumber: 'ZL-100',
+        reason: 'Nieobecność z zleceniem w rozliczeniu (podwójne naliczenie)',
+        contribution: 16,
+      });
+
+      const sumContributions = response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0);
+      expect(sumContributions).toBe(response.body.difference);
+    });
+
+    it('returns MISMATCHED status with both positive and negative contributions for Mixed Direction', async () => {
+      vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+        if (args?.where?.OR || !args?.where?.orderNumber) {
+          return [
+            {
+              id: 'ord-1',
+              orderNumber: 'ZL-100',
+              status: 'OPEN',
+              completionDate: null,
+              deletedAt: null,
+              reports: [{ hours: 100, date: new Date('2026-08-10T00:00:00.000Z'), deletedAt: null }],
+            },
+          ] as any;
+        }
+        return [] as any;
+      });
+
+      vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
+        { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+        { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+      ] as any);
+
+      vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
+        if (args?.where?.workTimeType?.isAbsence) {
+          return [{ workTimeTypeCode: 'UW', hours: 16 }] as any;
+        }
+
+        if (args?.include?.employee && args?.include?.order && args?.include?.workTimeType) {
+          return [
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+              hours: 16,
+              workTimeTypeCode: 'UW',
+              workTimeType: { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+              orderId: 'ord-1',
+              order: { orderNumber: 'ZL-100' },
+              date: new Date('2026-08-18T00:00:00.000Z'),
+            },
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+              hours: 8,
+              workTimeTypeCode: 'SZK',
+              workTimeType: { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+              orderId: null,
+              order: null,
+              date: new Date('2026-08-20T00:00:00.000Z'),
+            },
+          ] as any;
+        }
+
+        return [
+          {
+            employeeId: 'emp-1',
+            employee: { fullName: 'Jan Kowalski' },
+            hours: 100,
+            workTimeTypeCode: 'G',
+            workTimeType: { name: 'Standardowe' },
+          },
+          {
+            employeeId: 'emp-1',
+            employee: { fullName: 'Jan Kowalski' },
+            hours: 8,
+            workTimeTypeCode: 'SZK',
+            workTimeType: { name: 'Szkolenie' },
+          },
+        ] as any;
+      });
+
+      const response = await authenticatedGet('/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31').expect(200);
+
+      // Settled: 100 orders + 16 UW = 116
+      // Employee total: 100 G + 8 SZK = 108
+      // Difference: 116 - 108 = +8
+      expect(response.body.ordersHours).toBe(100);
+      expect(response.body.totalAbsenceHours).toBe(16);
+      expect(response.body.totalSettledHours).toBe(116);
+      expect(response.body.totalEmployeeHours).toBe(108);
+      expect(response.body.difference).toBe(8);
+      expect(response.body.status).toBe('MISMATCHED');
+
+      expect(response.body.diagnostics).toHaveLength(2);
+      expect(response.body.diagnostics[0].contribution).toBe(16);
+      expect(response.body.diagnostics[1].contribution).toBe(-8);
+
+      const sumContributions = response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0);
+      expect(sumContributions).toBe(response.body.difference);
     });
 
     it('dynamically includes custom absence type with isAbsence=true and excludes isAbsence=false', async () => {
@@ -1246,6 +1443,7 @@ describe('Analytics reports', () => {
       ]);
       expect(response.body.absences.some((a: any) => a.code === 'PRZESTOJ')).toBe(false);
       expect(response.body.status).toBe('MATCHED');
+      expect(response.body.diagnostics).toBeUndefined();
     });
 
     it('rejects invalid date parameters with HTTP 400', async () => {
@@ -1262,7 +1460,7 @@ describe('Analytics reports', () => {
         .expect(({ body }) => expect(body.code).toBe('INVALID_CLOSURE_REPORT_PARAMS'));
     });
 
-    it('includes control summary section in XLSX export when in closureReport mode', async () => {
+    it('includes control summary section in XLSX export when in closureReport mode and omits diagnostics for MATCHED', async () => {
       vi.spyOn(prisma.order, 'findMany').mockResolvedValue([
         {
           id: 'ord-1',
@@ -1338,6 +1536,130 @@ describe('Analytics reports', () => {
 
       const hasStatusRow = allValues.some((row: any) => Array.isArray(row) && row.includes('Status') && row.includes('Zgodne'));
       expect(hasStatusRow).toBe(true);
+
+      // MATCHED should NOT include diagnostics section
+      const hasDiagnosticsSection = allValues.some((row: any) => Array.isArray(row) && row.includes('Diagnostyka niezgodności'));
+      expect(hasDiagnosticsSection).toBe(false);
+    });
+
+    it('includes full 7-column diagnostics section with signed numbers in XLSX export for MISMATCHED status', async () => {
+      vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+        if (args?.where?.OR || !args?.where?.orderNumber) {
+          return [
+            {
+              id: 'ord-1',
+              orderNumber: 'ZL-XLSX',
+              productName: 'Forma',
+              productCode: 'P-XLSX',
+              accountingAccount: 'K-900',
+              plannedHours: 50,
+              quantity: 2,
+              quantityUnit: 'szt.',
+              status: 'CLOSED',
+              completionDate: new Date('2026-08-20T00:00:00.000Z'),
+              deletedAt: null,
+              reports: [{ hours: 40, date: new Date('2026-08-15T00:00:00.000Z'), deletedAt: null }],
+            },
+          ] as any;
+        }
+        return [] as any;
+      });
+
+      vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
+        { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+        { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+      ] as any);
+
+      vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
+        if (args?.where?.workTimeType?.isAbsence) {
+          return [{ workTimeTypeCode: 'UW', hours: 16 }] as any;
+        }
+
+        if (args?.include?.employee && args?.include?.order && args?.include?.workTimeType) {
+          return [
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+              hours: 8,
+              workTimeTypeCode: 'SZK',
+              workTimeType: { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+              orderId: null,
+              order: null,
+              date: new Date('2026-08-15T00:00:00.000Z'),
+            },
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+              hours: 16,
+              workTimeTypeCode: 'UW',
+              workTimeType: { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+              orderId: 'ord-1',
+              order: { orderNumber: 'ZL-XLSX' },
+              date: new Date('2026-08-18T00:00:00.000Z'),
+            },
+          ] as any;
+        }
+
+        return [
+          {
+            employeeId: 'emp-1',
+            employee: { fullName: 'Jan Kowalski' },
+            hours: 40,
+            workTimeTypeCode: 'G',
+            workTimeType: { name: 'Standardowe' },
+          },
+          {
+            employeeId: 'emp-1',
+            employee: { fullName: 'Jan Kowalski' },
+            hours: 8,
+            workTimeTypeCode: 'SZK',
+            workTimeType: { name: 'Szkolenie' },
+          },
+        ] as any;
+      });
+
+      const xlsxResponse = await authenticatedGet('/api/analytics/export/by-order?closureReport=true&dateFrom=2026-08-01&dateTo=2026-08-31')
+        .buffer(true)
+        .parse(binaryParser)
+        .expect(200)
+        .expect('Content-Type', /spreadsheetml/);
+
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(xlsxResponse.body);
+      const worksheet = workbook.getWorksheet('Zlecenia')!;
+
+      const allValues = worksheet.getSheetValues();
+
+      // 1. Verify header exists
+      const hasDiagnosticsHeader = allValues.some((row: any) => Array.isArray(row) && row.includes('Diagnostyka niezgodności'));
+      expect(hasDiagnosticsHeader).toBe(true);
+
+      // 2. Verify column headers
+      const expectedColHeaders = ['Pracownik', 'Data', 'Typ', 'Godziny', 'Zlecenie', 'Przyczyna', 'Wkład w różnicę'];
+      const hasColHeaders = allValues.some((row: any) =>
+        Array.isArray(row) && expectedColHeaders.every((h) => row.includes(h)),
+      );
+      expect(hasColHeaders).toBe(true);
+
+      // 3. Find diagnostic rows
+      const szkRow = allValues.find((row: any) => Array.isArray(row) && row.includes('SZK (Szkolenie)')) as any[];
+      expect(szkRow).toBeDefined();
+      expect(szkRow).toContain('Kowalski Jan');
+      expect(szkRow).toContain('2026-08-15');
+      expect(szkRow).toContain(8); // hours
+      expect(szkRow).toContain('—'); // no order
+      expect(szkRow).toContain('Brak zlecenia');
+      expect(szkRow).toContain(-8); // negative contribution
+
+      const uwRow = allValues.find((row: any) => Array.isArray(row) && row.includes('Nieobecność z zleceniem w rozliczeniu (podwójne naliczenie)')) as any[];
+      expect(uwRow).toBeDefined();
+      expect(uwRow).toContain('Kowalski Jan');
+      expect(uwRow).toContain('2026-08-18');
+      expect(uwRow).toContain('UW (Urlop wypoczynkowy)');
+      expect(uwRow).toContain(16); // hours
+      expect(uwRow).toContain('ZL-XLSX'); // order
+      expect(uwRow).toContain('Nieobecność z zleceniem w rozliczeniu (podwójne naliczenie)');
+      expect(uwRow).toContain(16); // positive contribution
     });
   });
 });

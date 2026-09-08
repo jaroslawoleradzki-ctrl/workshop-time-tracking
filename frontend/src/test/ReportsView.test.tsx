@@ -646,7 +646,7 @@ describe('ReportsView — miesięczny raport pracowników', () => {
       expect(within(summaryCard).getByTestId('control-difference')).toHaveTextContent('0.00 h');
     });
 
-    it('renders MISMATCHED status and difference when settled hours do not equal employee hours', async () => {
+    it('renders MISMATCHED status, difference, and full diagnostics table with signed contributions', async () => {
       vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
         if (url === '/api/employees') return response(employees);
@@ -659,13 +659,39 @@ describe('ReportsView — miesięczny raport pracowników', () => {
         if (url.startsWith('/api/analytics/closure-control-summary')) {
           return response({
             ordersHours: 100,
-            absences: [{ code: 'L4', name: 'Zwolnienie', hours: 16 }],
+            absences: [{ code: 'UW', name: 'Urlop wypoczynkowy', hours: 16 }],
             totalAbsenceHours: 16,
             totalSettledHours: 116,
-            totalEmployeeHours: 124,
-            difference: -8,
+            totalEmployeeHours: 108,
+            difference: 8,
             status: 'MISMATCHED',
             statusLabel: 'Niezgodne',
+            diagnostics: [
+              {
+                employeeId: 'emp-1',
+                employeeName: 'Kowalski Jan',
+                date: '2026-08-18',
+                workTimeTypeCode: 'UW',
+                workTimeTypeName: 'Urlop wypoczynkowy',
+                hours: 16,
+                orderId: 'order-1',
+                orderNumber: 'ZL-001',
+                reason: 'Nieobecność z zleceniem w rozliczeniu (podwójne naliczenie)',
+                contribution: 16,
+              },
+              {
+                employeeId: 'emp-1',
+                employeeName: 'Kowalski Jan',
+                date: '2026-08-15',
+                workTimeTypeCode: 'SZK',
+                workTimeTypeName: 'Szkolenie',
+                hours: 8,
+                orderId: null,
+                orderNumber: null,
+                reason: 'Brak zlecenia',
+                contribution: -8,
+              },
+            ],
           });
         }
         return response([]);
@@ -676,9 +702,30 @@ describe('ReportsView — miesięczny raport pracowników', () => {
       fireEvent.change(screen.getByLabelText('Data do'), { target: { value: '2026-08-31' } });
       fireEvent.click(screen.getByRole('button', { name: 'Raport zamknięcia' }));
 
-      await screen.findByTestId('closure-control-summary');
-      expect(screen.getByTestId('control-summary-status-badge')).toHaveTextContent('Status: Niezgodne');
-      expect(screen.getByTestId('control-difference')).toHaveTextContent('-8.00 h');
+      const summaryCard = await screen.findByTestId('closure-control-summary');
+      expect(within(summaryCard).getByTestId('control-summary-status-badge')).toHaveTextContent('Status: Niezgodne');
+      expect(within(summaryCard).getByTestId('control-difference')).toHaveTextContent('+8.00 h');
+
+      // Diagnostics header
+      expect(within(summaryCard).getByText(/Diagnostyka niezgodności \(2 rekordów\)/)).toBeInTheDocument();
+
+      // Diagnostic table headers
+      expect(within(summaryCard).getByRole('columnheader', { name: 'Pracownik' })).toBeInTheDocument();
+      expect(within(summaryCard).getByRole('columnheader', { name: 'Data' })).toBeInTheDocument();
+      expect(within(summaryCard).getByRole('columnheader', { name: 'Typ' })).toBeInTheDocument();
+      expect(within(summaryCard).getByRole('columnheader', { name: 'Godziny' })).toBeInTheDocument();
+      expect(within(summaryCard).getByRole('columnheader', { name: 'Zlecenie' })).toBeInTheDocument();
+      expect(within(summaryCard).getByRole('columnheader', { name: 'Przyczyna' })).toBeInTheDocument();
+      expect(within(summaryCard).getByRole('columnheader', { name: 'Wkład' })).toBeInTheDocument();
+
+      // Diagnostic rows
+      expect(within(summaryCard).getByText('Nieobecność z zleceniem w rozliczeniu (podwójne naliczenie)')).toBeInTheDocument();
+      expect(within(summaryCard).getByText('+16.00 h')).toBeInTheDocument();
+      expect(within(summaryCard).getByText('Brak zlecenia')).toBeInTheDocument();
+      expect(within(summaryCard).getByText('-8.00 h')).toBeInTheDocument();
+
+      // Diagnostics sum row
+      expect(within(summaryCard).getByText('Suma wkładów:')).toBeInTheDocument();
     });
   });
 

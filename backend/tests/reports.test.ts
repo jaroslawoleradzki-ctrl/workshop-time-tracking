@@ -25,6 +25,11 @@ const authenticatedPost = (path: string, body: any) =>
     .set('Authorization', `Bearer ${token}`)
     .send(body);
 
+const authenticatedGet = (path: string) =>
+  request(app)
+    .get(path)
+    .set('Authorization', `Bearer ${token}`);
+
 describe('Weekend report entry validations', () => {
   beforeEach(() => {
     vi.spyOn(prisma.user, 'findUnique').mockResolvedValue({
@@ -186,7 +191,7 @@ describe('Weekend report entry validations', () => {
     expect(res.body.code).toBe('NON_WORKING_DAY_ENTRY_NOT_ALLOWED');
   });
 
-  it('allows NS entry on Sunday with valid order - reproduces production bug scenario', async () => {
+  it('allows NS entry on Sunday with valid order and confirms persistence via GET by-employee-date', async () => {
     vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue({
       code: 'NS',
       name: 'Nadgodziny sobota/niedziela',
@@ -194,13 +199,19 @@ describe('Weekend report entry validations', () => {
       isAbsence: false,
     } as any);
 
-    vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([]);
+    let savedDbRecord: any = null;
 
-    let capturedReport: any = null;
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
+      // If querying by employeeId and date after save, return saved record
+      if (args?.where?.employeeId === EMPLOYEE_ID && savedDbRecord) {
+        return [savedDbRecord] as any;
+      }
+      return [];
+    });
+
     vi.spyOn(prisma.workTimeReport, 'create').mockImplementation(async (args: any) => {
-      capturedReport = args.data;
-      return {
-        id: 'r1',
+      savedDbRecord = {
+        id: 'r-ns-sunday-1',
         date: new Date('2026-09-06T00:00:00.000Z'),
         employeeId: EMPLOYEE_ID,
         orderId: ORDER_ID,
@@ -208,7 +219,20 @@ describe('Weekend report entry validations', () => {
         workTimeTypeCode: 'NS',
         missingCard: false,
         createdByUserId: USER_ID,
-      } as any;
+        createdAt: new Date('2026-09-06T10:00:00.000Z'),
+        order: {
+          orderNumber: 'ZL-100',
+          productCode: 'P-1',
+          productName: 'Produkt',
+          accountingAccount: 'K-1',
+        },
+        workTimeType: {
+          code: 'NS',
+          name: 'Nadgodziny sobota/niedziela',
+          requiresOrder: true,
+        },
+      };
+      return savedDbRecord;
     });
 
     vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => {
@@ -216,9 +240,8 @@ describe('Weekend report entry validations', () => {
         $executeRaw: vi.fn(),
         workTimeReport: {
           create: vi.fn().mockImplementation(async (args: any) => {
-            capturedReport = args.data;
-            return {
-              id: 'r1',
+            savedDbRecord = {
+              id: 'r-ns-sunday-1',
               date: new Date('2026-09-06T00:00:00.000Z'),
               employeeId: EMPLOYEE_ID,
               orderId: ORDER_ID,
@@ -226,15 +249,28 @@ describe('Weekend report entry validations', () => {
               workTimeTypeCode: 'NS',
               missingCard: false,
               createdByUserId: USER_ID,
-            } as any;
+              createdAt: new Date('2026-09-06T10:00:00.000Z'),
+              order: {
+                orderNumber: 'ZL-100',
+                productCode: 'P-1',
+                productName: 'Produkt',
+                accountingAccount: 'K-1',
+              },
+              workTimeType: {
+                code: 'NS',
+                name: 'Nadgodziny sobota/niedziela',
+                requiresOrder: true,
+              },
+            };
+            return savedDbRecord;
           }),
         },
       };
       return callback(tx);
     });
 
-    // 2026-09-06 is Sunday
-    const res = await authenticatedPost('/api/reports', {
+    // 1. Perform actual POST request to create NS on Sunday (2026-09-06)
+    const postRes = await authenticatedPost('/api/reports', {
       date: '2026-09-06',
       employeeId: EMPLOYEE_ID,
       orderId: ORDER_ID,
@@ -242,11 +278,71 @@ describe('Weekend report entry validations', () => {
       workTimeTypeCode: 'NS',
     }).expect(201);
 
-    expect(res.body.report).toBeDefined();
-    expect(res.body.report.hours).toBe(8);
-    expect(res.body.report.workTimeTypeCode).toBe('NS');
-    expect(capturedReport).toBeDefined();
-    expect(capturedReport.workTimeTypeCode).toBe('NS');
-    expect(capturedReport.orderId).toBe(ORDER_ID);
+    expect(postRes.body.report).toBeDefined();
+    expect(postRes.body.report.hours).toBe(8);
+    expect(postRes.body.report.workTimeTypeCode).toBe('NS');
+    expect(postRes.body.report.orderId).toBe(ORDER_ID);
+
+    // 2. Fetch reports via GET /api/reports/by-employee-date and verify persisted state
+    const getRes = await authenticatedGet(`/api/reports/by-employee-date?employeeId=${EMPLOYEE_ID}&date=2026-09-06`).expect(200);
+    expect(Array.isArray(getRes.body)).toBe(true);
+    expect(getRes.body.length).toBe(1);
+    expect(getRes.body[0]).toMatchObject({
+      id: 'r-ns-sunday-1',
+      date: '2026-09-06',
+      employeeId: EMPLOYEE_ID,
+      orderId: ORDER_ID,
+      hours: 8,
+      workTimeTypeCode: 'NS',
+      missingCard: false,
+      order: {
+        orderNumber: 'ZL-100',
+      },
+      workTimeType: {
+        code: 'NS',
+        name: 'Nadgodziny sobota/niedziela',
+      },
+    });
+  });
+
+  it('rejects NS entry on Sunday when orderId is missing with 400 NON_WORKING_DAY_ENTRY_NOT_ALLOWED', async () => {
+    vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue({
+      code: 'NS',
+      name: 'Nadgodziny sobota/niedziela',
+      requiresOrder: true,
+      isAbsence: false,
+    } as any);
+
+    // 2026-09-06 is Sunday, orderId is omitted
+    const res = await authenticatedPost('/api/reports', {
+      date: '2026-09-06',
+      employeeId: EMPLOYEE_ID,
+      hours: 8,
+      workTimeTypeCode: 'NS',
+    }).expect(400);
+
+    expect(res.body.code).toBe('NON_WORKING_DAY_ENTRY_NOT_ALLOWED');
+    expect(res.body.message).toMatch(/W dni wolne \(sobota, niedziela\) dozwolona jest wyłącznie rejestracja pracy nad zleceniem/i);
+  });
+
+  it('rejects G entry on Sunday even when orderId is provided with 400 NON_WORKING_DAY_ENTRY_NOT_ALLOWED', async () => {
+    vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue({
+      code: 'G',
+      name: 'Godziny standardowe',
+      requiresOrder: false,
+      isAbsence: false,
+    } as any);
+
+    // 2026-09-06 is Sunday, G is standard weekday work type
+    const res = await authenticatedPost('/api/reports', {
+      date: '2026-09-06',
+      employeeId: EMPLOYEE_ID,
+      orderId: ORDER_ID,
+      hours: 8,
+      workTimeTypeCode: 'G',
+    }).expect(400);
+
+    expect(res.body.code).toBe('NON_WORKING_DAY_ENTRY_NOT_ALLOWED');
+    expect(res.body.message).toMatch(/W dni wolne \(sobota, niedziela\) dozwolona jest wyłącznie rejestracja pracy nad zleceniem/i);
   });
 });

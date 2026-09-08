@@ -486,7 +486,7 @@ describe('ReportingPanel — nawigacja dat strzałkami ◀ i ▶', () => {
   });
 });
 
-describe('ReportingPanel — default work type logic', () => {
+describe('ReportingPanel — default work type and NS/G save & load interaction', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
   let workTypesDeferred: ReturnType<typeof deferred>;
 
@@ -560,8 +560,7 @@ describe('ReportingPanel — default work type logic', () => {
     vi.unstubAllGlobals();
   });
 
-  it('default work type is applied after dictionaries load', async () => {
-    // Render component with today's date
+  it('applies default work type G on weekday and NS on weekend once dictionaries load', async () => {
     render(
       <ReportingPanel
         token="test-token"
@@ -569,64 +568,69 @@ describe('ReportingPanel — default work type logic', () => {
       />,
     );
 
-await screen.findByDisplayValue('Jan Kowalski');
-    await screen.findByPlaceholderText('np. 8.00');
+    await screen.findByDisplayValue('Jan Kowalski');
+    const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
 
-    // Resolve work types
+    // Set date to a known Monday (2026-07-13) before dictionaries resolve
+    fireEvent.change(dateInput, { target: { value: '2026-07-13' } });
+
+    // Resolve work types dictionary
     workTypesDeferred.resolve(response(baseWorkTypes));
 
-    // Wait for work type select to be populated
+    // Verify default work type on Monday is 'G'
     const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
     await waitFor(() => {
-      expect(workTypeSelect.options.length).toBeGreaterThan(0);
+      expect(workTypeSelect.value).toBe('G');
+    });
+
+    // Change date to a known Sunday (2026-07-19)
+    fireEvent.change(dateInput, { target: { value: '2026-07-19' } });
+    await waitFor(() => {
+      expect(workTypeSelect.value).toBe('NS');
+    });
+
+    // Change date back to Tuesday (2026-07-14)
+    fireEvent.change(dateInput, { target: { value: '2026-07-14' } });
+    await waitFor(() => {
+      expect(workTypeSelect.value).toBe('G');
     });
   });
 
-  it('manual work type change persists after form reset on save', async () => {
-    let savedRequestBody: any = null;
-    fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+  it('loads and preserves work type G and NS when editing existing entries', async () => {
+    const existingReports = [
+      {
+        id: 'rep-g-1',
+        date: '2026-07-13',
+        employeeId: EMPLOYEE_ID,
+        orderId: null,
+        hours: 8,
+        workTimeTypeCode: 'G',
+        missingCard: false,
+        workTimeType: { code: 'G', name: 'Godziny standardowe', requiresOrder: false },
+      },
+      {
+        id: 'rep-ns-2',
+        date: '2026-07-19',
+        employeeId: EMPLOYEE_ID,
+        orderId: 'order-1',
+        hours: 8,
+        workTimeTypeCode: 'NS',
+        missingCard: false,
+        order: { orderNumber: 'ZL-001', productCode: 'P1', productName: 'Produkt 1', accountingAccount: '123' },
+        workTimeType: { code: 'NS', name: 'Nadgodziny sobota/niedziela', requiresOrder: true },
+      },
+    ];
+
+    fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-
-      if (url === '/api/employees?activeOnly=true') {
-        return response([baseEmployee]);
-      }
-      if (url === '/api/orders/active') {
-        return response(baseOrders);
-      }
-      if (url === '/api/work-time-types') {
-        return response(baseWorkTypes);
-      }
+      if (url === '/api/employees?activeOnly=true') return response([baseEmployee]);
+      if (url === '/api/orders/active') return response(baseOrders);
+      if (url === '/api/work-time-types') return response(baseWorkTypes);
       if (url.startsWith('/api/reports/by-employee-date')) {
-        return response([]);
+        return response(existingReports);
       }
-      if (url === '/api/reports/check-warnings') {
-        return response({
-          warnStandard: false,
-          warnTotal12: false,
-          warnTotal24: false,
-          totalStandard: 0,
-          totalHours: 0,
-        });
-      }
-      if (url === '/api/reports') {
-        savedRequestBody = JSON.parse(init?.body as string);
-        return response({
-          report: {
-            id: 'new-report',
-            date: '2026-07-20',
-            employeeId: EMPLOYEE_ID,
-            orderId: 'order-1',
-            hours: 8,
-            workTimeTypeCode: 'NS',
-            missingCard: false,
-          },
-          warnings: {},
-        }, 201);
-      }
-
-      throw new Error(`Nieobsłużone żądanie testowe: ${url}`);
+      throw new Error(`Unhandled: ${url}`);
     });
-
     vi.stubGlobal('fetch', fetchMock);
 
     render(
@@ -637,25 +641,229 @@ await screen.findByDisplayValue('Jan Kowalski');
     );
 
     await screen.findByDisplayValue('Jan Kowalski');
-    await screen.findByPlaceholderText('np. 8.00');
+    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
 
-    // Manually change to NS using the select element
-    const workTypeSelect = screen.getByRole('combobox');
+    // Find edit buttons in table
+    const editButtons = await screen.findAllByRole('button', { name: 'Edytuj' });
+    expect(editButtons).toHaveLength(2);
+
+    // Edit the first entry (G)
+    fireEvent.click(editButtons[0]);
     await waitFor(() => {
-      fireEvent.change(workTypeSelect, { target: { value: 'NS' } });
+      expect(workTypeSelect.value).toBe('G');
     });
-    expect(workTypeSelect).toHaveValue('NS');
 
-    // Submit without order (will trigger frontend validation)
+    // Cancel editing
+    fireEvent.click(screen.getByRole('button', { name: 'Anuluj' }));
+
+    // Edit the second entry (NS)
+    fireEvent.click(editButtons[1]);
+    await waitFor(() => {
+      expect(workTypeSelect.value).toBe('NS');
+    });
+  });
+
+  it('executes real NS save path on Sunday with valid order, asserts POST payload and updates list', async () => {
+    let capturedRequestBody: any = null;
+    let savedReports: any[] = [];
+
+    fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url === '/api/employees?activeOnly=true') return response([baseEmployee]);
+      if (url === '/api/orders/active') return response(baseOrders);
+      if (url === '/api/work-time-types') return response(baseWorkTypes);
+      if (url.startsWith('/api/reports/by-employee-date')) {
+        return response(savedReports);
+      }
+      if (url === '/api/reports/check-warnings') {
+        return response({
+          warnStandard: false,
+          warnTotal12: false,
+          warnTotal24: false,
+          totalStandard: 0,
+          totalHours: 0,
+        });
+      }
+      if (url === '/api/reports' && init?.method === 'POST') {
+        capturedRequestBody = JSON.parse(init?.body as string);
+        const newReport = {
+          id: 'report-ns-sunday',
+          date: capturedRequestBody.date,
+          employeeId: capturedRequestBody.employeeId,
+          orderId: capturedRequestBody.orderId,
+          hours: capturedRequestBody.hours,
+          workTimeTypeCode: capturedRequestBody.workTimeTypeCode,
+          missingCard: capturedRequestBody.missingCard,
+          order: {
+            orderNumber: 'ZL-001',
+            productCode: 'P1',
+            productName: 'Produkt 1',
+            accountingAccount: '123',
+          },
+          workTimeType: {
+            code: 'NS',
+            name: 'Nadgodziny sobota/niedziela',
+            requiresOrder: true,
+          },
+        };
+        savedReports = [newReport];
+        return response({ report: newReport, warnings: {} }, 201);
+      }
+
+      throw new Error(`Unhandled: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <ReportingPanel
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    await screen.findByDisplayValue('Jan Kowalski');
+
+    // 1. Set Sunday date: 2026-09-06
+    const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
+    fireEvent.change(dateInput, { target: { value: '2026-09-06' } });
+
+    // Verify workTypeSelect defaulted to NS
+    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    await waitFor(() => {
+      expect(workTypeSelect.value).toBe('NS');
+    });
+
+    // 2. Select order from autocomplete
+    const orderInput = screen.getByPlaceholderText('Wpisz numer zlecenia lub produktu...');
+    fireEvent.focus(orderInput);
+    fireEvent.change(orderInput, { target: { value: 'ZL-001' } });
+
+    const orderOption = await screen.findByText('Zlecenie: ZL-001');
+    fireEvent.click(orderOption);
+
+    // 3. Enter hours
+    const hoursInput = screen.getByPlaceholderText('np. 8.00');
+    fireEvent.change(hoursInput, { target: { value: '8.00' } });
+
+    // 4. Click save
     const saveButton = screen.getByRole('button', { name: /Zapisz wpis/ });
     fireEvent.click(saveButton);
 
-    // Should show validation error (NS requires order)
+    // 5. Assert POST payload
+    await waitFor(() => {
+      expect(capturedRequestBody).not.toBeNull();
+      expect(capturedRequestBody).toEqual({
+        date: '2026-09-06',
+        employeeId: EMPLOYEE_ID,
+        orderId: 'order-1',
+        hours: 8,
+        workTimeTypeCode: 'NS',
+        missingCard: false,
+      });
+    });
+
+    // 6. Assert saved entry appears in the table
+    await screen.findByText('ZL-001');
+    expect(screen.getByText('8.0h')).toBeInTheDocument();
+    expect(screen.getByText('Wpis został dodany.')).toBeInTheDocument();
+  });
+
+  it('renders visible backend error alert when backend rejects save', async () => {
+    fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/employees?activeOnly=true') return response([baseEmployee]);
+      if (url === '/api/orders/active') return response(baseOrders);
+      if (url === '/api/work-time-types') return response(baseWorkTypes);
+      if (url.startsWith('/api/reports/by-employee-date')) return response([]);
+      if (url === '/api/reports/check-warnings') {
+        return response({
+          warnStandard: false,
+          warnTotal12: false,
+          warnTotal24: false,
+          totalStandard: 0,
+          totalHours: 0,
+        });
+      }
+      if (url === '/api/reports' && init?.method === 'POST') {
+        return response({
+          code: 'NON_WORKING_DAY_ENTRY_NOT_ALLOWED',
+          message: 'W dni wolne (sobota, niedziela) dozwolona jest wyłącznie rejestracja pracy nad zleceniem.',
+        }, 400);
+      }
+      throw new Error(`Unhandled: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <ReportingPanel
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    await screen.findByDisplayValue('Jan Kowalski');
+
+    const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
+    fireEvent.change(dateInput, { target: { value: '2026-09-06' } });
+
+    // Select order
+    const orderInput = screen.getByPlaceholderText('Wpisz numer zlecenia lub produktu...');
+    fireEvent.focus(orderInput);
+    fireEvent.change(orderInput, { target: { value: 'ZL-001' } });
+    const orderOption = await screen.findByText('Zlecenie: ZL-001');
+    fireEvent.click(orderOption);
+
+    // Enter hours
+    const hoursInput = screen.getByPlaceholderText('np. 8.00');
+    fireEvent.change(hoursInput, { target: { value: '8.00' } });
+
+    // Save
+    const saveButton = screen.getByRole('button', { name: /Zapisz wpis/ });
+    fireEvent.click(saveButton);
+
+    // Assert visible error alert with message from backend
+    await waitFor(() => {
+      expect(screen.getByText('W dni wolne (sobota, niedziela) dozwolona jest wyłącznie rejestracja pracy nad zleceniem.')).toBeInTheDocument();
+    });
+  });
+
+  it('displays client-side validation error when NS is submitted without order', async () => {
+    fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/employees?activeOnly=true') return response([baseEmployee]);
+      if (url === '/api/orders/active') return response(baseOrders);
+      if (url === '/api/work-time-types') return response(baseWorkTypes);
+      if (url.startsWith('/api/reports/by-employee-date')) return response([]);
+      throw new Error(`Unhandled: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <ReportingPanel
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    await screen.findByDisplayValue('Jan Kowalski');
+
+    // Manually change to NS
+    const workTypeSelect = screen.getByRole('combobox');
+    fireEvent.change(workTypeSelect, { target: { value: 'NS' } });
+    expect(workTypeSelect).toHaveValue('NS');
+
+    // Enter hours but no order
+    const hoursInput = screen.getByPlaceholderText('np. 8.00');
+    fireEvent.change(hoursInput, { target: { value: '8.00' } });
+
+    // Submit
+    const saveButton = screen.getByRole('button', { name: /Zapisz wpis/ });
+    fireEvent.click(saveButton);
+
+    // Assert client-side validation message
     await waitFor(() => {
       expect(screen.getByText("Dla rodzaju 'NS' numer zlecenia jest wymagany.")).toBeInTheDocument();
     });
-
-    // Suppress unused variable warning
-    void savedRequestBody;
   });
 });
