@@ -2036,13 +2036,16 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
 
   it('CASE 1 — INSERT: concurrent report inserted during calculation does not leak into snapshot reads', async () => {
     // Snapshot State A:
-    // Order ord-1 (OPEN, 40h on 2026-08-10)
-    // 1 report: emp-1, 40h G on ord-1
-    // State A Totals: orders = 40, absences = 0, settled = 40, employee = 40, difference = 0 (MATCHED)
+    // Order ord-1 is OPEN (in closure, 40h reports on ord-1)
+    // 2 reports:
+    //   emp-1: 40h G on ord-1
+    //   emp-1: 8h SZK without order (non-absence, no order) -> generates legitimate mismatch
+    // State A Totals: orders = 40, absences = 0, settled = 40, employee = 48, difference = -8 (MISMATCHED)
+    // State A Diagnostics: 1 record (emp-1, 8h SZK, contribution = -8)
     //
     // State B (Concurrent/Global Prisma):
-    // A concurrent transaction commits an unassigned 8h report (emp-1, 8h G no order on 2026-08-12)
-    // In State B: employee = 48, difference = -8 (MISMATCHED)
+    // A concurrent transaction commits an unassigned 8h report (emp-2, 8h G no order on 2026-08-15)
+    // In State B: employee = 56, difference = -16 (MISMATCHED if leaked)
 
     const stateAReports = [
       {
@@ -2056,19 +2059,30 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
         date: new Date('2026-08-10T00:00:00.000Z'),
         deletedAt: null,
       },
+      {
+        employeeId: 'emp-1',
+        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+        hours: 8,
+        workTimeTypeCode: 'SZK',
+        workTimeType: { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+        orderId: null,
+        order: null,
+        date: new Date('2026-08-12T00:00:00.000Z'),
+        deletedAt: null,
+      },
     ];
 
     const stateBReports = [
       ...stateAReports,
       {
-        employeeId: 'emp-1',
-        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+        employeeId: 'emp-2',
+        employee: { fullName: 'Adam Nowak', firstName: 'Adam', lastName: 'Nowak' },
         hours: 8,
         workTimeTypeCode: 'G',
         workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
         orderId: null,
         order: null,
-        date: new Date('2026-08-12T00:00:00.000Z'),
+        date: new Date('2026-08-15T00:00:00.000Z'),
         deletedAt: null,
       },
     ];
@@ -2102,6 +2116,7 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
       workTimeType: {
         findMany: vi.fn().mockResolvedValue([
           { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+          { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
         ]),
       },
       workTimeReport: {
@@ -2119,13 +2134,21 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
       '/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31',
     ).expect(200);
 
-    // Assert that the calculation used Snapshot State A (MATCHED, 40h) and was isolated from State B INSERT
-    expect(response.body.status).toBe('MATCHED');
+    // Assert that the calculation used Snapshot State A (MISMATCHED, 40h settled vs 48h employee) and was isolated from State B INSERT
+    expect(response.body.status).toBe('MISMATCHED');
     expect(response.body.ordersHours).toBe(40);
     expect(response.body.totalSettledHours).toBe(40);
-    expect(response.body.totalEmployeeHours).toBe(40);
-    expect(response.body.difference).toBe(0);
-    expect(response.body.diagnostics).toBeUndefined();
+    expect(response.body.totalEmployeeHours).toBe(48);
+    expect(response.body.difference).toBe(-8);
+
+    expect(response.body.diagnostics).toHaveLength(1);
+    expect(response.body.diagnostics[0].hours).toBe(8);
+    expect(response.body.diagnostics[0].contribution).toBe(-8);
+    expect(response.body.diagnostics[0].reason).toBe('Brak zlecenia');
+
+    // Invariant holds
+    const sumContributions = Math.round(response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0) * 100) / 100;
+    expect(sumContributions).toBe(Math.round(response.body.difference * 100) / 100);
 
     // Verify all reads were executed against the transaction client
     expect(txMock.order.findMany).toHaveBeenCalled();
@@ -2406,13 +2429,16 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
 
   it('CASE 5 — ORDER LEAVES CLOSURE: concurrent order status change out of closure does not cause conflicting order classification', async () => {
     // Snapshot State A:
-    // Order ord-1 is OPEN (IN CLOSURE)
-    // Report: emp-1, 40h G on ord-1 in August
-    // State A Totals: orders = 40, absences = 0, settled = 40, employee = 40, difference = 0 (MATCHED)
+    // Order ord-1 is OPEN (IN CLOSURE, 40h on ord-1)
+    // 2 reports:
+    //   emp-1: 40h G on ord-1
+    //   emp-1: 8h SZK without order (non-absence, no order) -> generates legitimate mismatch
+    // State A Totals: orders = 40, absences = 0, settled = 40, employee = 48, difference = -8 (MISMATCHED)
+    // State A Diagnostics: 1 record (emp-1, 8h SZK, contribution = -8)
     //
     // State B (Concurrent/Global Prisma):
     // Order ord-1 status changed to SUSPENDED (or soft-deleted), leaving closure.
-    // In State B: orders = 0, employee = 40, difference = -40 (MISMATCHED)
+    // In State B: orders = 0, employee = 48, difference = -48 (if leaked)
 
     const stateAReports = [
       {
@@ -2424,6 +2450,17 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
         orderId: 'ord-1',
         order: { orderNumber: 'ZL-OPEN' },
         date: new Date('2026-08-10T00:00:00.000Z'),
+        deletedAt: null,
+      },
+      {
+        employeeId: 'emp-1',
+        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+        hours: 8,
+        workTimeTypeCode: 'SZK',
+        workTimeType: { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+        orderId: null,
+        order: null,
+        date: new Date('2026-08-12T00:00:00.000Z'),
         deletedAt: null,
       },
     ];
@@ -2460,6 +2497,7 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
       workTimeType: {
         findMany: vi.fn().mockResolvedValue([
           { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+          { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
         ]),
       },
       workTimeReport: {
@@ -2477,13 +2515,21 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
       '/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31',
     ).expect(200);
 
-    // Assert that the calculation used Snapshot State A (MATCHED, 40h orders == 40h employee)
-    expect(response.body.status).toBe('MATCHED');
+    // Assert that the calculation used Snapshot State A (MISMATCHED, 40h settled vs 48h employee) and ord-1 remained in closure
+    expect(response.body.status).toBe('MISMATCHED');
     expect(response.body.ordersHours).toBe(40);
     expect(response.body.totalSettledHours).toBe(40);
-    expect(response.body.totalEmployeeHours).toBe(40);
-    expect(response.body.difference).toBe(0);
-    expect(response.body.diagnostics).toBeUndefined();
+    expect(response.body.totalEmployeeHours).toBe(48);
+    expect(response.body.difference).toBe(-8);
+
+    expect(response.body.diagnostics).toHaveLength(1);
+    expect(response.body.diagnostics[0].hours).toBe(8);
+    expect(response.body.diagnostics[0].contribution).toBe(-8);
+    expect(response.body.diagnostics[0].reason).toBe('Brak zlecenia');
+
+    // Invariant holds
+    const sumContributions = Math.round(response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0) * 100) / 100;
+    expect(sumContributions).toBe(Math.round(response.body.difference * 100) / 100);
   });
 
   it('endpoint returns consistent MISMATCHED response where sum(diagnostics.contribution) === difference', async () => {
