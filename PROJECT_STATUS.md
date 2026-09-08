@@ -11,25 +11,25 @@
 
 Zakres wersji `0.5.2`:
 
-- Naprawiono błąd zapisu wpisów NS (Nadgodziny sobota/niedziela) w dni wolne (sobota/niedziela) przy podaniu prawidłowego zlecenia – wpisy są teraz poprawnie akceptowane zgodnie z regułą biznesową dopuszczającą pracę nad zleceniem w dni wolne.
+- Zweryfikowano i pokryto testami integracyjnymi backendu oraz komponentów frontendu regułę zapisu wpisów NS (Nadgodziny sobota/niedziela) w dni wolne (sobota/niedziela) przy podaniu prawidłowego zlecenia oraz obsługę błędów odrzucenia (ostateczna identyfikacja specyficznego incydentu produkcyjnego wymaga weryfikacji bazy produkcyjnej w trybie READ-ONLY).
 - Poprawiono obsługę błędów frontendu przy zapisie wpisów czasu – użytkownik otrzymuje czytelny komunikat w przypadku odrzucenia przez backend.
 - Automatyczny domyślny typ czasu pracy w formularzu raportowania: dni robocze (poniedziałek–piątek) → G, sobota i niedziela → NS.
 - Wyświetlanie skrótu dnia tygodnia (pn, wt, śr, czw, pt, sob, nd) przy polu daty raportowania.
-- Diagnostyka niezgodności sum kontrolnych zamknięcia miesiąca: przy statusie NIEZGODNE pokazuje konkretne wpisy powodujące różnicę (pracownik, data, typ, godziny, zlecenie, przyczyna).
-- Rozszerzono eksport XLSX raportu zamknięcia o sekcję diagnostyki przy statusie NIEZGODNE.
+- Diagnostyka niezgodności sum kontrolnych zamknięcia miesiąca: przy statusie NIEZGODNE pokazuje konkretne wpisy powodujące różnicę (pracownik, data, typ, godziny, zlecenie, przyczyna, podpisany wkład w różnicę rozliczenia) zarówno dla kierunku ujemnego (Direction A), dodatniego (Direction B), jak i mieszanego.
+- Rozszerzono eksport XLSX raportu zamknięcia o pełną 7-kolumnową sekcję diagnostyki przy statusie NIEZGODNE.
 - Logika resetowania formularza nowego wpisu uwzględnia dzień tygodnia dla domyślnego typu czasu pracy.
-- Edycja istniejącego wpisu nie zmienia już automatycznie jego typu czasu pracy.
+- Edycja istniejącego wpisu zachowuje jego typ czasu pracy.
 - Zmiana nie wymaga migracji bazy danych.
 
 ## Weryfikacja wersji 0.5.2
 
-- backend: 147 testów zakończonych powodzeniem,
+- backend: 156 testów zakończonych powodzeniem (12 plików testowych),
 - backend: build (`npm run build`) zakończony powodzeniem,
-- backend: walidacja schematu Prisma (`npx prisma validate`) — schemat poprawny (DATABASE_URL nieustawione w środowisku testowym),
-- frontend: 78 testów zakończonych powodzeniem,
+- backend: walidacja schematu Prisma (`npx prisma validate`) — schemat poprawny (z lokalnym parse-only DATABASE_URL),
+- frontend: 88 testów zakończonych powodzeniem (10 plików testowych),
 - frontend: build (`npm run build`) zakończony powodzeniem,
 - frontend: lint (`npm run lint`) zakończony powodzeniem z wynikiem 0 ostrzeżeń,
-- verify-release.sh: PASS.
+- verify-release.sh: zatrzymany przez feature branch guard na gałęzi `feature/v0.5.2-production-followup` (zgodnie z przeznaczeniem skryptu).
 
 Zakres Pakietu 2 (Sumy kontrolne zamknięcia miesiąca):
 

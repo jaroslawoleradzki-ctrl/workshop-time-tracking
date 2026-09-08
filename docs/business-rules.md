@@ -1,6 +1,6 @@
 # Reguły biznesowe
 
-Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.5.1.
+Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.5.2.
 
 ## Role i dostęp
 
@@ -76,10 +76,10 @@ Odpowiedź sukcesu (`201`) zawiera co najmniej `employeeId`, `sourceDate`, `targ
 - Godziny sprzed lub po zakresie nie są uwzględniane. Usunięte wpisy nie zwiększają sumy, a usunięte zlecenia, zlecenia `SUSPENDED` i zlecenia zamknięte poza zakresem są wykluczone.
 - W trybie zamknięcia wyszukiwanie numeru zlecenia pozostaje aktywne. Filtry statusu oraz „tylko z godzinami” są sprzeczne z definicją trybu, dlatego interfejs je wyłącza, a API ignoruje.
 - `completionDate` jest porównywana jako data biznesowa w UTC, od początku `dateFrom` do końca `dateTo`, bez konwersji przez lokalną strefę czasową.
-- W trybie raportu zamknięcia dostępna jest automatyczna sekcja **„Kontrola rozliczenia czasu”** (zarówno w interfejsie pod tabelą zleceń, jak i w eksporcie XLSX/CSV), która porównuje łączny rozliczony czas (`Godziny wg zleceń` + dynamicznie zagregowane godziny wszystkich typów ze słownika oznaczonych jako `isAbsence=true`) z sumą godzin pracowników z raportu miesięcznego (`totalEmployeeHours`). Różnica równa zero oznacza status **ZGODNE** (`MATCHED`), natomiast różnica różna od zera oznacza status **NIEZGODNE** (`MISMATCHED`).
+- W trybie raportu zamknięcia dostępna jest automatyczna sekcja **„Kontrola rozliczenia czasu”** (zarówno w interfejsie pod tabelą zleceń, jak i w eksporcie XLSX/CSV), która porównuje łączny rozliczony czas (`Godziny wg zleceń` + dynamicznie zagregowane godziny wszystkich typów ze słownika oznaczonych jako `isAbsence=true`) z sumą godzin pracowników z raportu miesięcznego (`totalEmployeeHours`). Różnica równa zero oznacza status **ZGODNE** (`MATCHED`), natomiast różnica różna od zera oznacza status **NIEZGODNE** (`MISMATCHED`). Przy statusie NIEZGODNE system generuje szczegółową diagnostykę rekordów z podpisanym wkładem (`contribution`) wyjaśniającym różnicę w rozliczeniu.
 
 ## Audyt i daty
 
 - `AuditLog` zapisuje `CREATE`, `UPDATE` i `DELETE` wraz z użytkownikiem oraz starymi/nowymi wartościami dla pracowników, zleceń i wpisów czasu. Kopiowanie zapisuje jeden atomowy audyt całej operacji z identyfikatorem żądania, datami i licznikami. Importy również audytują tworzenie i aktualizację pracowników/zleceń.
 - Zmiany użytkowników i rodzajów czasu nie są rejestrowane w `AuditLog`.
-- Data raportu jest kolumną PostgreSQL `date`. API tworzy daty przez `new Date(...)`, a odpowiedzi formatuje przez UTC (`toISOString().split('T')[0]`). Przycisk „Dzisiaj” koryguje offset lokalny przeglądarki; początkowa data formularza używa bezpośrednio UTC. Jednolita biznesowa strefa czasowa nie jest skonfigurowana — **do potwierdzenia**.
+- Data raportu jest kolumną PostgreSQL `date`. API tworzy daty przez `new Date(...)`, a odpowiedzi formatuje przez UTC (`toISOString().split('T')[0]`). Zarówno przycisk „Dzisiaj”, jak i początkowa data formularza raportowania używają lokalnej daty biznesowej przeglądarki (`getLocalDateString()`). Jednolita biznesowa strefa czasowa nie jest skonfigurowana — **do potwierdzenia**.
