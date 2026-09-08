@@ -2034,94 +2034,456 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
     });
   });
 
-  it('guarantees invariant round(sum(diagnostics.contribution),2) === round(difference,2) across concurrency edge cases', async () => {
-    // Representative concurrency cases testing that inconsistent state transitions trigger the invariant guard:
-    // Case 1: An unassigned report appeared (INSERT) between totals calculation and diagnostics
-    // Case 2: A report hours value was modified (UPDATE) between totals and diagnostics
-    // Case 3: A report was soft-deleted (DELETE) between totals and diagnostics
-    // Case 4: An order status/completion changed (entering/leaving closure) between totals and diagnostics
+  it('CASE 1 — INSERT: concurrent report inserted during calculation does not leak into snapshot reads', async () => {
+    // Snapshot State A:
+    // Order ord-1 (OPEN, 40h on 2026-08-10)
+    // 1 report: emp-1, 40h G on ord-1
+    // State A Totals: orders = 40, absences = 0, settled = 40, employee = 40, difference = 0 (MATCHED)
+    //
+    // State B (Concurrent/Global Prisma):
+    // A concurrent transaction commits an unassigned 8h report (emp-1, 8h G no order on 2026-08-12)
+    // In State B: employee = 48, difference = -8 (MISMATCHED)
 
-    const testConcurrencyViolation = async (inconsistentDiagnostics: any[]) => {
-      const txMock = {
-        order: {
-          findMany: vi.fn().mockImplementation(async (args: any) => {
-            if (args?.select?.id) return [{ id: 'ord-1' }];
-            return [
-              {
-                id: 'ord-1',
-                orderNumber: 'ZL-1',
-                productName: 'P',
-                productCode: 'C',
-                accountingAccount: 'A',
-                plannedHours: 40,
-                quantity: 1,
-                quantityUnit: 'szt.',
-                status: 'OPEN',
-                completionDate: null,
-                deletedAt: null,
-                reports: [{ hours: 40, date: new Date('2026-08-10T00:00:00.000Z'), deletedAt: null }],
-              },
-            ];
-          }),
-        },
-        workTimeType: {
-          findMany: vi.fn().mockResolvedValue([
-            { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
-          ]),
-        },
-        workTimeReport: {
-          findMany: vi.fn().mockImplementation(async (args: any) => {
-            if (args?.where?.workTimeType?.isAbsence) return [];
-            if (args?.include?.employee && args?.include?.order) {
-              return inconsistentDiagnostics;
-            }
-            return [
-              {
-                employeeId: 'emp-1',
-                employee: { fullName: 'Jan Kowalski' },
-                hours: 48,
-                workTimeTypeCode: 'G',
-                workTimeType: { name: 'Standardowe' },
-              },
-            ];
-          }),
-        },
-      };
+    const stateAReports = [
+      {
+        employeeId: 'emp-1',
+        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+        hours: 40,
+        workTimeTypeCode: 'G',
+        workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+        orderId: 'ord-1',
+        order: { orderNumber: 'ZL-1' },
+        date: new Date('2026-08-10T00:00:00.000Z'),
+        deletedAt: null,
+      },
+    ];
 
-      // Settled = 40h, Employee = 48h -> Difference = -8h
-      vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => callback(txMock));
+    const stateBReports = [
+      ...stateAReports,
+      {
+        employeeId: 'emp-1',
+        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+        hours: 8,
+        workTimeTypeCode: 'G',
+        workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
+        orderId: null,
+        order: null,
+        date: new Date('2026-08-12T00:00:00.000Z'),
+        deletedAt: null,
+      },
+    ];
 
-      await expect(
-        getClosureControlSummary({ dateFrom: '2026-08-01', dateTo: '2026-08-31' }),
-      ).rejects.toThrow(ReconciliationConsistencyError);
+    // Global prisma represents State B (mutated concurrently during calculation)
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async () => stateBReports as any);
+
+    // Transaction client txMock represents stable Snapshot State A
+    const txMock = {
+      order: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.select?.id) return [{ id: 'ord-1' }];
+          return [
+            {
+              id: 'ord-1',
+              orderNumber: 'ZL-1',
+              productName: 'P',
+              productCode: 'C',
+              accountingAccount: 'A',
+              plannedHours: 40,
+              quantity: 1,
+              quantityUnit: 'szt.',
+              status: 'OPEN',
+              completionDate: null,
+              deletedAt: null,
+              reports: [{ hours: 40, date: new Date('2026-08-10T00:00:00.000Z'), deletedAt: null }],
+            },
+          ];
+        }),
+      },
+      workTimeType: {
+        findMany: vi.fn().mockResolvedValue([
+          { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+        ]),
+      },
+      workTimeReport: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.where?.workTimeType?.isAbsence) return [];
+          if (args?.include?.employee && args?.include?.order) return stateAReports;
+          return stateAReports;
+        }),
+      },
     };
 
-    // Case 1: Diagnostics sees an extra 8h missing-order report (-16 total contribution instead of -8)
-    await testConcurrencyViolation([
-      {
-        employeeId: 'emp-1',
-        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
-        date: new Date('2026-08-10T00:00:00.000Z'),
-        hours: 8,
-        workTimeTypeCode: 'G',
-        workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
-        orderId: null,
-        order: null,
-      },
-      {
-        employeeId: 'emp-1',
-        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
-        date: new Date('2026-08-11T00:00:00.000Z'),
-        hours: 8,
-        workTimeTypeCode: 'G',
-        workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
-        orderId: null,
-        order: null,
-      },
-    ]);
+    vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => callback(txMock));
 
-    // Case 2: Diagnostics sees 0 reports (empty instead of -8)
-    await testConcurrencyViolation([]);
+    const response = await authenticatedGet(
+      '/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31',
+    ).expect(200);
+
+    // Assert that the calculation used Snapshot State A (MATCHED, 40h) and was isolated from State B INSERT
+    expect(response.body.status).toBe('MATCHED');
+    expect(response.body.ordersHours).toBe(40);
+    expect(response.body.totalSettledHours).toBe(40);
+    expect(response.body.totalEmployeeHours).toBe(40);
+    expect(response.body.difference).toBe(0);
+    expect(response.body.diagnostics).toBeUndefined();
+
+    // Verify all reads were executed against the transaction client
+    expect(txMock.order.findMany).toHaveBeenCalled();
+    expect(txMock.workTimeReport.findMany).toHaveBeenCalled();
+  });
+
+  it('CASE 2 — UPDATE: concurrent report hours modification during calculation does not produce mixed totals and diagnostics', async () => {
+    // Snapshot State A:
+    // 1 unassigned report: emp-1, 8h SZK (Szkolenie, non-absence, no order)
+    // State A Totals: orders = 0, absences = 0, settled = 0, employee = 8, difference = -8 (MISMATCHED)
+    // State A Diagnostics: 1 record, contribution = -8h
+    //
+    // State B (Concurrent/Global Prisma):
+    // Report is updated concurrently to 16h SZK (employee = 16, difference = -16)
+
+    const stateAReports = [
+      {
+        employeeId: 'emp-1',
+        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+        hours: 8,
+        workTimeTypeCode: 'SZK',
+        workTimeType: { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+        orderId: null,
+        order: null,
+        date: new Date('2026-08-15T00:00:00.000Z'),
+        deletedAt: null,
+      },
+    ];
+
+    const stateBReports = [
+      {
+        ...stateAReports[0],
+        hours: 16,
+      },
+    ];
+
+    // Global prisma represents updated State B
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async () => stateBReports as any);
+
+    // Transaction client txMock represents stable Snapshot State A
+    const txMock = {
+      order: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.select?.id) return [];
+          return [];
+        }),
+      },
+      workTimeType: {
+        findMany: vi.fn().mockResolvedValue([
+          { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+        ]),
+      },
+      workTimeReport: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.where?.workTimeType?.isAbsence) return [];
+          if (args?.include?.employee && args?.include?.order) return stateAReports;
+          return stateAReports;
+        }),
+      },
+    };
+
+    vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => callback(txMock));
+
+    const response = await authenticatedGet(
+      '/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31',
+    ).expect(200);
+
+    // Assert that the calculation used Snapshot State A (8h) and did not mix with State B (16h)
+    expect(response.body.status).toBe('MISMATCHED');
+    expect(response.body.ordersHours).toBe(0);
+    expect(response.body.totalSettledHours).toBe(0);
+    expect(response.body.totalEmployeeHours).toBe(8);
+    expect(response.body.difference).toBe(-8);
+
+    expect(response.body.diagnostics).toHaveLength(1);
+    expect(response.body.diagnostics[0].hours).toBe(8);
+    expect(response.body.diagnostics[0].contribution).toBe(-8);
+    expect(response.body.diagnostics[0].reason).toBe('Brak zlecenia');
+
+    // Invariant holds
+    const sumContributions = response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0);
+    expect(sumContributions).toBe(response.body.difference);
+  });
+
+  it('CASE 3 — SOFT DELETE: concurrent report deletion during calculation does not cause partial record inclusion', async () => {
+    // Snapshot State A:
+    // Order ord-1 (OPEN, 40h on 2026-08-10)
+    // 2 reports:
+    //   emp-1: 40h G on ord-1
+    //   emp-1: 8h G without order (deletedAt: null in State A)
+    // State A: settled = 40, employee = 48, difference = -8 (MISMATCHED with 1 diagnostic row)
+    //
+    // State B (Concurrent/Global Prisma):
+    // The unassigned 8h report is soft-deleted (deletedAt = new Date())
+    // In State B: employee = 40, difference = 0 (MATCHED)
+
+    const stateAReports = [
+      {
+        employeeId: 'emp-1',
+        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+        hours: 40,
+        workTimeTypeCode: 'G',
+        workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+        orderId: 'ord-1',
+        order: { orderNumber: 'ZL-1' },
+        date: new Date('2026-08-10T00:00:00.000Z'),
+        deletedAt: null,
+      },
+      {
+        employeeId: 'emp-1',
+        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+        hours: 8,
+        workTimeTypeCode: 'G',
+        workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
+        orderId: null,
+        order: null,
+        date: new Date('2026-08-15T00:00:00.000Z'),
+        deletedAt: null,
+      },
+    ];
+
+    const stateBReports = [
+      stateAReports[0], // 8h report soft-deleted/omitted in State B
+    ];
+
+    // Global prisma represents State B where the 8h report is deleted
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async () => stateBReports as any);
+
+    // Transaction client txMock represents Snapshot State A where 8h report is active
+    const txMock = {
+      order: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.select?.id) return [{ id: 'ord-1' }];
+          return [
+            {
+              id: 'ord-1',
+              orderNumber: 'ZL-1',
+              productName: 'P',
+              productCode: 'C',
+              accountingAccount: 'A',
+              plannedHours: 40,
+              quantity: 1,
+              quantityUnit: 'szt.',
+              status: 'OPEN',
+              completionDate: null,
+              deletedAt: null,
+              reports: [{ hours: 40, date: new Date('2026-08-10T00:00:00.000Z'), deletedAt: null }],
+            },
+          ];
+        }),
+      },
+      workTimeType: {
+        findMany: vi.fn().mockResolvedValue([
+          { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+        ]),
+      },
+      workTimeReport: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.where?.workTimeType?.isAbsence) return [];
+          if (args?.include?.employee && args?.include?.order) return stateAReports;
+          return stateAReports;
+        }),
+      },
+    };
+
+    vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => callback(txMock));
+
+    const response = await authenticatedGet(
+      '/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31',
+    ).expect(200);
+
+    // Assert that the calculation used Snapshot State A (settled=40, employee=48, diff=-8)
+    expect(response.body.status).toBe('MISMATCHED');
+    expect(response.body.ordersHours).toBe(40);
+    expect(response.body.totalSettledHours).toBe(40);
+    expect(response.body.totalEmployeeHours).toBe(48);
+    expect(response.body.difference).toBe(-8);
+
+    expect(response.body.diagnostics).toHaveLength(1);
+    expect(response.body.diagnostics[0].hours).toBe(8);
+    expect(response.body.diagnostics[0].contribution).toBe(-8);
+    expect(response.body.diagnostics[0].reason).toBe('Brak zlecenia');
+
+    // Invariant holds
+    const sumContributions = response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0);
+    expect(sumContributions).toBe(response.body.difference);
+  });
+
+  it('CASE 4 — ORDER ENTERS CLOSURE: concurrent order status/completion transition into closure does not alter snapshot membership', async () => {
+    // Snapshot State A:
+    // Order ord-1 is CLOSED on 2026-09-15 (outside August 2026 closure range) -> NOT IN CLOSURE
+    // Report: emp-1, 40h G on ord-1 in August
+    // State A Totals: orders = 0, absences = 0, settled = 0, employee = 40, difference = -40 (MISMATCHED)
+    // State A Diagnostics: 1 record on ord-1, reason: 'Zlecenie nieobjęte raportem zamknięcia', contribution: -40
+    //
+    // State B (Concurrent/Global Prisma):
+    // Order ord-1 is transitioned to OPEN (or completionDate set to 2026-08-20), entering closure.
+    // In State B: orders = 40, employee = 40, difference = 0 (MATCHED)
+
+    const stateAReports = [
+      {
+        employeeId: 'emp-1',
+        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+        hours: 40,
+        workTimeTypeCode: 'G',
+        workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+        orderId: 'ord-1',
+        order: { orderNumber: 'ZL-OUTSIDE' },
+        date: new Date('2026-08-10T00:00:00.000Z'),
+        deletedAt: null,
+      },
+    ];
+
+    // Global prisma represents State B where ord-1 entered closure
+    vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+      if (args?.select?.id) return [{ id: 'ord-1' }];
+      return [
+        {
+          id: 'ord-1',
+          orderNumber: 'ZL-OUTSIDE',
+          status: 'OPEN', // OPEN in State B
+          completionDate: null,
+          deletedAt: null,
+          reports: [{ hours: 40, date: new Date('2026-08-10T00:00:00.000Z'), deletedAt: null }],
+        },
+      ] as any;
+    });
+
+    // Transaction client txMock represents Snapshot State A where ord-1 is CLOSED outside closure
+    const txMock = {
+      order: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.select?.id) {
+            // ord-1 completionDate 2026-09-15 is outside August range -> empty closure order ids in State A
+            return [];
+          }
+          // getOrderReportRows in closureReport mode for State A excludes ord-1
+          return [];
+        }),
+      },
+      workTimeType: {
+        findMany: vi.fn().mockResolvedValue([
+          { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+        ]),
+      },
+      workTimeReport: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.where?.workTimeType?.isAbsence) return [];
+          if (args?.include?.employee && args?.include?.order) return stateAReports;
+          return stateAReports;
+        }),
+      },
+    };
+
+    vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => callback(txMock));
+
+    const response = await authenticatedGet(
+      '/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31',
+    ).expect(200);
+
+    // Assert that the calculation used Snapshot State A (orders=0, employee=40, diff=-40)
+    expect(response.body.status).toBe('MISMATCHED');
+    expect(response.body.ordersHours).toBe(0);
+    expect(response.body.totalSettledHours).toBe(0);
+    expect(response.body.totalEmployeeHours).toBe(40);
+    expect(response.body.difference).toBe(-40);
+
+    expect(response.body.diagnostics).toHaveLength(1);
+    expect(response.body.diagnostics[0].hours).toBe(40);
+    expect(response.body.diagnostics[0].orderNumber).toBe('ZL-OUTSIDE');
+    expect(response.body.diagnostics[0].reason).toBe('Zlecenie nieobjęte raportem zamknięcia');
+    expect(response.body.diagnostics[0].contribution).toBe(-40);
+
+    // Invariant holds
+    const sumContributions = response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0);
+    expect(sumContributions).toBe(response.body.difference);
+  });
+
+  it('CASE 5 — ORDER LEAVES CLOSURE: concurrent order status change out of closure does not cause conflicting order classification', async () => {
+    // Snapshot State A:
+    // Order ord-1 is OPEN (IN CLOSURE)
+    // Report: emp-1, 40h G on ord-1 in August
+    // State A Totals: orders = 40, absences = 0, settled = 40, employee = 40, difference = 0 (MATCHED)
+    //
+    // State B (Concurrent/Global Prisma):
+    // Order ord-1 status changed to SUSPENDED (or soft-deleted), leaving closure.
+    // In State B: orders = 0, employee = 40, difference = -40 (MISMATCHED)
+
+    const stateAReports = [
+      {
+        employeeId: 'emp-1',
+        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+        hours: 40,
+        workTimeTypeCode: 'G',
+        workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+        orderId: 'ord-1',
+        order: { orderNumber: 'ZL-OPEN' },
+        date: new Date('2026-08-10T00:00:00.000Z'),
+        deletedAt: null,
+      },
+    ];
+
+    // Global prisma represents State B where ord-1 left closure (SUSPENDED)
+    vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+      if (args?.select?.id) return []; // ord-1 suspended in State B
+      return [];
+    });
+
+    // Transaction client txMock represents Snapshot State A where ord-1 is OPEN in closure
+    const txMock = {
+      order: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.select?.id) return [{ id: 'ord-1' }];
+          return [
+            {
+              id: 'ord-1',
+              orderNumber: 'ZL-OPEN',
+              productName: 'P',
+              productCode: 'C',
+              accountingAccount: 'A',
+              plannedHours: 40,
+              quantity: 1,
+              quantityUnit: 'szt.',
+              status: 'OPEN',
+              completionDate: null,
+              deletedAt: null,
+              reports: [{ hours: 40, date: new Date('2026-08-10T00:00:00.000Z'), deletedAt: null }],
+            },
+          ];
+        }),
+      },
+      workTimeType: {
+        findMany: vi.fn().mockResolvedValue([
+          { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+        ]),
+      },
+      workTimeReport: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.where?.workTimeType?.isAbsence) return [];
+          if (args?.include?.employee && args?.include?.order) return stateAReports;
+          return stateAReports;
+        }),
+      },
+    };
+
+    vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => callback(txMock));
+
+    const response = await authenticatedGet(
+      '/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31',
+    ).expect(200);
+
+    // Assert that the calculation used Snapshot State A (MATCHED, 40h orders == 40h employee)
+    expect(response.body.status).toBe('MATCHED');
+    expect(response.body.ordersHours).toBe(40);
+    expect(response.body.totalSettledHours).toBe(40);
+    expect(response.body.totalEmployeeHours).toBe(40);
+    expect(response.body.difference).toBe(0);
+    expect(response.body.diagnostics).toBeUndefined();
   });
 
   it('endpoint returns consistent MISMATCHED response where sum(diagnostics.contribution) === difference', async () => {

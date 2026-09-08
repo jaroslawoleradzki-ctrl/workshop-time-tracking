@@ -24,7 +24,7 @@ Zakres wersji `0.5.2`:
 
 ## Weryfikacja wersji 0.5.2
 
-- backend: 160 testów zakończonych powodzeniem (12 plików testowych), w tym testy spójności migawki transakcyjnej, strażnika niezmiennika oraz deterministyczne parsowanie XLSX przez ExcelJS,
+- backend: 164 testy zakończone powodzeniem (12 plików testowych), w tym 5 deterministycznych testów regresyjnych współbieżności i spójności migawki transakcyjnej, strażnika niezmiennika oraz deterministyczne parsowanie XLSX przez ExcelJS,
 - backend: build (`npm run build`) zakończony powodzeniem,
 - backend: walidacja schematu Prisma (`npx prisma validate`) — schemat poprawny (z lokalnym parse-only DATABASE_URL),
 - frontend: 88 testów zakończonych powodzeniem (10 plików testowych), w tym szczegółowe testy renderowania pól diagnostyki w UI,
