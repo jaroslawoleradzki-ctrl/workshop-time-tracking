@@ -578,13 +578,6 @@ export async function getReconciliationDiagnostics(filters: {
   });
   const orderIdsInClosure = new Set(ordersInClosure.map((o) => o.id));
 
-  // Get absence type codes
-  const absenceTypes = await prisma.workTimeType.findMany({
-    where: { isAbsence: true },
-    select: { code: true },
-  });
-  const absenceTypeCodes = new Set(absenceTypes.map((t) => t.code));
-
   // Compute signed contribution for each report to the difference (settledHours - employeeHours)
   // settledHours = ordersHours + absenceHours
   // employeeHours = sum of all reports

@@ -239,7 +239,7 @@ export async function generateExcelResponse(params: {
       worksheet.addRow([]);
       worksheet.addRow([]);
 
-      const diagHeaderRow = worksheet.addRow(['Diagnostyka niezgodności', '', '', '', '', '']);
+      const diagHeaderRow = worksheet.addRow(['Diagnostyka niezgodności', '', '', '', '', '', '']);
       diagHeaderRow.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FF1E293B' } };
       diagHeaderRow.fill = {
         type: 'pattern',
