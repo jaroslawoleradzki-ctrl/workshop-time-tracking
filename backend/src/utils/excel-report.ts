@@ -18,6 +18,23 @@ export interface ClosureControlSummary {
   statusLabel: 'Zgodne' | 'Niezgodne';
 }
 
+export interface ReconciliationDiagnosticRecord {
+  employeeId: string;
+  employeeName: string;
+  date: string;
+  workTimeTypeCode: string;
+  workTimeTypeName: string;
+  hours: number;
+  orderId: string | null;
+  orderNumber: string | null;
+  reason: string;
+  contribution: number;
+}
+
+export interface ClosureControlSummaryWithDiagnostics extends ClosureControlSummary {
+  diagnostics?: ReconciliationDiagnosticRecord[];
+}
+
 export interface ReportFilterItem {
   label: string;
   value: string;
@@ -28,7 +45,7 @@ export interface ExcelReportMetadata {
   dateFrom?: string;
   dateTo?: string;
   filters?: ReportFilterItem[];
-  controlSummary?: ClosureControlSummary;
+  controlSummary?: ClosureControlSummaryWithDiagnostics;
 }
 
 export function formatDateISO(dateStr?: string): string {
@@ -216,6 +233,61 @@ export async function generateExcelResponse(params: {
         argb: summary.status === 'MATCHED' ? 'FF166534' : 'FF991B1B',
       },
     };
+
+    // 9. Diagnostyka niezgodności (tylko gdy status = NIEZGODNE)
+    if (summary.status === 'MISMATCHED' && summary.diagnostics && summary.diagnostics.length > 0) {
+      worksheet.addRow([]);
+      worksheet.addRow([]);
+
+      const diagHeaderRow = worksheet.addRow(['Diagnostyka niezgodności', '', '', '', '', '', '']);
+      diagHeaderRow.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FF1E293B' } };
+      diagHeaderRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFFEF3C7' },
+      };
+
+      const diagColHeaders = ['Pracownik', 'Data', 'Typ', 'Godziny', 'Zlecenie', 'Przyczyna', 'Wkład w różnicę'];
+      const diagHeaderRow2 = worksheet.addRow(diagColHeaders);
+      diagHeaderRow2.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+      diagHeaderRow2.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFB45309' },
+      };
+      diagHeaderRow2.eachCell((cell) => {
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FF92400E' } },
+          left: { style: 'thin', color: { argb: 'FF92400E' } },
+          bottom: { style: 'medium', color: { argb: 'FF92400E' } },
+          right: { style: 'thin', color: { argb: 'FF92400E' } },
+        };
+      });
+
+      summary.diagnostics.forEach((diag) => {
+        const row = worksheet.addRow([
+          diag.employeeName,
+          diag.date,
+          `${diag.workTimeTypeCode} (${diag.workTimeTypeName})`,
+          diag.hours,
+          diag.orderNumber || '—',
+          diag.reason,
+          diag.contribution,
+        ]);
+        row.eachCell((cell) => {
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FFD97706' } },
+            left: { style: 'thin', color: { argb: 'FFD97706' } },
+            bottom: { style: 'thin', color: { argb: 'FFD97706' } },
+            right: { style: 'thin', color: { argb: 'FFD97706' } },
+          };
+        });
+        row.getCell(4).numFmt = '#,##0.00';
+        row.getCell(4).alignment = { horizontal: 'right' };
+        row.getCell(7).numFmt = '+#,##0.00;-#,##0.00;0.00';
+        row.getCell(7).alignment = { horizontal: 'right' };
+      });
+    }
   }
 
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

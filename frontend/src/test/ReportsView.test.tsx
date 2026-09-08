@@ -646,7 +646,7 @@ describe('ReportsView — miesięczny raport pracowników', () => {
       expect(within(summaryCard).getByTestId('control-difference')).toHaveTextContent('0.00 h');
     });
 
-    it('renders MISMATCHED status and difference when settled hours do not equal employee hours', async () => {
+    it('renders MISMATCHED status, difference, and full diagnostics table with signed contributions', async () => {
       vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
         if (url === '/api/employees') return response(employees);
@@ -659,13 +659,39 @@ describe('ReportsView — miesięczny raport pracowników', () => {
         if (url.startsWith('/api/analytics/closure-control-summary')) {
           return response({
             ordersHours: 100,
-            absences: [{ code: 'L4', name: 'Zwolnienie', hours: 16 }],
+            absences: [{ code: 'UW', name: 'Urlop wypoczynkowy', hours: 16 }],
             totalAbsenceHours: 16,
             totalSettledHours: 116,
-            totalEmployeeHours: 124,
-            difference: -8,
+            totalEmployeeHours: 108,
+            difference: 8,
             status: 'MISMATCHED',
             statusLabel: 'Niezgodne',
+            diagnostics: [
+              {
+                employeeId: 'emp-1',
+                employeeName: 'Kowalski Jan',
+                date: '2026-08-18',
+                workTimeTypeCode: 'UW',
+                workTimeTypeName: 'Urlop wypoczynkowy',
+                hours: 16,
+                orderId: 'order-1',
+                orderNumber: 'ZL-001',
+                reason: 'Nieobecność z zleceniem w rozliczeniu (podwójne naliczenie)',
+                contribution: 16,
+              },
+              {
+                employeeId: 'emp-1',
+                employeeName: 'Kowalski Jan',
+                date: '2026-08-15',
+                workTimeTypeCode: 'SZK',
+                workTimeTypeName: 'Szkolenie',
+                hours: 8,
+                orderId: null,
+                orderNumber: null,
+                reason: 'Brak zlecenia',
+                contribution: -8,
+              },
+            ],
           });
         }
         return response([]);
@@ -676,9 +702,54 @@ describe('ReportsView — miesięczny raport pracowników', () => {
       fireEvent.change(screen.getByLabelText('Data do'), { target: { value: '2026-08-31' } });
       fireEvent.click(screen.getByRole('button', { name: 'Raport zamknięcia' }));
 
-      await screen.findByTestId('closure-control-summary');
-      expect(screen.getByTestId('control-summary-status-badge')).toHaveTextContent('Status: Niezgodne');
-      expect(screen.getByTestId('control-difference')).toHaveTextContent('-8.00 h');
+      const summaryCard = await screen.findByTestId('closure-control-summary');
+      expect(within(summaryCard).getByTestId('control-summary-status-badge')).toHaveTextContent('Status: Niezgodne');
+      expect(within(summaryCard).getByTestId('control-difference')).toHaveTextContent('+8.00 h');
+
+      // Diagnostics header
+      expect(within(summaryCard).getByText(/Diagnostyka niezgodności \(2 rekordów\)/)).toBeInTheDocument();
+
+      // Diagnostic table headers (all 7 headers in order)
+      expect(within(summaryCard).getByRole('columnheader', { name: 'Pracownik' })).toBeInTheDocument();
+      expect(within(summaryCard).getByRole('columnheader', { name: 'Data' })).toBeInTheDocument();
+      expect(within(summaryCard).getByRole('columnheader', { name: 'Typ' })).toBeInTheDocument();
+      expect(within(summaryCard).getByRole('columnheader', { name: 'Godziny' })).toBeInTheDocument();
+      expect(within(summaryCard).getByRole('columnheader', { name: 'Zlecenie' })).toBeInTheDocument();
+      expect(within(summaryCard).getByRole('columnheader', { name: 'Przyczyna' })).toBeInTheDocument();
+      expect(within(summaryCard).getByRole('columnheader', { name: 'Wkład' })).toBeInTheDocument();
+
+      const diagTable = summaryCard.querySelector('table')!;
+      expect(diagTable).toBeInTheDocument();
+      const rows = diagTable.querySelectorAll('tbody tr');
+      expect(rows).toHaveLength(3); // 2 data rows + 1 sum row
+
+      // Row 1 concrete assertions: Kowalski Jan, 2026-08-18, UW (Urlop wypoczynkowy), 16.00 h, ZL-001, reason, +16.00 h
+      const row1 = within(rows[0] as HTMLElement);
+      expect(row1.getByText('Kowalski Jan')).toBeInTheDocument();
+      expect(row1.getByText('2026-08-18')).toBeInTheDocument();
+      expect(row1.getByText(/UW/)).toBeInTheDocument();
+      expect(row1.getByText(/\(Urlop wypoczynkowy\)/)).toBeInTheDocument();
+      expect(row1.getByText('16.00 h')).toBeInTheDocument();
+      expect(row1.getByText('ZL-001')).toBeInTheDocument();
+      expect(row1.getByText('Nieobecność z zleceniem w rozliczeniu (podwójne naliczenie)')).toBeInTheDocument();
+      expect(row1.getByText('+16.00 h')).toBeInTheDocument();
+
+      // Row 2 concrete assertions: Kowalski Jan, 2026-08-15, SZK (Szkolenie), 8.00 h, —, Brak zlecenia, -8.00 h
+      const row2 = within(rows[1] as HTMLElement);
+      expect(row2.getByText('Kowalski Jan')).toBeInTheDocument();
+      expect(row2.getByText('2026-08-15')).toBeInTheDocument();
+      expect(row2.getByText(/SZK/)).toBeInTheDocument();
+      expect(row2.getByText(/\(Szkolenie\)/)).toBeInTheDocument();
+      expect(row2.getByText('8.00 h')).toBeInTheDocument();
+      expect(row2.getByText('—')).toBeInTheDocument();
+      expect(row2.getByText('Brak zlecenia')).toBeInTheDocument();
+      expect(row2.getByText('-8.00 h')).toBeInTheDocument();
+
+      // Row 3: Diagnostics sum row and explanatory difference text
+      const row3 = within(rows[2] as HTMLElement);
+      expect(row3.getByText('Suma wkładów:')).toBeInTheDocument();
+      expect(row3.getByText('+8.00 h')).toBeInTheDocument();
+      expect(within(summaryCard).getByText(/Suma wkładów powinna równać się różnicy:/)).toBeInTheDocument();
     });
   });
 

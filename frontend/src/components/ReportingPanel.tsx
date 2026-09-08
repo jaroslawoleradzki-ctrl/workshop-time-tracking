@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  ArrowLeft, 
-  ArrowRight, 
-  Save, 
-  Trash2, 
-  Copy, 
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Save,
+  Trash2,
+  Copy,
   AlertTriangle,
   HelpCircle,
   Plus,
@@ -14,6 +14,37 @@ import {
 } from 'lucide-react';
 import type { UserSession } from '../App';
 import AbsenceRangeModal from './AbsenceRangeModal';
+
+const WEEKDAY_ABBREVIATIONS = ['nd', 'pn', 'wt', 'śr', 'czw', 'pt', 'sob'];
+
+export function getDayOfWeekAbbreviation(dateStr: string): string {
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return '';
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  const date = new Date(year, month, day);
+  return WEEKDAY_ABBREVIATIONS[date.getDay()];
+}
+
+export function isWeekend(dateStr: string): boolean {
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return false;
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  const date = new Date(year, month, day);
+  const dayOfWeek = date.getDay();
+  return dayOfWeek === 0 || dayOfWeek === 6;
+}
+
+export function getDefaultWorkType(dateStr: string, workTypes: WorkTimeType[]): string {
+  if (isWeekend(dateStr)) {
+    const nsType = workTypes.find(t => t.code === 'NS');
+    if (nsType) return 'NS';
+  }
+  return 'G';
+}
 
 interface Employee {
   id: string;
@@ -77,17 +108,21 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [activeOrders, setActiveOrders] = useState<Order[]>([]);
   const [workTypes, setWorkTypes] = useState<WorkTimeType[]>([]);
+  const [dictionariesLoaded, setDictionariesLoaded] = useState(false);
+
+  // Helper to get local date string (YYYY-MM-DD) without timezone shift
+  const getLocalDateString = useCallback((date: Date = new Date()): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
 
   // Selection states
-  const [currentDate, setCurrentDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
-  );
+  const [currentDate, setCurrentDate] = useState<string>(() => getLocalDateString());
 
   const handleSetToday = () => {
-    const today = new Date();
-    const offset = today.getTimezoneOffset();
-    const localToday = new Date(today.getTime() - (offset * 60 * 1000));
-    setCurrentDate(localToday.toISOString().split('T')[0]);
+    setCurrentDate(getLocalDateString());
   };
 
   const handlePrevDay = () => {
@@ -121,20 +156,20 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
 
   const currentEmployee = employees[currentEmployeeIdx];
   const [showAbsenceModal, setShowAbsenceModal] = useState(false);
-  
+
   // Form input states
   const [searchOrderQuery, setSearchOrderQuery] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [hoursInput, setHoursInput] = useState('8.00');
   const [selectedWorkType, setSelectedWorkType] = useState('G');
   const [missingCard, setMissingCard] = useState(false);
-  
+
   // Autocomplete UI states
   const [showOrderAutocomplete, setShowOrderAutocomplete] = useState(false);
   const [autocompleteHighlightIdx, setAutocompleteHighlightIdx] = useState(-1);
   const safeActiveOrders = Array.isArray(activeOrders) ? activeOrders : [];
   const filteredOrders = safeActiveOrders.filter(
-    o => 
+    o =>
       (o?.orderNumber?.toLowerCase() || '').includes(searchOrderQuery.toLowerCase()) ||
       (o?.productCode?.toLowerCase() || '').includes(searchOrderQuery.toLowerCase()) ||
       (o?.productName?.toLowerCase() || '').includes(searchOrderQuery.toLowerCase())
@@ -161,7 +196,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
 
   // Current reported entries list
   const [dayEntries, setDayEntries] = useState<ReportEntry[]>([]);
-  
+
   // Notifications & Alerts
   const [successNotification, setSuccessNotification] = useState('');
   const [warningData, setWarningData] = useState<WarningResponse | null>(null);
@@ -229,21 +264,31 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
         } else {
           setWorkTypes([]);
         }
+
+        // Mark dictionaries as loaded after all fetches complete
+        setDictionariesLoaded(true);
       } catch (err: any) {
         console.error('Błąd podczas ładowania słowników:', err);
         setValidationError('Wystąpił problem z połączeniem lub pobieraniem słowników.');
         setActiveOrders([]);
+        setDictionariesLoaded(true);
       }
     };
 
     fetchDictionaries();
   }, [token]);
 
-  // 2. Load Day Entries when date or employee changes
+  // 2. Initialize form when dictionaries are loaded (fixes race condition on first render)
+  useEffect(() => {
+    if (dictionariesLoaded && currentEmployee) {
+      resetForm();
+    }
+  }, [dictionariesLoaded, currentEmployee, currentDate, workTypes]);
+
+  // 3. Load Day Entries when date or employee changes
   useEffect(() => {
     if (currentEmployee) {
       fetchDayEntries(currentEmployee.id, currentDate);
-      resetForm();
     }
   }, [currentEmployeeIdx, currentDate, employees]);
 
@@ -264,7 +309,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
-        autocompleteContainerRef.current && 
+        autocompleteContainerRef.current &&
         !autocompleteContainerRef.current.contains(e.target as Node)
       ) {
         setShowOrderAutocomplete(false);
@@ -289,17 +334,19 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
   };
 
   // Reset Form
-  const resetForm = () => {
+  const resetForm = useCallback((preserveWorkType = false) => {
     setSearchOrderQuery('');
     setSelectedOrder(null);
     setHoursInput('8.00');
-    setSelectedWorkType('G');
+    if (!preserveWorkType) {
+      setSelectedWorkType(getDefaultWorkType(currentDate, workTypes));
+    }
     setMissingCard(false);
     setValidationError('');
     setEditingReportId(null);
     setAutocompleteHighlightIdx(-1);
     setShowOrderAutocomplete(false);
-  };
+  }, [currentDate, workTypes]);
 
   // Navigation handlers
   const handlePrevEmployee = () => {
@@ -337,12 +384,12 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setEmployeeHighlightIdx(prev => 
+      setEmployeeHighlightIdx(prev =>
         prev < filteredEmployees.length - 1 ? prev + 1 : 0
       );
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setEmployeeHighlightIdx(prev => 
+      setEmployeeHighlightIdx(prev =>
         prev > 0 ? prev - 1 : filteredEmployees.length - 1
       );
     } else if (e.key === 'Enter') {
@@ -395,13 +442,13 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
 
     switch (e.key) {
       case 'ArrowDown':
-        setAutocompleteHighlightIdx(prev => 
+        setAutocompleteHighlightIdx(prev =>
           prev < filteredOrders.length - 1 ? prev + 1 : 0
         );
         e.preventDefault();
         break;
       case 'ArrowUp':
-        setAutocompleteHighlightIdx(prev => 
+        setAutocompleteHighlightIdx(prev =>
           prev > 0 ? prev - 1 : filteredOrders.length - 1
         );
         e.preventDefault();
@@ -534,7 +581,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
     setEditingReportId(entry.id);
     setSelectedWorkType(entry.workTimeTypeCode);
     setHoursInput(entry.hours.toString());
-    
+
     if (entry.order) {
       const matchedOrder = Array.isArray(activeOrders) ? activeOrders.find(o => o?.orderNumber === entry.order?.orderNumber) : undefined;
       if (matchedOrder) {
@@ -643,10 +690,10 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
     <div>
       {/* Top Banner Success Notification */}
       {successNotification && (
-        <div className="alert alert-success" style={{ 
-          position: 'fixed', 
-          top: '20px', 
-          right: '20px', 
+        <div className="alert alert-success" style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
           zIndex: 9999,
           boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
         }}>
@@ -662,11 +709,11 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
               <AlertTriangle size={24} />
               Ostrzeżenie o wymiarze czasu pracy!
             </h3>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <p>Wprowadzany czas pracy powoduje przekroczenie norm dobowych dla pracownika:</p>
               <p style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{currentEmployee?.fullName}</p>
-              
+
               <ul style={{ paddingLeft: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {warningData.warnStandard && (
                   <li style={{ color: 'var(--warning-color)', fontWeight: 600 }}>
@@ -690,8 +737,8 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
             </div>
 
             <div className="modal-actions">
-              <button 
-                className="btn btn-secondary" 
+              <button
+                className="btn btn-secondary"
                 onClick={() => {
                   setShowWarningModal(false);
                   setWarningData(null);
@@ -699,8 +746,8 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
               >
                 Anuluj
               </button>
-              <button 
-                className="btn btn-primary" 
+              <button
+                className="btn btn-primary"
                 style={{ backgroundColor: 'var(--warning-color)' }}
                 onClick={() => handleFormSubmit(undefined, true)} // Save directly bypassing check
               >
@@ -731,14 +778,25 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
         >
           ◀
         </button>
-        <input 
-          id="dateInput"
-          type="date" 
-          className="form-control" 
-          style={{ width: '170px', padding: '0.5rem 0.75rem' }}
-          value={currentDate}
-          onChange={e => setCurrentDate(e.target.value)}
-        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <input
+            id="dateInput"
+            type="date"
+            className="form-control"
+            style={{ width: '170px', padding: '0.5rem 0.75rem' }}
+            value={currentDate}
+            onChange={e => setCurrentDate(e.target.value)}
+          />
+          <span style={{
+            fontWeight: 600,
+            color: isWeekend(currentDate) ? 'var(--warning-color)' : 'var(--text-secondary)',
+            fontSize: '0.9rem',
+            minWidth: '36px',
+            textAlign: 'center'
+          }}>
+            ({getDayOfWeekAbbreviation(currentDate)})
+          </span>
+        </div>
         <button
           type="button"
           className="btn btn-secondary"
@@ -791,7 +849,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                 autoComplete="off"
               />
             </div>
-            
+
             {showEmployeeDropdown && (
               <div className="autocomplete-dropdown" style={{ width: '100%' }}>
                 {filteredEmployees.length === 0 ? (
@@ -896,10 +954,10 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
 
                 {/* Display auto-filled info */}
                 {selectedOrder && (
-                  <div style={{ 
-                    marginTop: '0.75rem', 
-                    padding: '0.75rem', 
-                    backgroundColor: 'var(--bg-tertiary)', 
+                  <div style={{
+                    marginTop: '0.75rem',
+                    padding: '0.75rem',
+                    backgroundColor: 'var(--bg-tertiary)',
                     borderRadius: 'var(--radius-md)',
                     border: '1px solid var(--border-color)',
                     fontSize: '0.85rem',
@@ -950,20 +1008,20 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
             </div>
 
             <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 ref={saveBtnRef}
-                className="btn btn-primary" 
+                className="btn btn-primary"
                 style={{ flex: 1 }}
               >
                 <Save size={18} />
                 {editingReportId ? 'Zapisz zmiany' : 'Zapisz wpis (Enter)'}
               </button>
               {editingReportId && (
-                <button 
-                  type="button" 
-                  className="btn btn-secondary" 
-                  onClick={resetForm}
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => resetForm()}
                 >
                   Anuluj
                 </button>
@@ -978,7 +1036,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
             <h3 style={{ margin: 0, fontSize: '1.2rem', fontFamily: 'var(--font-header)' }}>
               Wpisy z dnia ({totalHoursToday.toFixed(1)} h)
             </h3>
-            
+
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               {currentEmployee && (
                 <button
@@ -991,9 +1049,9 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                   Dodaj nieobecność
                 </button>
               )}
-              <button 
+              <button
                 type="button"
-                className="btn btn-secondary btn-sm" 
+                className="btn btn-secondary btn-sm"
                 onClick={handleCopyPreviousDay}
                 disabled={isCopyingPreviousDay}
                 aria-busy={isCopyingPreviousDay}
@@ -1024,12 +1082,12 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                 </thead>
                 <tbody>
                   {Array.isArray(dayEntries) && dayEntries.map(entry => (
-                    <tr key={entry.id} style={{ 
-                      backgroundColor: editingReportId === entry.id ? 'var(--primary-glow)' : 'transparent' 
+                    <tr key={entry.id} style={{
+                      backgroundColor: editingReportId === entry.id ? 'var(--primary-glow)' : 'transparent'
                     }}>
                       <td>
-                        <span style={{ 
-                          fontWeight: 700, 
+                        <span style={{
+                          fontWeight: 700,
                           color: entry.workTimeTypeCode === 'G' ? 'var(--success-color)' : 'var(--warning-color)',
                           fontSize: '0.95rem'
                         }}>
@@ -1060,16 +1118,16 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                       </td>
                       <td>
                         <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
-                          <button 
-                            className="btn btn-secondary btn-sm" 
+                          <button
+                            className="btn btn-secondary btn-sm"
                             style={{ padding: '0.25rem 0.5rem' }}
                             onClick={() => handleEditEntry(entry)}
                             title="Edytuj wpis"
                           >
                             Edytuj
                           </button>
-                          <button 
-                            className="btn btn-danger btn-sm" 
+                          <button
+                            className="btn btn-danger btn-sm"
                             style={{ padding: '0.25rem 0.5rem', backgroundColor: 'transparent', color: 'var(--danger-color)', borderColor: 'var(--danger-border)' }}
                             onClick={() => handleDeleteEntry(entry.id)}
                             title="Usuń wpis"

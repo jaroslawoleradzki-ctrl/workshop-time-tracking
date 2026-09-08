@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as jwt from 'jsonwebtoken';
 import * as ExcelJS from 'exceljs';
 import request from 'supertest';
-import { formatEmployeeName } from '../src/routes/analytics';
+import { Prisma } from '@prisma/client';
+import {
+  formatEmployeeName,
+  getClosureControlSummary,
+  ReconciliationConsistencyError,
+} from '../src/routes/analytics';
 import app from '../src/app';
 import prisma from '../src/utils/prisma';
 import { TEST_JWT_SECRET } from './setup-env';
@@ -58,6 +63,19 @@ const closureOrders = [
 }));
 
 const mockOrderReportQuery = () => vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+  // Diagnostic query for closure control summary - only selects id, no include
+  if (args?.select?.id && !args?.include?.reports) {
+    return closureOrders
+      .filter(order => order.deletedAt === null)
+      .filter(order => order.status === 'OPEN' || (
+        order.status === 'CLOSED' &&
+        order.completionDate &&
+        order.completionDate >= new Date('2026-08-01T00:00:00.000Z') &&
+        order.completionDate <= new Date('2026-08-31T23:59:59.999Z')
+      ))
+      .map(order => ({ id: order.id })) as any;
+  }
+
   const reportRange = args.include.reports.where.date;
   const closureBranches = args.where.OR as any[] | undefined;
   const completionRange = closureBranches?.[1]?.completionDate;
@@ -98,6 +116,12 @@ describe('Analytics reports', () => {
     vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([]);
     vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([]);
     vi.spyOn(prisma.companyCalendarDay, 'findUnique').mockResolvedValue(null);
+    vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => {
+      if (typeof callback === 'function') {
+        return callback(prisma);
+      }
+      return callback;
+    });
   });
 
   afterEach(() => {
@@ -585,6 +609,31 @@ describe('Analytics reports', () => {
 
     it('exports exactly the JSON rows, including zero-hour closed orders', async () => {
       mockOrderReportQuery();
+      vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
+        if (args?.where?.workTimeType?.isAbsence) {
+          return [];
+        }
+        return [
+          {
+            employeeId: EMPLOYEE_ID,
+            employee: { fullName: 'Jan Kowalski' },
+            hours: 5,
+            workTimeTypeCode: 'G',
+            workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+            orderId: 'open-hours',
+            date: new Date('2026-08-10T00:00:00.000Z'),
+          },
+          {
+            employeeId: EMPLOYEE_ID,
+            employee: { fullName: 'Jan Kowalski' },
+            hours: 4,
+            workTimeTypeCode: 'G',
+            workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+            orderId: 'closed-hours',
+            date: new Date('2026-08-12T00:00:00.000Z'),
+          },
+        ] as any;
+      });
 
       const jsonResponse = await authenticatedGet(`/api/analytics/report-by-order?${closureRange}`).expect(200);
       const xlsxResponse = await authenticatedGet(`/api/analytics/export/by-order?${closureRange}`)
@@ -1111,7 +1160,7 @@ describe('Analytics reports', () => {
       });
     });
 
-    it('returns MISMATCHED status when settled hours differ from employee total hours', async () => {
+    it('returns MISMATCHED status and negative diagnostics for Direction A (employee > settled, difference < 0)', async () => {
       // Orders: 100h
       vi.spyOn(prisma.order, 'findMany').mockResolvedValue([
         {
@@ -1140,6 +1189,22 @@ describe('Analytics reports', () => {
       vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
         if (args?.where?.workTimeType?.isAbsence) {
           return [{ workTimeTypeCode: 'L4', hours: 16 }] as any;
+        }
+
+        // Diagnostic query - has include with employee, order, workTimeType
+        if (args?.include?.employee && args?.include?.order && args?.include?.workTimeType) {
+          return [
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+              hours: 8,
+              workTimeTypeCode: 'SZK',
+              workTimeType: { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+              orderId: null,
+              order: null,
+              date: new Date('2026-08-15T00:00:00.000Z'),
+            },
+          ] as any;
         }
 
         return [
@@ -1179,6 +1244,203 @@ describe('Analytics reports', () => {
       expect(response.body.difference).toBe(-8);
       expect(response.body.status).toBe('MISMATCHED');
       expect(response.body.statusLabel).toBe('Niezgodne');
+
+      // Assert diagnostics array is returned and explains difference
+      expect(response.body.diagnostics).toBeDefined();
+      expect(response.body.diagnostics.length).toBe(1);
+      expect(response.body.diagnostics[0]).toMatchObject({
+        employeeName: 'Kowalski Jan',
+        date: '2026-08-15',
+        workTimeTypeCode: 'SZK',
+        hours: 8,
+        orderNumber: null,
+        reason: 'Brak zlecenia',
+        contribution: -8,
+      });
+
+      const sumContributions = response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0);
+      expect(sumContributions).toBe(response.body.difference);
+    });
+
+    it('returns MISMATCHED status and positive diagnostics for Direction B (settled > employee, difference > 0)', async () => {
+      // Order in closure: 100h
+      vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+        if (args?.where?.OR || !args?.where?.orderNumber) {
+          return [
+            {
+              id: 'ord-1',
+              orderNumber: 'ZL-100',
+              productName: 'Produkt',
+              productCode: 'P-1',
+              accountingAccount: 'K-1',
+              plannedHours: 100,
+              quantity: 1,
+              quantityUnit: 'szt.',
+              status: 'OPEN',
+              completionDate: null,
+              deletedAt: null,
+              reports: [{ hours: 100, date: new Date('2026-08-10T00:00:00.000Z'), deletedAt: null }],
+            },
+          ] as any;
+        }
+        return [] as any;
+      });
+
+      // WorkTimeTypes: UW (absence)
+      vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
+        { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+      ] as any);
+
+      // Reports: 16h UW tied to ord-1 (counted in orders AND in absence -> double counted)
+      vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
+        if (args?.where?.workTimeType?.isAbsence) {
+          return [{ workTimeTypeCode: 'UW', hours: 16 }] as any;
+        }
+
+        // Diagnostic query
+        if (args?.include?.employee && args?.include?.order && args?.include?.workTimeType) {
+          return [
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+              hours: 16,
+              workTimeTypeCode: 'UW',
+              workTimeType: { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+              orderId: 'ord-1',
+              order: { orderNumber: 'ZL-100' },
+              date: new Date('2026-08-18T00:00:00.000Z'),
+            },
+          ] as any;
+        }
+
+        return [
+          {
+            employeeId: 'emp-1',
+            employee: { fullName: 'Jan Kowalski' },
+            hours: 100,
+            workTimeTypeCode: 'G',
+            workTimeType: { name: 'Standardowe' },
+          },
+        ] as any;
+      });
+
+      const response = await authenticatedGet('/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31').expect(200);
+
+      // Settled: 100 orders + 16 UW = 116
+      // Employee total: 100
+      // Difference: 116 - 100 = +16
+      expect(response.body.ordersHours).toBe(100);
+      expect(response.body.totalAbsenceHours).toBe(16);
+      expect(response.body.totalSettledHours).toBe(116);
+      expect(response.body.totalEmployeeHours).toBe(100);
+      expect(response.body.difference).toBe(16);
+      expect(response.body.status).toBe('MISMATCHED');
+      expect(response.body.statusLabel).toBe('Niezgodne');
+
+      expect(response.body.diagnostics).toBeDefined();
+      expect(response.body.diagnostics.length).toBe(1);
+      expect(response.body.diagnostics[0]).toMatchObject({
+        employeeName: 'Kowalski Jan',
+        date: '2026-08-18',
+        workTimeTypeCode: 'UW',
+        hours: 16,
+        orderNumber: 'ZL-100',
+        reason: 'Nieobecność z zleceniem w rozliczeniu (podwójne naliczenie)',
+        contribution: 16,
+      });
+
+      const sumContributions = response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0);
+      expect(sumContributions).toBe(response.body.difference);
+    });
+
+    it('returns MISMATCHED status with both positive and negative contributions for Mixed Direction', async () => {
+      vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+        if (args?.where?.OR || !args?.where?.orderNumber) {
+          return [
+            {
+              id: 'ord-1',
+              orderNumber: 'ZL-100',
+              status: 'OPEN',
+              completionDate: null,
+              deletedAt: null,
+              reports: [{ hours: 100, date: new Date('2026-08-10T00:00:00.000Z'), deletedAt: null }],
+            },
+          ] as any;
+        }
+        return [] as any;
+      });
+
+      vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
+        { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+        { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+      ] as any);
+
+      vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
+        if (args?.where?.workTimeType?.isAbsence) {
+          return [{ workTimeTypeCode: 'UW', hours: 16 }] as any;
+        }
+
+        if (args?.include?.employee && args?.include?.order && args?.include?.workTimeType) {
+          return [
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+              hours: 16,
+              workTimeTypeCode: 'UW',
+              workTimeType: { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+              orderId: 'ord-1',
+              order: { orderNumber: 'ZL-100' },
+              date: new Date('2026-08-18T00:00:00.000Z'),
+            },
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+              hours: 8,
+              workTimeTypeCode: 'SZK',
+              workTimeType: { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+              orderId: null,
+              order: null,
+              date: new Date('2026-08-20T00:00:00.000Z'),
+            },
+          ] as any;
+        }
+
+        return [
+          {
+            employeeId: 'emp-1',
+            employee: { fullName: 'Jan Kowalski' },
+            hours: 100,
+            workTimeTypeCode: 'G',
+            workTimeType: { name: 'Standardowe' },
+          },
+          {
+            employeeId: 'emp-1',
+            employee: { fullName: 'Jan Kowalski' },
+            hours: 8,
+            workTimeTypeCode: 'SZK',
+            workTimeType: { name: 'Szkolenie' },
+          },
+        ] as any;
+      });
+
+      const response = await authenticatedGet('/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31').expect(200);
+
+      // Settled: 100 orders + 16 UW = 116
+      // Employee total: 100 G + 8 SZK = 108
+      // Difference: 116 - 108 = +8
+      expect(response.body.ordersHours).toBe(100);
+      expect(response.body.totalAbsenceHours).toBe(16);
+      expect(response.body.totalSettledHours).toBe(116);
+      expect(response.body.totalEmployeeHours).toBe(108);
+      expect(response.body.difference).toBe(8);
+      expect(response.body.status).toBe('MISMATCHED');
+
+      expect(response.body.diagnostics).toHaveLength(2);
+      expect(response.body.diagnostics[0].contribution).toBe(16);
+      expect(response.body.diagnostics[1].contribution).toBe(-8);
+
+      const sumContributions = response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0);
+      expect(sumContributions).toBe(response.body.difference);
     });
 
     it('dynamically includes custom absence type with isAbsence=true and excludes isAbsence=false', async () => {
@@ -1192,6 +1454,11 @@ describe('Analytics reports', () => {
       vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
         if (args?.where?.workTimeType?.isAbsence) {
           return [{ workTimeTypeCode: 'DELEGACJA_URLOP', hours: 24 }] as any;
+        }
+
+        // Diagnostic query - has include with employee, order, workTimeType
+        if (args?.include?.employee && args?.include?.order && args?.include?.workTimeType) {
+          return [] as any;
         }
 
         return [
@@ -1212,6 +1479,7 @@ describe('Analytics reports', () => {
       ]);
       expect(response.body.absences.some((a: any) => a.code === 'PRZESTOJ')).toBe(false);
       expect(response.body.status).toBe('MATCHED');
+      expect(response.body.diagnostics).toBeUndefined();
     });
 
     it('rejects invalid date parameters with HTTP 400', async () => {
@@ -1228,7 +1496,7 @@ describe('Analytics reports', () => {
         .expect(({ body }) => expect(body.code).toBe('INVALID_CLOSURE_REPORT_PARAMS'));
     });
 
-    it('includes control summary section in XLSX export when in closureReport mode', async () => {
+    it('includes control summary section in XLSX export when in closureReport mode and omits diagnostics for MATCHED', async () => {
       vi.spyOn(prisma.order, 'findMany').mockResolvedValue([
         {
           id: 'ord-1',
@@ -1304,6 +1572,1094 @@ describe('Analytics reports', () => {
 
       const hasStatusRow = allValues.some((row: any) => Array.isArray(row) && row.includes('Status') && row.includes('Zgodne'));
       expect(hasStatusRow).toBe(true);
+
+      // MATCHED should NOT include diagnostics section
+      const hasDiagnosticsSection = allValues.some((row: any) => Array.isArray(row) && row.includes('Diagnostyka niezgodności'));
+      expect(hasDiagnosticsSection).toBe(false);
     });
+
+    it('includes full 7-column diagnostics section with signed numbers in XLSX export for MISMATCHED status', async () => {
+      vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+        if (args?.where?.OR || !args?.where?.orderNumber) {
+          return [
+            {
+              id: 'ord-1',
+              orderNumber: 'ZL-XLSX',
+              productName: 'Forma',
+              productCode: 'P-XLSX',
+              accountingAccount: 'K-900',
+              plannedHours: 50,
+              quantity: 2,
+              quantityUnit: 'szt.',
+              status: 'CLOSED',
+              completionDate: new Date('2026-08-20T00:00:00.000Z'),
+              deletedAt: null,
+              reports: [{ hours: 40, date: new Date('2026-08-15T00:00:00.000Z'), deletedAt: null }],
+            },
+          ] as any;
+        }
+        return [] as any;
+      });
+
+      vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
+        { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+        { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+      ] as any);
+
+      vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
+        if (args?.where?.workTimeType?.isAbsence) {
+          return [{ workTimeTypeCode: 'UW', hours: 16 }] as any;
+        }
+
+        if (args?.include?.employee && args?.include?.order && args?.include?.workTimeType) {
+          return [
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+              hours: 8,
+              workTimeTypeCode: 'SZK',
+              workTimeType: { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+              orderId: null,
+              order: null,
+              date: new Date('2026-08-15T00:00:00.000Z'),
+            },
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+              hours: 16,
+              workTimeTypeCode: 'UW',
+              workTimeType: { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+              orderId: 'ord-1',
+              order: { orderNumber: 'ZL-XLSX' },
+              date: new Date('2026-08-18T00:00:00.000Z'),
+            },
+          ] as any;
+        }
+
+        return [
+          {
+            employeeId: 'emp-1',
+            employee: { fullName: 'Jan Kowalski' },
+            hours: 40,
+            workTimeTypeCode: 'G',
+            workTimeType: { name: 'Standardowe' },
+          },
+          {
+            employeeId: 'emp-1',
+            employee: { fullName: 'Jan Kowalski' },
+            hours: 8,
+            workTimeTypeCode: 'SZK',
+            workTimeType: { name: 'Szkolenie' },
+          },
+        ] as any;
+      });
+
+      const xlsxResponse = await authenticatedGet('/api/analytics/export/by-order?closureReport=true&dateFrom=2026-08-01&dateTo=2026-08-31')
+        .buffer(true)
+        .parse(binaryParser)
+        .expect(200)
+        .expect('Content-Type', /spreadsheetml/);
+
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(xlsxResponse.body);
+      const worksheet = workbook.getWorksheet('Zlecenia')!;
+
+      const allValues = worksheet.getSheetValues();
+
+      // 1. Verify diagnostics header section title exists
+      const hasDiagnosticsHeader = allValues.some((row: any) => Array.isArray(row) && row.includes('Diagnostyka niezgodności'));
+      expect(hasDiagnosticsHeader).toBe(true);
+
+      // Find the header row index
+      let diagHeaderRowIdx = -1;
+      worksheet.eachRow((row, rowNumber) => {
+        const vals = Array.isArray(row.values) ? (row.values as any[]).slice(1) : [];
+        if (vals.includes('Diagnostyka niezgodności')) {
+          diagHeaderRowIdx = rowNumber + 1;
+        }
+      });
+      expect(diagHeaderRowIdx).toBeGreaterThan(0);
+
+      // 2. Verify exact 7 columns in exact order
+      const expectedColHeaders = ['Pracownik', 'Data', 'Typ', 'Godziny', 'Zlecenie', 'Przyczyna', 'Wkład w różnicę'];
+      const headerRow = worksheet.getRow(diagHeaderRowIdx);
+      const actualHeaders = (headerRow.values as any[]).slice(1);
+      expect(actualHeaders).toHaveLength(7);
+      expect(actualHeaders).toEqual(expectedColHeaders);
+
+      // 3. Find and verify diagnostic rows (including numeric types and numFmt)
+      let szkRowExcel: ExcelJS.Row | undefined;
+      let uwRowExcel: ExcelJS.Row | undefined;
+
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber > diagHeaderRowIdx) {
+          const vals = Array.isArray(row.values) ? (row.values as any[]).slice(1) : [];
+          if (vals.includes('SZK (Szkolenie)')) {
+            szkRowExcel = row;
+          }
+          if (vals.includes('Nieobecność z zleceniem w rozliczeniu (podwójne naliczenie)')) {
+            uwRowExcel = row;
+          }
+        }
+      });
+
+      expect(szkRowExcel).toBeDefined();
+      const szkValues = (szkRowExcel!.values as any[]).slice(1);
+      expect(szkValues[0]).toBe('Kowalski Jan');
+      expect(szkValues[1]).toBe('2026-08-15');
+      expect(szkValues[2]).toBe('SZK (Szkolenie)');
+      expect(szkValues[3]).toBe(8);
+      expect(typeof szkValues[3]).toBe('number');
+      expect(szkValues[4]).toBe('—');
+      expect(szkValues[5]).toBe('Brak zlecenia');
+      expect(szkValues[6]).toBe(-8);
+      expect(typeof szkValues[6]).toBe('number');
+      expect(szkRowExcel!.getCell(4).numFmt).toBe('#,##0.00');
+      expect(szkRowExcel!.getCell(7).numFmt).toBe('+#,##0.00;-#,##0.00;0.00');
+
+      expect(uwRowExcel).toBeDefined();
+      const uwValues = (uwRowExcel!.values as any[]).slice(1);
+      expect(uwValues[0]).toBe('Kowalski Jan');
+      expect(uwValues[1]).toBe('2026-08-18');
+      expect(uwValues[2]).toBe('UW (Urlop wypoczynkowy)');
+      expect(uwValues[3]).toBe(16);
+      expect(typeof uwValues[3]).toBe('number');
+      expect(uwValues[4]).toBe('ZL-XLSX');
+      expect(uwValues[5]).toBe('Nieobecność z zleceniem w rozliczeniu (podwójne naliczenie)');
+      expect(uwValues[6]).toBe(16);
+      expect(typeof uwValues[6]).toBe('number');
+      expect(uwRowExcel!.getCell(4).numFmt).toBe('#,##0.00');
+      expect(uwRowExcel!.getCell(7).numFmt).toBe('+#,##0.00;-#,##0.00;0.00');
+    });
+  });
+});
+
+describe('getReconciliationDiagnostics — math verification', () => {
+  const EMPLOYEE_ID = '20000000-0000-4000-8000-000000000001';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('sum of contributions equals totalSettledHours - totalEmployeeHours for MISMATCHED case', async () => {
+    // Test case setup:
+    // Orders in closure: ord-1, ord-2
+    // Reports in date range:
+    //   emp-1: 40h G on ord-1 (in closure) → contribution = 0
+    //   emp-1: 16h UW on ord-1 (in closure) → contribution = +16 (double counted)
+    //   emp-1: 10h G on ord-2 (in closure) → contribution = 0
+    //   emp-1: 8h G no order → contribution = -8
+    //   emp-1: 4h UW no order → contribution = 0
+    //
+    // ordersHours = 40 + 16 + 10 = 66 (ALL reports on orders in closure)
+    // absenceHours = 16 + 4 = 20 (ALL absences)
+    // totalSettledHours = 66 + 20 = 86
+    // totalEmployeeHours = 40 + 16 + 10 + 8 + 4 = 78
+    // difference = 86 - 78 = 8
+    //
+    // Diagnostics sum = 0 + 16 + 0 + (-8) + 0 = 8 = difference ✓
+
+    const { getReconciliationDiagnostics } = await import('../src/routes/analytics');
+
+    // Mock orders in closure
+    vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+      if (args?.where?.OR) {
+        // ordersInClosure query
+        return [{ id: 'ord-1' }, { id: 'ord-2' }] as any;
+      }
+      return [] as any;
+    });
+
+    // Mock absence types
+    vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
+      { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false },
+      { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+    ] as any);
+
+    // Mock workTimeReports
+    const allReports = [
+      { employeeId: 'emp-1', employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' }, date: new Date('2026-08-15T00:00:00.000Z'), hours: 40, workTimeTypeCode: 'G', workTimeType: { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false }, orderId: 'ord-1', order: { orderNumber: 'ZL-1' } },
+      { employeeId: 'emp-1', employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' }, date: new Date('2026-08-15T00:00:00.000Z'), hours: 16, workTimeTypeCode: 'UW', workTimeType: { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false }, orderId: 'ord-1', order: { orderNumber: 'ZL-1' } },
+      { employeeId: 'emp-1', employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' }, date: new Date('2026-08-20T00:00:00.000Z'), hours: 10, workTimeTypeCode: 'G', workTimeType: { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false }, orderId: 'ord-2', order: { orderNumber: 'ZL-2' } },
+      { employeeId: 'emp-1', employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' }, date: new Date('2026-08-22T00:00:00.000Z'), hours: 8, workTimeTypeCode: 'G', workTimeType: { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false }, orderId: null, order: null },
+      { employeeId: 'emp-1', employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' }, date: new Date('2026-08-22T00:00:00.000Z'), hours: 4, workTimeTypeCode: 'UW', workTimeType: { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false }, orderId: null, order: null },
+    ];
+
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
+      if (args?.where?.workTimeType?.isAbsence) {
+        // absenceReports for absenceHours calculation
+        return [
+          { workTimeTypeCode: 'UW', hours: 16 },
+          { workTimeTypeCode: 'UW', hours: 4 },
+        ] as any;
+      }
+      if (args?.where?.date?.gte && args?.where?.date?.lte) {
+        // allReports for diagnostics
+        return allReports as any;
+      }
+      return [] as any;
+    });
+
+    const diagnostics = await getReconciliationDiagnostics({ dateFrom: '2026-08-01', dateTo: '2026-08-31' });
+
+    expect(diagnostics).toBeDefined();
+    expect(diagnostics.length).toBeGreaterThan(0);
+
+    const sumContributions = diagnostics.reduce((sum, d) => sum + d.contribution, 0);
+
+    // Verify against the expected difference
+    // totalSettledHours = 86, totalEmployeeHours = 78, difference = 8
+    const expectedDifference = 8;
+    expect(Math.round(sumContributions * 100) / 100).toBe(expectedDifference);
+  });
+
+  it('returns empty diagnostics for MATCHED case when no double-counted absences', async () => {
+    const { getReconciliationDiagnostics } = await import('../src/routes/analytics');
+
+    // Mock orders in closure
+    vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+      if (args?.where?.OR) {
+        return [{ id: 'ord-1' }] as any;
+      }
+      return [] as any;
+    });
+
+    // Mock absence types
+    vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
+      { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false },
+      { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+    ] as any);
+
+    // Mock workTimeReports - all matched (no double-counted absences)
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
+      if (args?.where?.workTimeType?.isAbsence) {
+        return [{ workTimeTypeCode: 'UW', hours: 10 }] as any;
+      }
+      if (args?.where?.date?.gte && args?.where?.date?.lte) {
+        // All reports are on orders in closure, no double-counted absences
+        return [
+          { employeeId: 'emp-1', employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' }, date: new Date('2026-08-15T00:00:00.000Z'), hours: 40, workTimeTypeCode: 'G', workTimeType: { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false }, orderId: 'ord-1', order: { orderNumber: 'ZL-1' } },
+          { employeeId: 'emp-1', employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' }, date: new Date('2026-08-15T00:00:00.000Z'), hours: 10, workTimeTypeCode: 'UW', workTimeType: { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false }, orderId: null, order: null }, // absence without order in closure
+        ] as any;
+      }
+      return [] as any;
+    });
+
+    const diagnostics = await getReconciliationDiagnostics({ dateFrom: '2026-08-01', dateTo: '2026-08-31' });
+
+    // Should be empty because:
+    // - 40h G on ord-1 (in closure): contribution = 0
+    // - 10h UW no order (not in closure): contribution = 0 (absence without order in closure)
+    expect(diagnostics.length).toBe(0);
+  });
+
+  it('diagnostics include double-counted absences (Direction B)', async () => {
+    const { getReconciliationDiagnostics } = await import('../src/routes/analytics');
+
+    // Mock orders in closure
+    vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+      if (args?.where?.OR) {
+        return [{ id: 'ord-1' }] as any;
+      }
+      return [] as any;
+    });
+
+    // Mock absence types
+    vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
+      { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false },
+      { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+    ] as any);
+
+    // Mock workTimeReports - absence WITH order in closure (Direction B: double counted)
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
+      if (args?.where?.workTimeType?.isAbsence) {
+        return [{ workTimeTypeCode: 'UW', hours: 10 }] as any;
+      }
+      if (args?.where?.date?.gte && args?.where?.date?.lte) {
+        return [
+          { employeeId: 'emp-1', employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' }, date: new Date('2026-08-15T00:00:00.000Z'), hours: 40, workTimeTypeCode: 'G', workTimeType: { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false }, orderId: 'ord-1', order: { orderNumber: 'ZL-1' } },
+          { employeeId: 'emp-1', employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' }, date: new Date('2026-08-15T00:00:00.000Z'), hours: 10, workTimeTypeCode: 'UW', workTimeType: { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false }, orderId: 'ord-1', order: { orderNumber: 'ZL-1' } }, // absence WITH order in closure → double counted
+        ] as any;
+      }
+      return [] as any;
+    });
+
+    const diagnostics = await getReconciliationDiagnostics({ dateFrom: '2026-08-01', dateTo: '2026-08-31' });
+
+    // Should include the double-counted absence
+    expect(diagnostics.length).toBe(1);
+    expect(diagnostics[0].workTimeTypeCode).toBe('UW');
+    expect(diagnostics[0].contribution).toBe(10);
+    expect(diagnostics[0].reason).toContain('podwójne naliczenie');
+  });
+});
+
+describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(prisma.user, 'findUnique').mockResolvedValue({
+      id: USER_ID,
+      username: 'test-admin',
+      passwordHash: 'unused',
+      fullName: 'Test Administrator',
+      role: 'admin',
+      isActive: true,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('executes closure control summary inside RepeatableRead transaction and passes tx client to all reads', async () => {
+    const txMock = {
+      order: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.select?.id) {
+            return [{ id: 'ord-1' }];
+          }
+          return [
+            {
+              id: 'ord-1',
+              orderNumber: 'ZL-SNAP',
+              productName: 'P1',
+              productCode: 'C1',
+              accountingAccount: 'A1',
+              plannedHours: 40,
+              quantity: 1,
+              quantityUnit: 'szt.',
+              status: 'CLOSED',
+              completionDate: new Date('2026-08-20T00:00:00.000Z'),
+              deletedAt: null,
+              reports: [{ hours: 40, date: new Date('2026-08-10T00:00:00.000Z'), deletedAt: null }],
+            },
+          ];
+        }),
+      },
+      workTimeType: {
+        findMany: vi.fn().mockResolvedValue([
+          { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
+          { code: 'UW', name: 'Urlop', isAbsence: true, requiresOrder: false },
+        ]),
+      },
+      workTimeReport: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.where?.workTimeType?.isAbsence) {
+            return [];
+          }
+          if (args?.include?.employee && args?.include?.order) {
+            return [];
+          }
+          return [
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Jan Kowalski' },
+              hours: 40,
+              workTimeTypeCode: 'G',
+              workTimeType: { name: 'Standardowe' },
+            },
+          ];
+        }),
+      },
+    };
+
+    const transactionSpy = vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any, options?: any) => {
+      expect(options).toMatchObject({
+        isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+      });
+      return callback(txMock);
+    });
+
+    const summary = await getClosureControlSummary({ dateFrom: '2026-08-01', dateTo: '2026-08-31' });
+
+    expect(transactionSpy).toHaveBeenCalledTimes(1);
+    expect(txMock.order.findMany).toHaveBeenCalled();
+    expect(txMock.workTimeType.findMany).toHaveBeenCalled();
+    expect(txMock.workTimeReport.findMany).toHaveBeenCalled();
+    expect(summary.status).toBe('MATCHED');
+  });
+
+  it('enforces server-side invariant guard and throws ReconciliationConsistencyError when invariant is violated', async () => {
+    // Simulate inconsistent reads where totals show difference = -8, but diagnostics returns empty (0)
+    const txMock = {
+      order: {
+        findMany: vi.fn().mockResolvedValue([]), // 0 order hours
+      },
+      workTimeType: {
+        findMany: vi.fn().mockResolvedValue([
+          { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
+        ]),
+      },
+      workTimeReport: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.where?.workTimeType?.isAbsence) {
+            return []; // 0 absence hours
+          }
+          if (args?.include?.employee && args?.include?.order) {
+            // Diagnostics query returns empty (0 contribution)
+            return [];
+          }
+          // Employee query returns 8h (totalEmployeeHours = 8)
+          // Difference = 0 - 8 = -8, but diagnostics sum = 0 -> INVARIANT VIOLATION!
+          return [
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Jan Kowalski' },
+              hours: 8,
+              workTimeTypeCode: 'G',
+              workTimeType: { name: 'Standardowe' },
+            },
+          ];
+        }),
+      },
+    };
+
+    vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => callback(txMock));
+
+    // Direct helper call must throw ReconciliationConsistencyError
+    await expect(
+      getClosureControlSummary({ dateFrom: '2026-08-01', dateTo: '2026-08-31' }),
+    ).rejects.toThrow(ReconciliationConsistencyError);
+
+    // Endpoint call must return 500 RECONCILIATION_CONSISTENCY_ERROR
+    const response = await authenticatedGet(
+      '/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31',
+    ).expect(500);
+
+    expect(response.body).toEqual({
+      code: 'RECONCILIATION_CONSISTENCY_ERROR',
+      message: 'Błąd spójności danych raportu rozliczenia. Spróbuj ponownie wygenerować raport.',
+    });
+  });
+
+  it('CASE 1 — INSERT: concurrent report inserted during calculation does not leak into snapshot reads', async () => {
+    // Snapshot State A:
+    // Order ord-1 is OPEN (in closure, 40h reports on ord-1)
+    // 2 reports:
+    //   emp-1: 40h G on ord-1
+    //   emp-1: 8h SZK without order (non-absence, no order) -> generates legitimate mismatch
+    // State A Totals: orders = 40, absences = 0, settled = 40, employee = 48, difference = -8 (MISMATCHED)
+    // State A Diagnostics: 1 record (emp-1, 8h SZK, contribution = -8)
+    //
+    // State B (Concurrent/Global Prisma):
+    // A concurrent transaction commits an unassigned 8h report (emp-2, 8h G no order on 2026-08-15)
+    // In State B: employee = 56, difference = -16 (MISMATCHED if leaked)
+
+    const stateAReports = [
+      {
+        employeeId: 'emp-1',
+        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+        hours: 40,
+        workTimeTypeCode: 'G',
+        workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+        orderId: 'ord-1',
+        order: { orderNumber: 'ZL-1' },
+        date: new Date('2026-08-10T00:00:00.000Z'),
+        deletedAt: null,
+      },
+      {
+        employeeId: 'emp-1',
+        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+        hours: 8,
+        workTimeTypeCode: 'SZK',
+        workTimeType: { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+        orderId: null,
+        order: null,
+        date: new Date('2026-08-12T00:00:00.000Z'),
+        deletedAt: null,
+      },
+    ];
+
+    const stateBReports = [
+      ...stateAReports,
+      {
+        employeeId: 'emp-2',
+        employee: { fullName: 'Adam Nowak', firstName: 'Adam', lastName: 'Nowak' },
+        hours: 8,
+        workTimeTypeCode: 'G',
+        workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
+        orderId: null,
+        order: null,
+        date: new Date('2026-08-15T00:00:00.000Z'),
+        deletedAt: null,
+      },
+    ];
+
+    // Global prisma represents State B (mutated concurrently during calculation)
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async () => stateBReports as any);
+
+    // Transaction client txMock represents stable Snapshot State A
+    const txMock = {
+      order: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.select?.id) return [{ id: 'ord-1' }];
+          return [
+            {
+              id: 'ord-1',
+              orderNumber: 'ZL-1',
+              productName: 'P',
+              productCode: 'C',
+              accountingAccount: 'A',
+              plannedHours: 40,
+              quantity: 1,
+              quantityUnit: 'szt.',
+              status: 'OPEN',
+              completionDate: null,
+              deletedAt: null,
+              reports: [{ hours: 40, date: new Date('2026-08-10T00:00:00.000Z'), deletedAt: null }],
+            },
+          ];
+        }),
+      },
+      workTimeType: {
+        findMany: vi.fn().mockResolvedValue([
+          { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+          { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+        ]),
+      },
+      workTimeReport: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.where?.workTimeType?.isAbsence) return [];
+          if (args?.include?.employee && args?.include?.order) return stateAReports;
+          return stateAReports;
+        }),
+      },
+    };
+
+    vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => callback(txMock));
+
+    const response = await authenticatedGet(
+      '/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31',
+    ).expect(200);
+
+    // Assert that the calculation used Snapshot State A (MISMATCHED, 40h settled vs 48h employee) and was isolated from State B INSERT
+    expect(response.body.status).toBe('MISMATCHED');
+    expect(response.body.ordersHours).toBe(40);
+    expect(response.body.totalSettledHours).toBe(40);
+    expect(response.body.totalEmployeeHours).toBe(48);
+    expect(response.body.difference).toBe(-8);
+
+    expect(response.body.diagnostics).toHaveLength(1);
+    expect(response.body.diagnostics[0].hours).toBe(8);
+    expect(response.body.diagnostics[0].contribution).toBe(-8);
+    expect(response.body.diagnostics[0].reason).toBe('Brak zlecenia');
+
+    // Invariant holds
+    const sumContributions = Math.round(response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0) * 100) / 100;
+    expect(sumContributions).toBe(Math.round(response.body.difference * 100) / 100);
+
+    // Verify all reads were executed against the transaction client
+    expect(txMock.order.findMany).toHaveBeenCalled();
+    expect(txMock.workTimeReport.findMany).toHaveBeenCalled();
+  });
+
+  it('CASE 2 — UPDATE: concurrent report hours modification during calculation does not produce mixed totals and diagnostics', async () => {
+    // Snapshot State A:
+    // 1 unassigned report: emp-1, 8h SZK (Szkolenie, non-absence, no order)
+    // State A Totals: orders = 0, absences = 0, settled = 0, employee = 8, difference = -8 (MISMATCHED)
+    // State A Diagnostics: 1 record, contribution = -8h
+    //
+    // State B (Concurrent/Global Prisma):
+    // Report is updated concurrently to 16h SZK (employee = 16, difference = -16)
+
+    const stateAReports = [
+      {
+        employeeId: 'emp-1',
+        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+        hours: 8,
+        workTimeTypeCode: 'SZK',
+        workTimeType: { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+        orderId: null,
+        order: null,
+        date: new Date('2026-08-15T00:00:00.000Z'),
+        deletedAt: null,
+      },
+    ];
+
+    const stateBReports = [
+      {
+        ...stateAReports[0],
+        hours: 16,
+      },
+    ];
+
+    // Global prisma represents updated State B
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async () => stateBReports as any);
+
+    // Transaction client txMock represents stable Snapshot State A
+    const txMock = {
+      order: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.select?.id) return [];
+          return [];
+        }),
+      },
+      workTimeType: {
+        findMany: vi.fn().mockResolvedValue([
+          { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+        ]),
+      },
+      workTimeReport: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.where?.workTimeType?.isAbsence) return [];
+          if (args?.include?.employee && args?.include?.order) return stateAReports;
+          return stateAReports;
+        }),
+      },
+    };
+
+    vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => callback(txMock));
+
+    const response = await authenticatedGet(
+      '/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31',
+    ).expect(200);
+
+    // Assert that the calculation used Snapshot State A (8h) and did not mix with State B (16h)
+    expect(response.body.status).toBe('MISMATCHED');
+    expect(response.body.ordersHours).toBe(0);
+    expect(response.body.totalSettledHours).toBe(0);
+    expect(response.body.totalEmployeeHours).toBe(8);
+    expect(response.body.difference).toBe(-8);
+
+    expect(response.body.diagnostics).toHaveLength(1);
+    expect(response.body.diagnostics[0].hours).toBe(8);
+    expect(response.body.diagnostics[0].contribution).toBe(-8);
+    expect(response.body.diagnostics[0].reason).toBe('Brak zlecenia');
+
+    // Invariant holds
+    const sumContributions = response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0);
+    expect(sumContributions).toBe(response.body.difference);
+  });
+
+  it('CASE 3 — SOFT DELETE: concurrent report deletion during calculation does not cause partial record inclusion', async () => {
+    // Snapshot State A:
+    // Order ord-1 (OPEN, 40h on 2026-08-10)
+    // 2 reports:
+    //   emp-1: 40h G on ord-1
+    //   emp-1: 8h G without order (deletedAt: null in State A)
+    // State A: settled = 40, employee = 48, difference = -8 (MISMATCHED with 1 diagnostic row)
+    //
+    // State B (Concurrent/Global Prisma):
+    // The unassigned 8h report is soft-deleted (deletedAt = new Date())
+    // In State B: employee = 40, difference = 0 (MATCHED)
+
+    const stateAReports = [
+      {
+        employeeId: 'emp-1',
+        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+        hours: 40,
+        workTimeTypeCode: 'G',
+        workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+        orderId: 'ord-1',
+        order: { orderNumber: 'ZL-1' },
+        date: new Date('2026-08-10T00:00:00.000Z'),
+        deletedAt: null,
+      },
+      {
+        employeeId: 'emp-1',
+        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+        hours: 8,
+        workTimeTypeCode: 'G',
+        workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
+        orderId: null,
+        order: null,
+        date: new Date('2026-08-15T00:00:00.000Z'),
+        deletedAt: null,
+      },
+    ];
+
+    const stateBReports = [
+      stateAReports[0], // 8h report soft-deleted/omitted in State B
+    ];
+
+    // Global prisma represents State B where the 8h report is deleted
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async () => stateBReports as any);
+
+    // Transaction client txMock represents Snapshot State A where 8h report is active
+    const txMock = {
+      order: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.select?.id) return [{ id: 'ord-1' }];
+          return [
+            {
+              id: 'ord-1',
+              orderNumber: 'ZL-1',
+              productName: 'P',
+              productCode: 'C',
+              accountingAccount: 'A',
+              plannedHours: 40,
+              quantity: 1,
+              quantityUnit: 'szt.',
+              status: 'OPEN',
+              completionDate: null,
+              deletedAt: null,
+              reports: [{ hours: 40, date: new Date('2026-08-10T00:00:00.000Z'), deletedAt: null }],
+            },
+          ];
+        }),
+      },
+      workTimeType: {
+        findMany: vi.fn().mockResolvedValue([
+          { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+        ]),
+      },
+      workTimeReport: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.where?.workTimeType?.isAbsence) return [];
+          if (args?.include?.employee && args?.include?.order) return stateAReports;
+          return stateAReports;
+        }),
+      },
+    };
+
+    vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => callback(txMock));
+
+    const response = await authenticatedGet(
+      '/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31',
+    ).expect(200);
+
+    // Assert that the calculation used Snapshot State A (settled=40, employee=48, diff=-8)
+    expect(response.body.status).toBe('MISMATCHED');
+    expect(response.body.ordersHours).toBe(40);
+    expect(response.body.totalSettledHours).toBe(40);
+    expect(response.body.totalEmployeeHours).toBe(48);
+    expect(response.body.difference).toBe(-8);
+
+    expect(response.body.diagnostics).toHaveLength(1);
+    expect(response.body.diagnostics[0].hours).toBe(8);
+    expect(response.body.diagnostics[0].contribution).toBe(-8);
+    expect(response.body.diagnostics[0].reason).toBe('Brak zlecenia');
+
+    // Invariant holds
+    const sumContributions = response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0);
+    expect(sumContributions).toBe(response.body.difference);
+  });
+
+  it('CASE 4 — ORDER ENTERS CLOSURE: concurrent order status/completion transition into closure does not alter snapshot membership', async () => {
+    // Snapshot State A:
+    // Order ord-1 is CLOSED on 2026-09-15 (outside August 2026 closure range) -> NOT IN CLOSURE
+    // Report: emp-1, 40h G on ord-1 in August
+    // State A Totals: orders = 0, absences = 0, settled = 0, employee = 40, difference = -40 (MISMATCHED)
+    // State A Diagnostics: 1 record on ord-1, reason: 'Zlecenie nieobjęte raportem zamknięcia', contribution: -40
+    //
+    // State B (Concurrent/Global Prisma):
+    // Order ord-1 is transitioned to OPEN (or completionDate set to 2026-08-20), entering closure.
+    // In State B: orders = 40, employee = 40, difference = 0 (MATCHED)
+
+    const stateAReports = [
+      {
+        employeeId: 'emp-1',
+        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+        hours: 40,
+        workTimeTypeCode: 'G',
+        workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+        orderId: 'ord-1',
+        order: { orderNumber: 'ZL-OUTSIDE' },
+        date: new Date('2026-08-10T00:00:00.000Z'),
+        deletedAt: null,
+      },
+    ];
+
+    // Global prisma represents State B where ord-1 entered closure
+    vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+      if (args?.select?.id) return [{ id: 'ord-1' }];
+      return [
+        {
+          id: 'ord-1',
+          orderNumber: 'ZL-OUTSIDE',
+          status: 'OPEN', // OPEN in State B
+          completionDate: null,
+          deletedAt: null,
+          reports: [{ hours: 40, date: new Date('2026-08-10T00:00:00.000Z'), deletedAt: null }],
+        },
+      ] as any;
+    });
+
+    // Transaction client txMock represents Snapshot State A where ord-1 is CLOSED outside closure
+    const txMock = {
+      order: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.select?.id) {
+            // ord-1 completionDate 2026-09-15 is outside August range -> empty closure order ids in State A
+            return [];
+          }
+          // getOrderReportRows in closureReport mode for State A excludes ord-1
+          return [];
+        }),
+      },
+      workTimeType: {
+        findMany: vi.fn().mockResolvedValue([
+          { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+        ]),
+      },
+      workTimeReport: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.where?.workTimeType?.isAbsence) return [];
+          if (args?.include?.employee && args?.include?.order) return stateAReports;
+          return stateAReports;
+        }),
+      },
+    };
+
+    vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => callback(txMock));
+
+    const response = await authenticatedGet(
+      '/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31',
+    ).expect(200);
+
+    // Assert that the calculation used Snapshot State A (orders=0, employee=40, diff=-40)
+    expect(response.body.status).toBe('MISMATCHED');
+    expect(response.body.ordersHours).toBe(0);
+    expect(response.body.totalSettledHours).toBe(0);
+    expect(response.body.totalEmployeeHours).toBe(40);
+    expect(response.body.difference).toBe(-40);
+
+    expect(response.body.diagnostics).toHaveLength(1);
+    expect(response.body.diagnostics[0].hours).toBe(40);
+    expect(response.body.diagnostics[0].orderNumber).toBe('ZL-OUTSIDE');
+    expect(response.body.diagnostics[0].reason).toBe('Zlecenie nieobjęte raportem zamknięcia');
+    expect(response.body.diagnostics[0].contribution).toBe(-40);
+
+    // Invariant holds
+    const sumContributions = response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0);
+    expect(sumContributions).toBe(response.body.difference);
+  });
+
+  it('CASE 5 — ORDER LEAVES CLOSURE: concurrent order status change out of closure does not cause conflicting order classification', async () => {
+    // Snapshot State A:
+    // Order ord-1 is OPEN (IN CLOSURE, 40h on ord-1)
+    // 2 reports:
+    //   emp-1: 40h G on ord-1
+    //   emp-1: 8h SZK without order (non-absence, no order) -> generates legitimate mismatch
+    // State A Totals: orders = 40, absences = 0, settled = 40, employee = 48, difference = -8 (MISMATCHED)
+    // State A Diagnostics: 1 record (emp-1, 8h SZK, contribution = -8)
+    //
+    // State B (Concurrent/Global Prisma):
+    // Order ord-1 status changed to SUSPENDED (or soft-deleted), leaving closure.
+    // In State B: orders = 0, employee = 48, difference = -48 (if leaked)
+
+    const stateAReports = [
+      {
+        employeeId: 'emp-1',
+        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+        hours: 40,
+        workTimeTypeCode: 'G',
+        workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+        orderId: 'ord-1',
+        order: { orderNumber: 'ZL-OPEN' },
+        date: new Date('2026-08-10T00:00:00.000Z'),
+        deletedAt: null,
+      },
+      {
+        employeeId: 'emp-1',
+        employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+        hours: 8,
+        workTimeTypeCode: 'SZK',
+        workTimeType: { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+        orderId: null,
+        order: null,
+        date: new Date('2026-08-12T00:00:00.000Z'),
+        deletedAt: null,
+      },
+    ];
+
+    // Global prisma represents State B where ord-1 left closure (SUSPENDED)
+    vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+      if (args?.select?.id) return []; // ord-1 suspended in State B
+      return [];
+    });
+
+    // Transaction client txMock represents Snapshot State A where ord-1 is OPEN in closure
+    const txMock = {
+      order: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.select?.id) return [{ id: 'ord-1' }];
+          return [
+            {
+              id: 'ord-1',
+              orderNumber: 'ZL-OPEN',
+              productName: 'P',
+              productCode: 'C',
+              accountingAccount: 'A',
+              plannedHours: 40,
+              quantity: 1,
+              quantityUnit: 'szt.',
+              status: 'OPEN',
+              completionDate: null,
+              deletedAt: null,
+              reports: [{ hours: 40, date: new Date('2026-08-10T00:00:00.000Z'), deletedAt: null }],
+            },
+          ];
+        }),
+      },
+      workTimeType: {
+        findMany: vi.fn().mockResolvedValue([
+          { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+          { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+        ]),
+      },
+      workTimeReport: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.where?.workTimeType?.isAbsence) return [];
+          if (args?.include?.employee && args?.include?.order) return stateAReports;
+          return stateAReports;
+        }),
+      },
+    };
+
+    vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => callback(txMock));
+
+    const response = await authenticatedGet(
+      '/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31',
+    ).expect(200);
+
+    // Assert that the calculation used Snapshot State A (MISMATCHED, 40h settled vs 48h employee) and ord-1 remained in closure
+    expect(response.body.status).toBe('MISMATCHED');
+    expect(response.body.ordersHours).toBe(40);
+    expect(response.body.totalSettledHours).toBe(40);
+    expect(response.body.totalEmployeeHours).toBe(48);
+    expect(response.body.difference).toBe(-8);
+
+    expect(response.body.diagnostics).toHaveLength(1);
+    expect(response.body.diagnostics[0].hours).toBe(8);
+    expect(response.body.diagnostics[0].contribution).toBe(-8);
+    expect(response.body.diagnostics[0].reason).toBe('Brak zlecenia');
+
+    // Invariant holds
+    const sumContributions = Math.round(response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0) * 100) / 100;
+    expect(sumContributions).toBe(Math.round(response.body.difference * 100) / 100);
+  });
+
+  it('endpoint returns consistent MISMATCHED response where sum(diagnostics.contribution) === difference', async () => {
+    // Consistent snapshot with both Direction A and Direction B records:
+    // ord-1 in closure
+    // emp-1: 40h G on ord-1 -> 0
+    // emp-1: 16h UW on ord-1 -> +16 (in closure orders & absence)
+    // emp-1: 8h G without order -> -8
+    // Settled: 40 + 16 (orders) + 16 (absence) = 72h
+    // Employee total: 40 + 16 + 8 = 64h
+    // Difference: 72 - 64 = +8h
+    // Diagnostics: +16 (UW on ord-1) and -8 (G no order) -> sum = +8h
+
+    const txMock = {
+      order: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.select?.id) return [{ id: 'ord-1' }];
+          return [
+            {
+              id: 'ord-1',
+              orderNumber: 'ZL-SNAP-1',
+              productName: 'Produkt 1',
+              productCode: 'P-1',
+              accountingAccount: 'K-1',
+              plannedHours: 100,
+              quantity: 1,
+              quantityUnit: 'szt.',
+              status: 'OPEN',
+              completionDate: null,
+              deletedAt: null,
+              reports: [
+                { hours: 40, date: new Date('2026-08-10T00:00:00.000Z'), deletedAt: null },
+                { hours: 16, date: new Date('2026-08-11T00:00:00.000Z'), deletedAt: null },
+              ],
+            },
+          ];
+        }),
+      },
+      workTimeType: {
+        findMany: vi.fn().mockResolvedValue([
+          { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
+          { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+        ]),
+      },
+      workTimeReport: {
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          if (args?.where?.workTimeType?.isAbsence) {
+            return [{ workTimeTypeCode: 'UW', hours: 16 }];
+          }
+          if (args?.include?.employee && args?.include?.order) {
+            return [
+              {
+                employeeId: 'emp-1',
+                employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+                hours: 40,
+                workTimeTypeCode: 'G',
+                workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
+                orderId: 'ord-1',
+                order: { orderNumber: 'ZL-SNAP-1' },
+                date: new Date('2026-08-10T00:00:00.000Z'),
+              },
+              {
+                employeeId: 'emp-1',
+                employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+                hours: 16,
+                workTimeTypeCode: 'UW',
+                workTimeType: { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+                orderId: 'ord-1',
+                order: { orderNumber: 'ZL-SNAP-1' },
+                date: new Date('2026-08-11T00:00:00.000Z'),
+              },
+              {
+                employeeId: 'emp-1',
+                employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
+                hours: 8,
+                workTimeTypeCode: 'G',
+                workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
+                orderId: null,
+                order: null,
+                date: new Date('2026-08-12T00:00:00.000Z'),
+              },
+            ];
+          }
+          return [
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Jan Kowalski' },
+              hours: 40,
+              workTimeTypeCode: 'G',
+              workTimeType: { name: 'Standardowe' },
+            },
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Jan Kowalski' },
+              hours: 16,
+              workTimeTypeCode: 'UW',
+              workTimeType: { name: 'Urlop wypoczynkowy' },
+            },
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Jan Kowalski' },
+              hours: 8,
+              workTimeTypeCode: 'G',
+              workTimeType: { name: 'Standardowe' },
+            },
+          ];
+        }),
+      },
+    };
+
+    vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => callback(txMock));
+
+    const response = await authenticatedGet(
+      '/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31',
+    ).expect(200);
+
+    expect(response.body.status).toBe('MISMATCHED');
+    expect(response.body.ordersHours).toBe(56);
+    expect(response.body.totalAbsenceHours).toBe(16);
+    expect(response.body.totalSettledHours).toBe(72);
+    expect(response.body.totalEmployeeHours).toBe(64);
+    expect(response.body.difference).toBe(8);
+
+    expect(response.body.diagnostics).toHaveLength(2);
+    expect(response.body.diagnostics[0].contribution).toBe(16);
+    expect(response.body.diagnostics[1].contribution).toBe(-8);
+
+    const sumContributions = Math.round(
+      response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0) * 100,
+    ) / 100;
+    expect(sumContributions).toBe(response.body.difference);
   });
 });
