@@ -1254,7 +1254,7 @@ describe('Analytics reports', () => {
         workTimeTypeCode: 'SZK',
         hours: 8,
         orderNumber: null,
-        reason: 'Brak zlecenia',
+        reason: 'Typ nie jest nieobecnością i nie wymaga zlecenia',
         contribution: -8,
       });
 
@@ -1711,7 +1711,7 @@ describe('Analytics reports', () => {
       expect(szkValues[3]).toBe(8);
       expect(typeof szkValues[3]).toBe('number');
       expect(szkValues[4]).toBe('—');
-      expect(szkValues[5]).toBe('Brak zlecenia');
+      expect(szkValues[5]).toBe('Typ nie jest nieobecnością i nie wymaga zlecenia');
       expect(szkValues[6]).toBe(-8);
       expect(typeof szkValues[6]).toBe('number');
       expect(szkRowExcel!.getCell(4).numFmt).toBe('#,##0.00');
@@ -2144,7 +2144,7 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
     expect(response.body.diagnostics).toHaveLength(1);
     expect(response.body.diagnostics[0].hours).toBe(8);
     expect(response.body.diagnostics[0].contribution).toBe(-8);
-    expect(response.body.diagnostics[0].reason).toBe('Brak zlecenia');
+    expect(response.body.diagnostics[0].reason).toBe('Typ nie jest nieobecnością i nie wymaga zlecenia');
 
     // Invariant holds
     const sumContributions = Math.round(response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0) * 100) / 100;
@@ -2226,7 +2226,7 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
     expect(response.body.diagnostics).toHaveLength(1);
     expect(response.body.diagnostics[0].hours).toBe(8);
     expect(response.body.diagnostics[0].contribution).toBe(-8);
-    expect(response.body.diagnostics[0].reason).toBe('Brak zlecenia');
+    expect(response.body.diagnostics[0].reason).toBe('Typ nie jest nieobecnością i nie wymaga zlecenia');
 
     // Invariant holds
     const sumContributions = response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0);
@@ -2330,7 +2330,7 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
     expect(response.body.diagnostics).toHaveLength(1);
     expect(response.body.diagnostics[0].hours).toBe(8);
     expect(response.body.diagnostics[0].contribution).toBe(-8);
-    expect(response.body.diagnostics[0].reason).toBe('Brak zlecenia');
+    expect(response.body.diagnostics[0].reason).toBe('Typ nie jest nieobecnością i nie wymaga zlecenia');
 
     // Invariant holds
     const sumContributions = response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0);
@@ -2525,7 +2525,7 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
     expect(response.body.diagnostics).toHaveLength(1);
     expect(response.body.diagnostics[0].hours).toBe(8);
     expect(response.body.diagnostics[0].contribution).toBe(-8);
-    expect(response.body.diagnostics[0].reason).toBe('Brak zlecenia');
+    expect(response.body.diagnostics[0].reason).toBe('Typ nie jest nieobecnością i nie wymaga zlecenia');
 
     // Invariant holds
     const sumContributions = Math.round(response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0) * 100) / 100;

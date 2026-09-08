@@ -34,7 +34,7 @@ erDiagram
   WORK_TIME_TYPE ||--o{ WORK_TIME_REPORT : classifies
 ```
 
-`User` nie jest powiązany z `Employee`. `WorkTimeReport` łączy pracownika, opcjonalne zlecenie, typ czasu i użytkowników tworzącego/modyfikującego. `WorkTimeType.isAbsence` klasyfikuje typ jako nieobecność niezależnie od `requiresOrder`; raport okresów nieobecności korzysta z relacji do tego słownika i nie przechowuje dodatkowego znacznika w samym wpisie. `Order` ma status, aktywność i plan godzin. `ImportHistory` przechowuje wynik importu, a `AuditLog` migawkę zmiany.
+`User` nie jest powiązany z `Employee`. `WorkTimeReport` łączy pracownika, opcjonalne zlecenie, typ czasu i użytkowników tworzącego/modyfikującego. `WorkTimeType` posiada niezależne flagi `requiresOrder` (wymóg zlecenia produkcyjnego), `isAbsence` (klasyfikacja nieobecności pracownika) oraz `isSystem` (ochrona typów systemowych). Standardowe kody (m.in. G, NDR, NS, UW, UOK, UŻ, L4, WKU, NN, NU, NUN, NUP, UB, UO, UPP, OP) są zarządzane kanonicznie poprzez migracje bazy danych oraz seed aplikacji. Raport okresów nieobecności i sekcja kontroli rozliczenia korzystają z dynamicznej klasyfikacji `isAbsence=true`. `Order` ma status, aktywność i plan godzin. `ImportHistory` przechowuje wynik importu, a `AuditLog` migawkę zmiany.
 
 `CompanyCalendarDay` przechowuje administracyjne wyjątki kalendarza z unikalną datą, statusem roboczym i opcjonalnym powodem. Serwis `getWorkingDayDecision` jest jedynym źródłem decyzji o dniu roboczym; korzystają z niego walidacja wpisów i zakresy nieobecności.
 

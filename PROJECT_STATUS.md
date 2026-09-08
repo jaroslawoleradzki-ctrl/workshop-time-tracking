@@ -4,23 +4,28 @@
 
 - Projekt: Workshop Time Tracking
 - Aktualna wersja produkcyjna: `0.3.8`
-- Aktualna wersja development: `0.5.2`
+- Aktualna wersja development: `0.5.2` (prace nad `v0.5.4`)
 - Gałąź produkcyjna: `main`
-- Gałąź robocza: `development`
-- Stan prac: v0.5.2 — produkcja follow-up: naprawa zapisu NS w dni wolne, domyślny typ czasu wg dnia tygodnia, dzień tygodnia przy dacie, diagnostyka niezgodności sum kontrolnych
+- Gałąź robocza: `feature/v0.5.4-work-time-types-hardening`
+- Stan prac: v0.5.4 — uszczelnienie słownika rodzajów czasu pracy (WorkTimeTypes hardening), naprawa wyrównania kolumn tabeli w UI, ujednolicenie semantyki diagnostyki rozliczenia, idempotentna migracja danych dla instalacji istniejących i produkcyjnych
 
-Zakres wersji `0.5.2`:
+Zakres wersji `0.5.4`:
 
-- Zapewniono pełną spójność migawki bazy danych (Prisma interactive transaction z `isolationLevel: RepeatableRead`) dla wyliczania sum kontrolnych i diagnostyki rozliczenia oraz wprowadzono serwerowego strażnika niezmiennika (`round(SUM(diagnostics.contribution), 2) === round(totalSettledHours - totalEmployeeHours, 2)`).
-- Zweryfikowano i pokryto testami integracyjnymi backendu oraz komponentów frontendu regułę zapisu wpisów NS (Nadgodziny sobota/niedziela) w dni wolne (sobota/niedziela) przy podaniu prawidłowego zlecenia oraz obsługę błędów odrzucenia (historyczny incydent ze środowiska produkcyjnego nadal wymaga weryfikacji bazy produkcyjnej w trybie READ-ONLY).
-- Poprawiono obsługę błędów frontendu przy zapisie wpisów czasu – użytkownik otrzymuje czytelny komunikat w przypadku odrzucenia przez backend.
-- Automatyczny domyślny typ czasu pracy w formularzu raportowania: dni robocze (poniedziałek–piątek) → G, sobota i niedziela → NS.
-- Wyświetlanie skrótu dnia tygodnia (pn, wt, śr, czw, pt, sob, nd) przy polu daty raportowania.
-- Diagnostyka niezgodności sum kontrolnych zamknięcia miesiąca: przy statusie NIEZGODNE pokazuje konkretne wpisy powodujące różnicę (pracownik, data, typ, godziny, zlecenie, przyczyna, podpisany wkład w różnicę rozliczenia) zarówno dla kierunku ujemnego (Direction A), dodatniego (Direction B), jak i mieszanego.
-- Rozszerzono eksport XLSX raportu zamknięcia o pełną 7-kolumnową sekcję diagnostyki przy statusie NIEZGODNE z formatowaniem numerycznym.
-- Logika resetowania formularza nowego wpisu uwzględnia dzień tygodnia dla domyślnego typu czasu pracy.
-- Edycja istniejącego wpisu zachowuje jego typ czasu pracy.
-- Zmiana nie wymaga migracji bazy danych.
+- Dodano idempotentną migrację bazy danych `20260908120000_canonical_work_time_types_hardening` oraz synchronizację w `seed.ts` dla pełnej macierzy 16 kanonicznych kodów czasu pracy (`G`, `NDR`, `NS`, `UW`, `UOK`, `UŻ`, `L4`, `WKU`, `NN`, `NU`, `NUN`, `NUP`, `UB`, `UO`, `UPP`, `OP`).
+- Poprawiono klasyfikację kodu `WKU` (Wojsko) jako nieobecności (`requires_order = false`, `is_absence = true`, `is_system = true`), eliminując niezgodności rozliczenia w raportach zamknięcia i niepoprawny komunikat o braku zlecenia.
+- Naprawiono krytyczny błąd wyrównania kolumn w tabeli Słownika Rodzajów Czasu Pracy (`DictionariesView.tsx`): naprawiono mapowanie nagłówków `Pełna nazwa`, `Wymaga zlecenia`, `Nieobecność`, `Status słownika` do odpowiadających im komórek danych oraz uporządkowano formularz dodawania/edycji.
+- Poprawiono semantykę diagnostyki rozliczenia w `analytics.ts`: dla typów niewymagających zlecenia i niebędących nieobecnościami (`requires_order=false`, `is_absence=false`) diagnostyka wskazuje dokładną przyczynę `Typ nie jest nieobecnością i nie wymaga zlecenia` zamiast mylącego komunikatu `Brak zlecenia`.
+- Zachowano pełną zgodność niezmiennika sumy wkładów diagnostyki (`sum(contribution) === difference`) oraz spójność migawki transakcyjnej (`RepeatableRead`).
+- Zapewniono pełne zachowanie i nienaruszalność typów własnych (custom) oraz istniejących wpisów czasu pracy.
+
+## Weryfikacja wersji 0.5.4
+
+- backend: 173 testy zakończone powodzeniem (13 plików testowych), w tym pełne pokrycie przypadków diagnostyki rozliczenia, migracji kanonicznej i blokad słownika,
+- backend: build (`npm run build`) zakończony powodzeniem,
+- backend: walidacja schematu Prisma (`npx prisma validate`) — schemat poprawny,
+- frontend: 90 testów zakończonych powodzeniem (10 plików testowych), w tym testy mapowania kolumn tabeli słowników i edycji typów,
+- frontend: build (`npm run build`) zakończony powodzeniem,
+- frontend: lint (`npm run lint`) zakończony powodzeniem z wynikiem 0 ostrzeżeń.
 
 ## Weryfikacja wersji 0.5.2
 

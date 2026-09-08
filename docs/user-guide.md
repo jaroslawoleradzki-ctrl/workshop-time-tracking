@@ -46,10 +46,10 @@ Administrator ma wszystkie funkcje lidera oraz poniższe ekrany.
 - **Zlecenia**: dodawanie, edycja, zmiana statusu/aktywności i miękkie usuwanie; plan godzin wylicza się z ilości i godzin na jednostkę. Opcjonalne pole „Uwagi” można uzupełnić w formularzu dodawania lub edycji, a jego wartość jest widoczna w kolumnie listy zleceń. Wyszukiwarka Bazy Zleceń obsługuje częściowe dopasowanie bez rozróżniania wielkości liter, między innymi po numerze zlecenia, zamawiającym, numerze produktu i koncie księgowym.
 - **Pracownicy**: dodawanie, edycja, aktywacja/dezaktywacja i miękkie usuwanie.
 - **Użytkownicy**: tworzenie kont `admin`/`leader`, edycja roli i aktywności oraz reset hasła. Nie można dezaktywować własnego konta ani odebrać sobie roli administratora.
-- **Rodzaje czasu pracy**: tworzenie i edycja kodów oraz niezależnych właściwości „Wymaga zlecenia” i „Nieobecność”. Typów systemowych nie można usunąć ani zmienić im flagi wymagania zlecenia; klasyfikację nieobecności można korygować administracyjnie. Używanego typu nie można usunąć.
+- **Rodzaje czasu pracy**: przeglądanie, tworzenie i edycja kodów czasu pracy. Tabela prezentuje kolumny: **Kod**, **Pełna nazwa**, **Wymaga zlecenia** (Wymagane / Niewymagane), **Nieobecność** (Tak / Nie) oraz **Status słownika** (Systemowy / Własny). Właściwości „Wymaga zlecenia” oraz „Nieobecność” są od siebie niezależne. Typów systemowych (np. G, NDR, NS, UW, UOK, UŻ, L4, WKU, NN, NU, NUN, NUP, UB, UO, UPP, OP) nie można usunąć, a ich wymóg zlecenia jest zabezpieczony; klasyfikację nieobecności oraz pełną nazwę można w razie potrzeby korygować. Używanego w historii raportowania typu nie można usunąć.
 
-> [!IMPORTANT]
-> Po aktualizacji należy sprawdzić, czy wszystkie niestandardowe typy nieobecności mają włączoną właściwość „Nieobecność”. Automatyczna migracja oznacza jako nieobecności wyłącznie standardowe kody UW, UOK, UŻ i L4.
+> [!NOTE]
+> Standardowe kody nieobecności (w tym UW, UOK, UŻ, L4, WKU, NN, NU, NUN, NUP, UB, UO, UPP, OP) są automatycznie traktowane jako nieobecności i biorą udział w raportowaniu nieobecności oraz rozliczeniu sum kontrolnych. Własne typy nieobecności administrator może samodzielnie oznaczyć flagą „Nieobecność”.
 - **Importy**: pobranie szablonu i wgranie pracowników albo zleceń. Wynik pokazuje rekordy poprawne i błędne; historia zawiera wykonawcę, czas, status i log błędów. Szczegóły formatów zawiera [specyfikacja importów i eksportów](import-export-specification.md).
 
 > **Zrzut ekranu do wstawienia:** Dashboard administratora z czterema licznikami i tabelami wykorzystania planu.

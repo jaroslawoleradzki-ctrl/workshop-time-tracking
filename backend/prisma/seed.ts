@@ -59,6 +59,15 @@ async function main() {
     { code: 'UOK', name: 'Urlop okolicznościowy', requiresOrder: false, isAbsence: true, isSystem: true },
     { code: 'UŻ', name: 'Urlop na żądanie', requiresOrder: false, isAbsence: true, isSystem: true },
     { code: 'L4', name: 'Zwolnienie chorobowe', requiresOrder: false, isAbsence: true, isSystem: true },
+    { code: 'WKU', name: 'Wojsko', requiresOrder: false, isAbsence: true, isSystem: true },
+    { code: 'NN', name: 'Nieobecność nieusprawiedliwiona', requiresOrder: false, isAbsence: true, isSystem: true },
+    { code: 'NU', name: 'Nieobecność usprawiedliwiona', requiresOrder: false, isAbsence: true, isSystem: true },
+    { code: 'NUN', name: 'Nieobecność usprawiedliwiona niepłatna', requiresOrder: false, isAbsence: true, isSystem: true },
+    { code: 'NUP', name: 'Nieobecność usprawiedliwiona płatna', requiresOrder: false, isAbsence: true, isSystem: true },
+    { code: 'UB', name: 'Urlop bezpłatny', requiresOrder: false, isAbsence: true, isSystem: true },
+    { code: 'UO', name: 'Urlop ojcowski', requiresOrder: false, isAbsence: true, isSystem: true },
+    { code: 'UPP', name: 'Urlop płatny pozostały', requiresOrder: false, isAbsence: true, isSystem: true },
+    { code: 'OP', name: 'Opieka nad dzieckiem (art. 188 KP)', requiresOrder: false, isAbsence: true, isSystem: true },
   ];
 
   for (const type of workTimeTypes) {
