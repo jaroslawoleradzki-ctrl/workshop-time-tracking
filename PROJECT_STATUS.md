@@ -3,11 +3,11 @@
 ## Stan bieżący
 
 - Projekt: Workshop Time Tracking
-- Aktualna wersja produkcyjna: `0.3.8`
-- Aktualna wersja development: `0.5.3` (prace nad `v0.5.4`)
+- Aktualna wersja produkcyjna: `0.5.4`
+- Aktualna wersja development: `0.5.4`
 - Gałąź produkcyjna: `main`
-- Gałąź robocza: `feature/v0.5.4-work-time-types-hardening`
-- Stan prac: v0.5.4 — uszczelnienie słownika rodzajów czasu pracy (WorkTimeTypes hardening) po niezależnym przeglądzie: bezpieczna korekta WKU (requires_order=false, is_absence=true) z zachowaniem nazwy i statusu własności, wąska migracja i bezpieczny seed bez przejmowania typów własnych (OP, NN itp.), naprawa wyrównania kolumn tabeli słowników w UI, ujednolicenie semantyki diagnostyki rozliczenia, wykonywalne testy bazy danych PostgreSQL oraz testy integracji z mechanizmami v0.5.3
+- Gałąź robocza: `development`
+- Stan prac: v0.5.4 wydane; uszczelnienie słownika rodzajów czasu pracy (WorkTimeTypes hardening) po niezależnym przeglądzie: bezpieczna korekta WKU (requires_order=false, is_absence=true) z zachowaniem nazwy i statusu własności, wąska migracja i bezpieczny seed bez przejmowania typów własnych (OP, NN itp.), naprawa wyrównania kolumn tabeli słowników w UI, ujednolicenie semantyki diagnostyki rozliczenia, wykonywalne testy bazy danych PostgreSQL oraz testy integracji z mechanizmami v0.5.3
 
 Zakres wersji `0.5.4` (rework po niezależnym przeglądzie):
 
