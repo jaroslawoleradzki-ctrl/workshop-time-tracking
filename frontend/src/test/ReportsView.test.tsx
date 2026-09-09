@@ -460,6 +460,46 @@ describe('ReportsView — miesięczny raport pracowników', () => {
     ]);
     expect(screen.getByRole('columnheader', { name: 'Liczba dni nieobecności' })).toBeInTheDocument();
     expect(screen.getByText('L4 (Zwolnienie chorobowe)')).toBeInTheDocument();
+    expect(screen.getByText('Łącznie dni nieobecności:')).toBeInTheDocument();
+  });
+
+  it('calculates total absence days correctly in table footer with multiple period rows', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/employees') {
+        return { ok: true, json: async () => [{ id: '1', fullName: 'Kowalski Jan' }] };
+      }
+      if (url === '/api/work-time-types') {
+        return { ok: true, json: async () => [{ code: 'L4', name: 'Zwolnienie chorobowe', isAbsence: true, requiresOrder: false }] };
+      }
+      if (url.startsWith('/api/analytics/report-absence-periods')) {
+        return {
+          ok: true,
+          json: async () => [
+            { employeeId: '1', employeeName: 'Kowalski Jan', workTimeTypeCode: 'L4', absenceType: 'L4 (Zwolnienie chorobowe)', dateFrom: '2026-07-01', dateTo: '2026-07-03', workingDays: 3 },
+            { employeeId: '1', employeeName: 'Kowalski Jan', workTimeTypeCode: 'L4', absenceType: 'L4 (Zwolnienie chorobowe)', dateFrom: '2026-07-06', dateTo: '2026-07-07', workingDays: 2 },
+          ],
+        };
+      }
+      return { ok: true, json: async () => [] };
+    }));
+
+    render(
+      <ReportsView
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Okresy Nieobecności' }));
+    await screen.findByRole('table', { name: 'Raport okresów nieobecności' });
+
+    expect(screen.getByText('Łącznie dni nieobecności:')).toBeInTheDocument();
+    // 3 + 2 = 5 total days in tfoot
+    const table = screen.getByRole('table', { name: 'Raport okresów nieobecności' });
+    const tfoot = table.querySelector('tfoot');
+    expect(tfoot).not.toBeNull();
+    expect(tfoot?.textContent).toContain('5');
   });
 
   describe('Raport zamknięcia', () => {
