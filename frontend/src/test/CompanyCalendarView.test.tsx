@@ -21,4 +21,22 @@ describe('CompanyCalendarView', () => {
     fireEvent.click(screen.getByRole('button', { name: /Zapisz wyjątek/i }));
     await waitFor(() => expect(request).toEqual({ isWorkingDay: false, reason: 'Za święto' }));
   });
+
+  it('displays public holiday name as reason in the calendar day list', async () => {
+    const holidayDay = {
+      date: '2026-11-11',
+      isWorkingDay: false,
+      source: 'public holiday',
+      reason: 'Narodowe Święto Niepodległości',
+      overrideId: null,
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      json: async () => [holidayDay],
+    })));
+    render(<CompanyCalendarView token="test-token" />);
+    await screen.findByText('2026-11-11 (śr)');
+    expect(screen.getByText('Narodowe Święto Niepodległości')).toBeInTheDocument();
+    expect(screen.getByText('wolny')).toBeInTheDocument();
+  });
 });
