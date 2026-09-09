@@ -41,32 +41,52 @@ describe('Canonical WorkTimeTypes and Hardening (v0.5.4)', () => {
       'utf8',
     );
 
-    it('contains all 16 canonical types with exact required flags', () => {
-      const canonicalCodes = [
-        'G', 'NDR', 'NS', 'UW', 'UOK', 'UŻ', 'L4', 'WKU',
-        'NN', 'NU', 'NUN', 'NUP', 'UB', 'UO', 'UPP', 'OP',
-      ];
+    it('hardens WKU with required flags while preserving custom attributes and avoiding unauthorized takeovers', () => {
+      // Assert WKU is specifically configured as requires_order=false, is_absence=true
+      expect(sql).toContain("'WKU'");
+      expect(sql).toContain('"requires_order" = false');
+      expect(sql).toContain('"is_absence" = true');
 
-      canonicalCodes.forEach((code) => {
-        expect(sql).toContain(`'${code}'`);
+      // Assert it does NOT force is_system=true on conflict update
+      expect(sql).not.toContain('"is_system" = EXCLUDED."is_system"');
+      expect(sql).not.toMatch(/"is_system"\s*=\s*true/);
+
+      // Assert it does NOT force name update on conflict
+      expect(sql).not.toContain('"name" = EXCLUDED."name"');
+
+      // Assert ambiguous codes without explicit business approval are NOT in the migration
+      const ambiguousCodes = ['NN', 'NU', 'NUN', 'NUP', 'UB', 'UO', 'UPP', 'OP'];
+      ambiguousCodes.forEach((code) => {
+        expect(sql).not.toContain(`'${code}'`);
       });
-
-      // Assert WKU is specifically configured as requires_order=false, is_absence=true, is_system=true
-      expect(sql).toMatch(/'WKU',\s*'Wojsko',\s*false,\s*true,\s*true/);
-
-      // Assert G, NDR, NS require orders and are not absences
-      expect(sql).toMatch(/'G',\s*'Standardowe godziny pracy',\s*true,\s*false,\s*true/);
-      expect(sql).toMatch(/'NDR',\s*'Nadgodziny',\s*true,\s*false,\s*true/);
-      expect(sql).toMatch(/'NS',\s*'Nadgodziny sobota\/niedziela',\s*true,\s*false,\s*true/);
-
-      // Assert ON CONFLICT DO UPDATE ensures idempotency
-      expect(sql).toContain('ON CONFLICT ("code") DO UPDATE SET');
-      expect(sql).toContain('"requires_order" = EXCLUDED."requires_order"');
-      expect(sql).toContain('"is_absence" = EXCLUDED."is_absence"');
-      expect(sql).toContain('"is_system" = EXCLUDED."is_system"');
 
       // Assert safety: no destructive SQL commands
       expect(sql).not.toMatch(/\bDELETE\b|\bDROP\b|\bTRUNCATE\b/i);
+    });
+  });
+
+  describe('Seed safety and canonical scope', () => {
+    const seedSource = readFileSync(
+      resolve(__dirname, '../prisma/seed.ts'),
+      'utf8',
+    );
+
+    it('contains only the 7 established canonical system types and protects custom records', () => {
+      // 7 established types
+      const establishedCanonicalCodes = ['G', 'NDR', 'NS', 'UW', 'UOK', 'UŻ', 'L4'];
+      establishedCanonicalCodes.forEach((code) => {
+        expect(seedSource).toContain(`code: '${code}'`);
+      });
+
+      // Ambiguous codes and custom WKU/OP are NOT in the canonical seed list
+      const excludedCodes = ['WKU', 'OP', 'NN', 'NU', 'NUN', 'NUP', 'UB', 'UO', 'UPP'];
+      excludedCodes.forEach((code) => {
+        expect(seedSource).not.toMatch(new RegExp(`code:\\s*['"]${code}['"]`));
+      });
+
+      // Seed must not overwrite client-owned records
+      expect(seedSource).toContain('if (!existing)');
+      expect(seedSource).toContain('existing.isSystem');
     });
   });
 
@@ -314,6 +334,76 @@ describe('Canonical WorkTimeTypes and Hardening (v0.5.4)', () => {
       });
       expect(summary.diagnostics![0].contribution).toBe(summary.difference);
     });
+
+    it('CASE 6: absence with order causing double counting -> diagnostic identifies double counting and positive contribution', async () => {
+      const order = { id: 'ord-200', orderNumber: 'ZL-2026-200', status: 'OPEN', completionDate: null, deletedAt: null };
+      const mockReports = [
+        {
+          id: 'rep-wku-double',
+          employeeId: EMPLOYEE_ID,
+          employee,
+          date: new Date('2026-09-02T00:00:00.000Z'),
+          hours: 8,
+          workTimeTypeCode: 'WKU',
+          workTimeType: { code: 'WKU', name: 'Wojsko', isAbsence: true, requiresOrder: false },
+          orderId: 'ord-200',
+          order,
+          deletedAt: null,
+        },
+      ];
+
+      const mockDb: any = {
+        order: {
+          findMany: vi.fn().mockImplementation(async (args: any) => {
+            if (args?.select?.id) return [{ id: 'ord-200' }];
+            return [
+              {
+                ...order,
+                productName: 'Produkt Dbl',
+                productCode: 'PR-DBL',
+                accountingAccount: 'KK-DBL',
+                plannedHours: 8,
+                quantity: 1,
+                quantityUnit: 'szt.',
+                reports: [{ hours: 8, date: new Date('2026-09-02T00:00:00.000Z'), deletedAt: null }],
+              },
+            ];
+          }),
+        },
+        workTimeType: {
+          findMany: vi.fn().mockResolvedValue([
+            { code: 'WKU', name: 'Wojsko', isAbsence: true, requiresOrder: false },
+          ]),
+        },
+        workTimeReport: {
+          findMany: vi.fn().mockImplementation(async (args: any) => {
+            if (args?.where?.workTimeType?.isAbsence) {
+              return [{ workTimeTypeCode: 'WKU', hours: 8 }];
+            }
+            return mockReports;
+          }),
+        },
+      };
+
+      const summary = await getClosureControlSummary({ dateFrom: '2026-09-01', dateTo: '2026-09-30' }, mockDb);
+
+      expect(summary.status).toBe('MISMATCHED');
+      expect(summary.ordersHours).toBe(8);
+      expect(summary.totalAbsenceHours).toBe(8);
+      expect(summary.totalSettledHours).toBe(16); // 8 + 8 = 16
+      expect(summary.totalEmployeeHours).toBe(8);
+      expect(summary.difference).toBe(8); // +8 discrepancy due to double counting
+
+      expect(summary.diagnostics).toHaveLength(1);
+      expect(summary.diagnostics![0]).toMatchObject({
+        orderNumber: 'ZL-2026-200',
+        reason: 'Nieobecność z zleceniem w rozliczeniu (podwójne naliczenie)',
+        contribution: 8,
+      });
+      // Invariant check: sum(diagnostic contribution) === difference
+      const sumContrib = summary.diagnostics!.reduce((s, d) => s + d.contribution, 0);
+      expect(sumContrib).toBe(summary.difference);
+    });
   });
 
   describe('Absence Periods reporting with WKU and standard absences', () => {
@@ -365,28 +455,28 @@ describe('Canonical WorkTimeTypes and Hardening (v0.5.4)', () => {
     });
   });
 
-  describe('WorkTimeType API Dictionary CRUD safety', () => {
-    it('prevents deleting system codes', async () => {
+  describe('WorkTimeType API Dictionary CRUD safety and ownership permissions', () => {
+    it('prevents deleting established system codes (e.g. L4)', async () => {
       vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue({
-        code: 'WKU',
-        name: 'Wojsko',
+        code: 'L4',
+        name: 'Zwolnienie chorobowe',
         requiresOrder: false,
         isAbsence: true,
         isSystem: true,
       } as any);
 
       const res = await request(app)
-        .delete('/api/work-time-types/WKU')
+        .delete('/api/work-time-types/L4')
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(400);
       expect(res.body.message).toContain('systemowego');
     });
 
-    it('prevents modifying requiresOrder on system codes but allows modifying name and isAbsence', async () => {
+    it('prevents modifying requiresOrder on established system codes but allows modifying name and isAbsence', async () => {
       vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue({
-        code: 'WKU',
-        name: 'Wojsko',
+        code: 'L4',
+        name: 'Zwolnienie chorobowe',
         requiresOrder: false,
         isAbsence: true,
         isSystem: true,
@@ -395,11 +485,51 @@ describe('Canonical WorkTimeTypes and Hardening (v0.5.4)', () => {
       const updateSpy = vi.spyOn(prisma.workTimeType, 'update').mockResolvedValue({} as any);
 
       await request(app)
+        .put('/api/work-time-types/L4')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          name: 'Zwolnienie lekarskie L4',
+          requiresOrder: true, // Should be ignored because isSystem: true
+          isAbsence: true,
+        })
+        .expect(200);
+
+      expect(updateSpy).toHaveBeenCalledWith({
+        where: { code: 'L4' },
+        data: {
+          name: 'Zwolnienie lekarskie L4',
+          isAbsence: true,
+        },
+      });
+    });
+
+    it('allows deleting and modifying requiresOrder on client-owned custom types (e.g. custom WKU, custom OP, custom SZK)', async () => {
+      vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue({
+        code: 'WKU',
+        name: 'Służba wojskowa',
+        requiresOrder: false,
+        isAbsence: true,
+        isSystem: false, // Preserved as custom/client-owned
+      } as any);
+      vi.spyOn(prisma.workTimeReport, 'count').mockResolvedValue(0);
+      const deleteSpy = vi.spyOn(prisma.workTimeType, 'delete').mockResolvedValue({} as any);
+
+      // Custom type can be deleted if no reports exist
+      await request(app)
+        .delete('/api/work-time-types/WKU')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(deleteSpy).toHaveBeenCalledWith({ where: { code: 'WKU' } });
+
+      // Custom type allows updating requiresOrder
+      const updateSpy = vi.spyOn(prisma.workTimeType, 'update').mockResolvedValue({} as any);
+      await request(app)
         .put('/api/work-time-types/WKU')
         .set('Authorization', `Bearer ${token}`)
         .send({
-          name: 'Wojsko / Ćwiczenia WCR',
-          requiresOrder: true, // Should be ignored because isSystem: true
+          name: 'Służba wojskowa (WCR)',
+          requiresOrder: true, // Custom type can modify requiresOrder
           isAbsence: true,
         })
         .expect(200);
@@ -407,7 +537,8 @@ describe('Canonical WorkTimeTypes and Hardening (v0.5.4)', () => {
       expect(updateSpy).toHaveBeenCalledWith({
         where: { code: 'WKU' },
         data: {
-          name: 'Wojsko / Ćwiczenia WCR',
+          name: 'Służba wojskowa (WCR)',
+          requiresOrder: true,
           isAbsence: true,
         },
       });

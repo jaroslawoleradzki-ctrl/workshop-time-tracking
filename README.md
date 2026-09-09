@@ -75,18 +75,18 @@ Zapewnia administratorom syntetyczne spojrzenie na statusy produkcyjne:
 ### 4. Centrum Raportów (Raporty)
 * Generowanie okresowych zestawień i rozliczeń zleceniowych dla liderów oraz administracji.
 * Istniejący raport „Godziny wg zleceń” udostępnia tryb „Raport zamknięcia”, łączący otwarte zlecenia z godzinami oraz zlecenia zamknięte w wybranym okresie, także z zerową liczbą godzin.
-* Raport okresów nieobecności grupuje kolejne dni robocze tego samego pracownika i rodzaju nieobecności, pozwala filtrować wyniki oraz eksportować je do XLSX.
+* Raport okresów nieobecności grupuje kolejne dni robocze tego samego pracownika i rodzaju nieobecności, mostkuje przez dni wolne (święta ustawowe, weekendy, wyjątki kalendarza), pozwala filtrować wyniki oraz eksportować je do XLSX i CSV.
 * Każdy raport zachowuje własne filtry w bieżącej sesji karty przeglądarki; wartości są odtwarzane po zmianie widoku i odświeżeniu strony, a zamknięcie karty usuwa je automatycznie.
 * Eksport raportów do arkuszy Excel z automatycznym formatowaniem szerokości kolumn, autofiltrami i zamrożonym pierwszym wierszem nagłówkowym w celu wygodnej pracy w arkuszu.
 
 ### 5. Kalendarz zakładowy
-* Administrator może definiować wyjątki dla konkretnych dat: dzień roboczy albo dzień wolny, z opcjonalnym opisem.
-* Bez wyjątku obowiązuje kalendarz poniedziałek–piątek robocze, sobota–niedziela wolne. Automatyczna baza świąt nie jest częścią systemu.
+* System automatycznie wyznacza polskie święta ustawowe (w tym Wigilię od 2025 roku) oraz weekendy.
+* Administrator może definiować wyjątki dla konkretnych dat: dzień roboczy albo dzień wolny, z opcjonalnym opisem, które mają pierwszeństwo przed domyślnymi regułami kalendarza.
 
-### 5. Administracja i Konfiguracja
+### 6. Administracja i Konfiguracja
 * **Pracownicy**: Zarządzanie danymi pracowników (imię, nazwisko, unikalny numer ewidencyjny). Wspiera masowy import z plików Excel.
 * **Użytkownicy**: Zarządzanie kontami użytkowników z uprawnieniami logowania do systemu.
-* **Słowniki**: Konfiguracja kodów klasyfikacji czasu pracy (np. godziny standardowe, nadgodziny, urlopy).
+* **Słowniki**: Konfiguracja kodów klasyfikacji czasu pracy (godziny standardowe, nadgodziny, urlopy, nieobecności). Typy systemowe podlegają ochronie, a typy własne zachowują pełną swobodę konfiguracji.
 * **Import danych**: Kreator masowego wgrywania zleceń i pracowników z plików Excel.
 
 ---

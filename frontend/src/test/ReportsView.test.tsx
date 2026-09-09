@@ -502,6 +502,68 @@ describe('ReportsView — miesięczny raport pracowników', () => {
     expect(tfoot?.textContent).toContain('5');
   });
 
+  it('renders WKU absence periods in the table and exports them to CSV', async () => {
+    let exportedBlob: Blob | null = null;
+    const createSpy = vi.spyOn(window.URL, 'createObjectURL').mockImplementation((blob: any) => {
+      exportedBlob = blob;
+      return 'blob:test-report-wku-csv';
+    });
+
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/employees') {
+        return { ok: true, json: async () => [{ id: '1', fullName: 'Kowalski Jan' }] };
+      }
+      if (url === '/api/work-time-types') {
+        return { ok: true, json: async () => [{ code: 'WKU', name: 'Służba wojskowa', isAbsence: true, requiresOrder: false }] };
+      }
+      if (url.startsWith('/api/analytics/report-absence-periods')) {
+        return {
+          ok: true,
+          json: async () => [
+            {
+              employeeId: '1',
+              employeeName: 'Kowalski Jan',
+              workTimeTypeCode: 'WKU',
+              absenceType: 'WKU (Służba wojskowa)',
+              dateFrom: '2026-09-01',
+              dateTo: '2026-09-04',
+              workingDays: 4,
+            },
+          ],
+        };
+      }
+      return { ok: true, json: async () => [] };
+    }));
+
+    render(
+      <ReportsView
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Okresy Nieobecności' }));
+    await screen.findByRole('table', { name: 'Raport okresów nieobecności' });
+
+    expect(screen.getByText('WKU (Służba wojskowa)')).toBeInTheDocument();
+    expect(screen.getByText('Łącznie dni nieobecności:')).toBeInTheDocument();
+
+    const table = screen.getByRole('table', { name: 'Raport okresów nieobecności' });
+    const tfoot = table.querySelector('tfoot');
+    expect(tfoot?.textContent).toContain('4');
+
+    // Test CSV export for WKU
+    const csvButton = screen.getByRole('button', { name: 'Pobierz plik CSV' });
+    fireEvent.click(csvButton);
+
+    expect(exportedBlob).not.toBeNull();
+    const csvContent = (await exportedBlob!.text()).replace(/^\uFEFF/, '');
+    expect(csvContent).toContain('Raport;Raport okresów nieobecności');
+    expect(csvContent).toContain('Kowalski Jan;WKU (Służba wojskowa);2026-09-01;2026-09-04;4');
+    createSpy.mockRestore();
+  });
+
   describe('Raport zamknięcia', () => {
     it('shows the toggle in the existing order report', () => {
       renderReports();

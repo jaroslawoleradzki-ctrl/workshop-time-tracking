@@ -4,26 +4,46 @@
 
 - Projekt: Workshop Time Tracking
 - Aktualna wersja produkcyjna: `0.3.8`
-- Aktualna wersja development: `0.5.2` (prace nad `v0.5.4`)
+- Aktualna wersja development: `0.5.3` (prace nad `v0.5.4`)
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `feature/v0.5.4-work-time-types-hardening`
-- Stan prac: v0.5.4 — uszczelnienie słownika rodzajów czasu pracy (WorkTimeTypes hardening), naprawa wyrównania kolumn tabeli w UI, ujednolicenie semantyki diagnostyki rozliczenia, idempotentna migracja danych dla instalacji istniejących i produkcyjnych
+- Stan prac: v0.5.4 — uszczelnienie słownika rodzajów czasu pracy (WorkTimeTypes hardening) po niezależnym przeglądzie: bezpieczna korekta WKU (requires_order=false, is_absence=true) z zachowaniem nazwy i statusu własności, wąska migracja i bezpieczny seed bez przejmowania typów własnych (OP, NN itp.), naprawa wyrównania kolumn tabeli słowników w UI, ujednolicenie semantyki diagnostyki rozliczenia, wykonywalne testy bazy danych PostgreSQL oraz testy integracji z mechanizmami v0.5.3
 
-Zakres wersji `0.5.4`:
+Zakres wersji `0.5.4` (rework po niezależnym przeglądzie):
 
-- Dodano idempotentną migrację bazy danych `20260908120000_canonical_work_time_types_hardening` oraz synchronizację w `seed.ts` dla pełnej macierzy 16 kanonicznych kodów czasu pracy (`G`, `NDR`, `NS`, `UW`, `UOK`, `UŻ`, `L4`, `WKU`, `NN`, `NU`, `NUN`, `NUP`, `UB`, `UO`, `UPP`, `OP`).
-- Poprawiono klasyfikację kodu `WKU` (Wojsko) jako nieobecności (`requires_order = false`, `is_absence = true`, `is_system = true`), eliminując niezgodności rozliczenia w raportach zamknięcia i niepoprawny komunikat o braku zlecenia.
-- Naprawiono krytyczny błąd wyrównania kolumn w tabeli Słownika Rodzajów Czasu Pracy (`DictionariesView.tsx`): naprawiono mapowanie nagłówków `Pełna nazwa`, `Wymaga zlecenia`, `Nieobecność`, `Status słownika` do odpowiadających im komórek danych oraz uporządkowano formularz dodawania/edycji.
-- Poprawiono semantykę diagnostyki rozliczenia w `analytics.ts`: dla typów niewymagających zlecenia i niebędących nieobecnościami (`requires_order=false`, `is_absence=false`) diagnostyka wskazuje dokładną przyczynę `Typ nie jest nieobecnością i nie wymaga zlecenia` zamiast mylącego komunikatu `Brak zlecenia`.
+- Bezpieczna korekta semantyki kodu `WKU` w słowniku: `requires_order = false`, `is_absence = true`.
+- Zachowanie nienaruszonej nazwy klienta (`name`) oraz statusu własności (`is_system = false`) dla istniejącego rekordu WKU.
+- Przeprojektowanie migracji bazy danych `20260908120000_canonical_work_time_types_hardening`: aktualizuje wyłącznie WKU w wąskim, precyzyjnym zakresie, bez wprowadzania niezatwierdzonych kodów wieloznacznych (`NN`, `NU`, `NUN`, `NUP`, `UB`, `UO`, `UPP`, `OP`) i bez przejmowania typów własnych klienta (w tym `OP`).
+- Bezpieczny seed produkcyjny (`seed.ts`): ograniczony wyłącznie do 7 ustalonych kanonicznych kodów systemowych (`G`, `NDR`, `NS`, `UW`, `UOK`, `UŻ`, `L4`), zachowujący nazwy zmodyfikowane przez administratora i chroniący typy własne.
+- Naprawa mapowania kolumn w widoku tabeli Słownika Rodzajów Czasu Pracy (`DictionariesView.tsx`): `Kod`, `Pełna nazwa`, `Wymaga zlecenia`, `Nieobecność`, `Status słownika`, `Akcje`.
+- Poprawa semantyki diagnostyki rozliczenia w `analytics.ts`: precyzyjne rozróżnienie „Brak zlecenia” od „Typ nie jest nieobecnością i nie wymaga zlecenia” oraz wykrywanie podwójnego naliczenia nieobecności ze zleceniem w rozliczeniu.
 - Zachowano pełną zgodność niezmiennika sumy wkładów diagnostyki (`sum(contribution) === difference`) oraz spójność migawki transakcyjnej (`RepeatableRead`).
-- Zapewniono pełne zachowanie i nienaruszalność typów własnych (custom) oraz istniejących wpisów czasu pracy.
+- Dodanie wykonywalnych testów migracji i seeda na kontenerze PostgreSQL (`executable-database-migration.test.ts`), testujących zachowanie custom WKU, custom OP, kolizji, typów własnych, historycznych raportów oraz instalacji od zera.
+- Dodanie testów integracyjnych WKU z mechanizmami v0.5.3 (`analytics.test.ts`, `ReportsView.test.tsx`): weekendy, święta ustawowe, Wigilia 2025+, nadrzędność wyjątków kalendarza, poprawność `workingDays`, brak naliczania godzin w dni wolne, eksport XLSX i CSV.
 
 ## Weryfikacja wersji 0.5.4
 
-- backend: 173 testy zakończone powodzeniem (13 plików testowych), w tym pełne pokrycie przypadków diagnostyki rozliczenia, migracji kanonicznej i blokad słownika,
+- backend: 191 testów zakończonych powodzeniem (15 plików testowych), w tym 4 testy na rzeczywistej bazie PostgreSQL w kontenerze,
+- backend: build (`npm run build`) zakończony powodzeniem,
+- backend: walidacja schematu Prisma (`npx prisma validate`) oraz generowanie klienta (`npx prisma generate`) — zakończone powodzeniem,
+- frontend: 93 testy zakończone powodzeniem (10 plików testowych),
+- frontend: build (`npm run build`) zakończony powodzeniem,
+- frontend: lint (`npm run lint`) zakończony powodzeniem z wynikiem 0 ostrzeżeń,
+- git diff --check: brak błędów białych znaków.
+
+Zakres wersji `0.5.3`:
+
+- Dodano automatyczne wyznaczanie polskich świąt ustawowych w module `backend/src/utils/holidays.ts` (w tym uwzględnienie Wigilii Bożego Narodzenia 24 grudnia od 2025 roku).
+- Kalendarz zakładowy: nadrzędność wyjątków administratora nad domyślnymi regułami dni roboczych, weekendów i świąt.
+- Raport okresów nieobecności: uwzględnienie dni wolnych (świąt ustawowych, weekendów, wyjątków kalendarza) w mostkowaniu okresów, bez sztucznego zwiększania liczby dni roboczych (`workingDays`).
+- Dodano łączne podsumowanie liczby dni nieobecności w stopce tabeli oraz spójny eksport CSV.
+
+## Weryfikacja wersji 0.5.3
+
+- backend: 186 testów zakończonych powodzeniem (14 plików testowych),
 - backend: build (`npm run build`) zakończony powodzeniem,
 - backend: walidacja schematu Prisma (`npx prisma validate`) — schemat poprawny,
-- frontend: 90 testów zakończonych powodzeniem (10 plików testowych), w tym testy mapowania kolumn tabeli słowników i edycji typów,
+- frontend: 92 testy zakończone powodzeniem (10 plików testowych),
 - frontend: build (`npm run build`) zakończony powodzeniem,
 - frontend: lint (`npm run lint`) zakończony powodzeniem z wynikiem 0 ostrzeżeń.
 
