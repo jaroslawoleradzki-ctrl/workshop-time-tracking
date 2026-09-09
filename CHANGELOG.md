@@ -3,7 +3,7 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [0.5.4] - 2026-09-09
 
 ### Fixed
 - Naprawiono klasyfikację kodu `WKU` w słowniku rodzajów czasu pracy: `requiresOrder = false` oraz `isAbsence = true`, eliminując fałszywe rozbieżności kontroli rozliczenia i niepoprawny komunikat o braku zlecenia.
