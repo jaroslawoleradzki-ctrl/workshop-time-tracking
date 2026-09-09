@@ -34,9 +34,9 @@ erDiagram
   WORK_TIME_TYPE ||--o{ WORK_TIME_REPORT : classifies
 ```
 
-`User` nie jest powiązany z `Employee`. `WorkTimeReport` łączy pracownika, opcjonalne zlecenie, typ czasu i użytkowników tworzącego/modyfikującego. `WorkTimeType.isAbsence` klasyfikuje typ jako nieobecność niezależnie od `requiresOrder`; raport okresów nieobecności korzysta z relacji do tego słownika i nie przechowuje dodatkowego znacznika w samym wpisie. `Order` ma status, aktywność i plan godzin. `ImportHistory` przechowuje wynik importu, a `AuditLog` migawkę zmiany.
+`User` nie jest powiązany z `Employee`. `WorkTimeReport` łączy pracownika, opcjonalne zlecenie, typ czasu i użytkowników tworzącego/modyfikującego. `WorkTimeType` posiada niezależne flagi `requiresOrder` (wymóg zlecenia produkcyjnego), `isAbsence` (klasyfikacja nieobecności pracownika) oraz `isSystem` (ochrona typów systemowych). Ustalona baza typów systemowych (`G`, `NDR`, `NS`, `UW`, `UOK`, `UŻ`, `L4`) jest inicjowana przez seed aplikacji. Typ `WKU` posiada ustalone reguły biznesowe `requiresOrder=false` oraz `isAbsence=true`, zachowując status własności klienta (`isSystem=false`). Typy własne utworzone przez klienta oraz ich ewentualne kolizje kodów podlegają ochronie przed automatycznym nadpisaniem. Raport okresów nieobecności i sekcja kontroli rozliczenia korzystają z dynamicznej klasyfikacji `isAbsence=true`. `Order` ma status, aktywność i plan godzin. `ImportHistory` przechowuje wynik importu, a `AuditLog` migawkę zmiany.
 
-`CompanyCalendarDay` przechowuje administracyjne wyjątki kalendarza z unikalną datą, statusem roboczym i opcjonalnym powodem. Serwis `getWorkingDayDecision` jest jedynym źródłem decyzji o dniu roboczym; korzystają z niego walidacja wpisów i zakresy nieobecności.
+`CompanyCalendarDay` przechowuje administracyjne wyjątki kalendarza z unikalną datą, statusem roboczym i opcjonalnym powodem. Serwis `getWorkingDayDecision` (wspierany przez moduł `holidays.ts` z algorytmem wyznaczania polskich świąt ustawowych) jest jedynym źródłem decyzji o dniu roboczym; korzystają z niego walidacja wpisów, zakresy nieobecności oraz raport okresów nieobecności.
 
 ## Przepływy
 

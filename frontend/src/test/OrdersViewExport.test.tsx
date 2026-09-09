@@ -66,11 +66,17 @@ describe('OrdersView — Eksport do Excel (XLSX)', () => {
 
     vi.stubGlobal('fetch', fetchMock);
 
-    // Mock URL.createObjectURL and revokeObjectURL
-    vi.stubGlobal('URL', {
-      createObjectURL: vi.fn(() => 'blob:http://localhost/mock-uuid'),
-      revokeObjectURL: vi.fn(),
-    });
+    // Mock URL.createObjectURL and revokeObjectURL without destroying URL constructor
+    if (!window.URL.createObjectURL) {
+      window.URL.createObjectURL = vi.fn(() => 'blob:http://localhost/mock-uuid');
+    } else {
+      vi.spyOn(window.URL, 'createObjectURL').mockImplementation(() => 'blob:http://localhost/mock-uuid');
+    }
+    if (!window.URL.revokeObjectURL) {
+      window.URL.revokeObjectURL = vi.fn();
+    } else {
+      vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
+    }
   });
 
   afterEach(() => {

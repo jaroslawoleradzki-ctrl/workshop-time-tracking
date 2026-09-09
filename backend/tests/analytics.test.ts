@@ -464,6 +464,266 @@ describe('Analytics reports', () => {
     const freeWeekdayResponse = await run([report('2026-08-13'), report('2026-08-17')]);
     expect(freeWeekdayResponse.body).toHaveLength(1);
     expect(freeWeekdayResponse.body[0]).toMatchObject({ dateFrom: '2026-08-13', dateTo: '2026-08-17', workingDays: 2 });
+
+    // A statutory Polish public holiday (e.g. Boże Ciało on 2026-06-04) bridges absence without an override
+    calendarSpy.mockResolvedValue(null);
+    reportSpy.mockResolvedValue([report('2026-06-03'), report('2026-06-05')] as any);
+    const holidayResponse = await authenticatedGet(
+      `/api/analytics/report-absence-periods?dateFrom=2026-06-01&dateTo=2026-06-10&employeeId=${EMPLOYEE_ID}&workTimeTypeCode=L4`,
+    ).expect(200);
+    expect(holidayResponse.body).toHaveLength(1);
+    expect(holidayResponse.body[0]).toMatchObject({ dateFrom: '2026-06-03', dateTo: '2026-06-05', workingDays: 2 });
+  });
+
+  it('correctly handles absence periods with multiple employees, multiple absence types, and Easter Monday / Nov 11 holiday bridging', async () => {
+    const employee1 = { id: 'emp-1', fullName: 'Adam Nowak', firstName: 'Adam', lastName: 'Nowak' };
+    const employee2 = { id: 'emp-2', fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' };
+    const l4Type = { code: 'L4', name: 'Zwolnienie chorobowe', isAbsence: true, requiresOrder: false };
+    const uwType = { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false };
+
+    // Employee 1:
+    // - UW on 2026-04-03 (Friday before Easter) and 2026-04-07 (Tuesday after Easter Monday 2026-04-06)
+    //   -> Easter Sunday (04-05) + Easter Monday (04-06) should bridge into 1 period: 2026-04-03 to 2026-04-07, 2 working days.
+    // - L4 on 2026-04-08 (Wednesday) -> different type, must NOT merge with UW! 1 period: 2026-04-08 to 2026-04-08, 1 working day.
+    //
+    // Employee 2:
+    // - L4 on 2026-11-10 (Tuesday) and 2026-11-12 (Thursday) spanning 2026-11-11 (Święto Niepodległości - Wednesday)
+    //   -> 1 period: 2026-11-10 to 2026-11-12, 2 working days.
+    vi.spyOn(prisma.companyCalendarDay, 'findUnique').mockResolvedValue(null);
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([
+      { employeeId: 'emp-1', employee: employee1, workTimeTypeCode: 'UW', workTimeType: uwType, hours: 8, date: new Date('2026-04-03T00:00:00.000Z') },
+      { employeeId: 'emp-1', employee: employee1, workTimeTypeCode: 'UW', workTimeType: uwType, hours: 8, date: new Date('2026-04-07T00:00:00.000Z') },
+      { employeeId: 'emp-1', employee: employee1, workTimeTypeCode: 'L4', workTimeType: l4Type, hours: 8, date: new Date('2026-04-08T00:00:00.000Z') },
+      { employeeId: 'emp-2', employee: employee2, workTimeTypeCode: 'L4', workTimeType: l4Type, hours: 8, date: new Date('2026-11-10T00:00:00.000Z') },
+      { employeeId: 'emp-2', employee: employee2, workTimeTypeCode: 'L4', workTimeType: l4Type, hours: 8, date: new Date('2026-11-12T00:00:00.000Z') },
+    ] as any);
+
+    const res = await authenticatedGet('/api/analytics/report-absence-periods').expect(200);
+
+    // Should have 3 separate periods in total
+    expect(res.body).toHaveLength(3);
+
+    // 1. Kowalski Jan - L4
+    const kowalskiL4 = res.body.find((r: any) => r.employeeName === 'Kowalski Jan' && r.workTimeTypeCode === 'L4');
+    expect(kowalskiL4).toMatchObject({
+      employeeId: 'emp-2',
+      employeeName: 'Kowalski Jan',
+      workTimeTypeCode: 'L4',
+      dateFrom: '2026-11-10',
+      dateTo: '2026-11-12',
+      workingDays: 2,
+    });
+
+    // 2. Nowak Adam - L4
+    const nowakL4 = res.body.find((r: any) => r.employeeName === 'Nowak Adam' && r.workTimeTypeCode === 'L4');
+    expect(nowakL4).toMatchObject({
+      employeeId: 'emp-1',
+      employeeName: 'Nowak Adam',
+      workTimeTypeCode: 'L4',
+      dateFrom: '2026-04-08',
+      dateTo: '2026-04-08',
+      workingDays: 1,
+    });
+
+    // 3. Nowak Adam - UW
+    const nowakUW = res.body.find((r: any) => r.employeeName === 'Nowak Adam' && r.workTimeTypeCode === 'UW');
+    expect(nowakUW).toMatchObject({
+      employeeId: 'emp-1',
+      employeeName: 'Nowak Adam',
+      workTimeTypeCode: 'UW',
+      dateFrom: '2026-04-03',
+      dateTo: '2026-04-07',
+      workingDays: 2,
+    });
+
+    // Sum of workingDays = 2 + 1 + 2 = 5
+    const totalWorkingDays = res.body.reduce((sum: number, r: any) => sum + r.workingDays, 0);
+    expect(totalWorkingDays).toBe(5);
+  });
+
+  it('correctly bridges absence period across Wigilia (2025-12-24) and Christmas holidays without inventing hours, and splits in 2024', async () => {
+    const employee = { id: 'emp-wigilia', fullName: 'Wigilia Test', firstName: 'Wigilia', lastName: 'Test' };
+    const l4Type = { code: 'L4', name: 'Zwolnienie chorobowe', isAbsence: true, requiresOrder: false };
+
+    vi.spyOn(prisma.companyCalendarDay, 'findUnique').mockResolvedValue(null);
+
+    // 2025: 23 Dec (Tue, work), 24 Dec (Wed, Wigilia - holiday), 25 Dec (Thu, holiday), 26 Dec (Fri, holiday), 27-28 Dec (Sat-Sun, weekend), 29 Dec (Mon, work)
+    // Both 23 Dec and 29 Dec have L4 reports. Because 24-28 Dec are all free (Wigilia + Christmas + Weekend), they form a single bridged period!
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([
+      { employeeId: 'emp-wigilia', employee, workTimeTypeCode: 'L4', workTimeType: l4Type, hours: 8, date: new Date('2025-12-23T00:00:00.000Z') },
+      { employeeId: 'emp-wigilia', employee, workTimeTypeCode: 'L4', workTimeType: l4Type, hours: 8, date: new Date('2025-12-29T00:00:00.000Z') },
+    ] as any);
+
+    const res2025 = await authenticatedGet(
+      '/api/analytics/report-absence-periods?dateFrom=2025-12-01&dateTo=2025-12-31&employeeId=emp-wigilia',
+    ).expect(200);
+
+    expect(res2025.body).toHaveLength(1);
+    expect(res2025.body[0]).toMatchObject({
+      employeeId: 'emp-wigilia',
+      workTimeTypeCode: 'L4',
+      dateFrom: '2025-12-23',
+      dateTo: '2025-12-29',
+      workingDays: 2, // exactly 2 working days (23rd and 29th) - 24th is bridged and does NOT invent hours
+    });
+
+    // 2024 (pre-2025): 23 Dec (Mon, work) and 27 Dec (Fri, work).
+    // In 2024, 24 Dec was a normal working Tuesday. Since there was no L4 on 24 Dec, the period is SPLIT into 2 periods.
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([
+      { employeeId: 'emp-wigilia', employee, workTimeTypeCode: 'L4', workTimeType: l4Type, hours: 8, date: new Date('2024-12-23T00:00:00.000Z') },
+      { employeeId: 'emp-wigilia', employee, workTimeTypeCode: 'L4', workTimeType: l4Type, hours: 8, date: new Date('2024-12-27T00:00:00.000Z') },
+    ] as any);
+
+    const res2024 = await authenticatedGet(
+      '/api/analytics/report-absence-periods?dateFrom=2024-12-01&dateTo=2024-12-31&employeeId=emp-wigilia',
+    ).expect(200);
+
+    expect(res2024.body).toHaveLength(2);
+    expect(res2024.body[0]).toMatchObject({
+      dateFrom: '2024-12-23',
+      dateTo: '2024-12-23',
+      workingDays: 1,
+    });
+    expect(res2024.body[1]).toMatchObject({
+      dateFrom: '2024-12-27',
+      dateTo: '2024-12-27',
+      workingDays: 1,
+    });
+  });
+
+  it('v0.5.3 + v0.5.4 integration: correctly handles WKU across holidays, weekends, Wigilia 2025+, company overrides, and exports XLSX', async () => {
+    const employee = { id: 'emp-wku-v053', fullName: 'WKU Integracja', firstName: 'WKU', lastName: 'Integracja' };
+    const wkuType = { code: 'WKU', name: 'Służba wojskowa', isAbsence: true, requiresOrder: false };
+
+    const calendarSpy = vi.spyOn(prisma.companyCalendarDay, 'findUnique');
+    const reportSpy = vi.spyOn(prisma.workTimeReport, 'findMany');
+
+    // 1. WKU across weekend: Friday 2026-09-04 and Monday 2026-09-07
+    // Saturday and Sunday are free, so they bridge into 1 period with exactly 2 workingDays.
+    calendarSpy.mockResolvedValue(null);
+    reportSpy.mockResolvedValue([
+      { employeeId: 'emp-wku-v053', employee, workTimeTypeCode: 'WKU', workTimeType: wkuType, hours: 8, date: new Date('2026-09-04T00:00:00.000Z') },
+      { employeeId: 'emp-wku-v053', employee, workTimeTypeCode: 'WKU', workTimeType: wkuType, hours: 8, date: new Date('2026-09-07T00:00:00.000Z') },
+    ] as any);
+
+    const weekendRes = await authenticatedGet(
+      '/api/analytics/report-absence-periods?dateFrom=2026-09-01&dateTo=2026-09-30&employeeId=emp-wku-v053&workTimeTypeCode=WKU',
+    ).expect(200);
+
+    expect(weekendRes.body).toHaveLength(1);
+    expect(weekendRes.body[0]).toMatchObject({
+      employeeId: 'emp-wku-v053',
+      workTimeTypeCode: 'WKU',
+      absenceType: 'WKU (Służba wojskowa)',
+      dateFrom: '2026-09-04',
+      dateTo: '2026-09-07',
+      workingDays: 2,
+    });
+
+    // 2. WKU across statutory Polish holiday: Boże Ciało (Thursday 2026-06-04)
+    // Wednesday 2026-06-03 and Friday 2026-06-05. 2026-06-04 is a statutory holiday without override.
+    // Must bridge into 1 period: 2026-06-03 to 2026-06-05, workingDays = 2, no invented hours on 2026-06-04.
+    reportSpy.mockResolvedValue([
+      { employeeId: 'emp-wku-v053', employee, workTimeTypeCode: 'WKU', workTimeType: wkuType, hours: 8, date: new Date('2026-06-03T00:00:00.000Z') },
+      { employeeId: 'emp-wku-v053', employee, workTimeTypeCode: 'WKU', workTimeType: wkuType, hours: 8, date: new Date('2026-06-05T00:00:00.000Z') },
+    ] as any);
+
+    const holidayRes = await authenticatedGet(
+      '/api/analytics/report-absence-periods?dateFrom=2026-06-01&dateTo=2026-06-30&employeeId=emp-wku-v053&workTimeTypeCode=WKU',
+    ).expect(200);
+
+    expect(holidayRes.body).toHaveLength(1);
+    expect(holidayRes.body[0]).toMatchObject({
+      employeeId: 'emp-wku-v053',
+      workTimeTypeCode: 'WKU',
+      dateFrom: '2026-06-03',
+      dateTo: '2026-06-05',
+      workingDays: 2,
+    });
+
+    // 3. WKU across 24 December from 2025+ (Wigilia)
+    // 2025: 23 Dec (Tue) and 29 Dec (Mon). 24 Dec (Wigilia) + 25-26 Dec (Christmas) + 27-28 Dec (Weekend) are free.
+    // Forms 1 bridged period: 2025-12-23 to 2025-12-29, workingDays = 2.
+    reportSpy.mockResolvedValue([
+      { employeeId: 'emp-wku-v053', employee, workTimeTypeCode: 'WKU', workTimeType: wkuType, hours: 8, date: new Date('2025-12-23T00:00:00.000Z') },
+      { employeeId: 'emp-wku-v053', employee, workTimeTypeCode: 'WKU', workTimeType: wkuType, hours: 8, date: new Date('2025-12-29T00:00:00.000Z') },
+    ] as any);
+
+    const wigiliaRes = await authenticatedGet(
+      '/api/analytics/report-absence-periods?dateFrom=2025-12-01&dateTo=2025-12-31&employeeId=emp-wku-v053&workTimeTypeCode=WKU',
+    ).expect(200);
+
+    expect(wigiliaRes.body).toHaveLength(1);
+    expect(wigiliaRes.body[0]).toMatchObject({
+      employeeId: 'emp-wku-v053',
+      workTimeTypeCode: 'WKU',
+      dateFrom: '2025-12-23',
+      dateTo: '2025-12-29',
+      workingDays: 2,
+    });
+
+    // 4. Company calendar override precedence:
+    // A. Administrator marks Boże Ciało (2026-06-04) as an explicit working day.
+    // Because employee did NOT report WKU on 2026-06-04, the missing working day splits the period into 2!
+    calendarSpy.mockImplementation(async ({ where }: any) =>
+      where.date.toISOString().startsWith('2026-06-04')
+        ? { date: where.date, isWorkingDay: true, reason: 'Praca w Boże Ciało' }
+        : null,
+    );
+    reportSpy.mockResolvedValue([
+      { employeeId: 'emp-wku-v053', employee, workTimeTypeCode: 'WKU', workTimeType: wkuType, hours: 8, date: new Date('2026-06-03T00:00:00.000Z') },
+      { employeeId: 'emp-wku-v053', employee, workTimeTypeCode: 'WKU', workTimeType: wkuType, hours: 8, date: new Date('2026-06-05T00:00:00.000Z') },
+    ] as any);
+
+    const overrideWorkRes = await authenticatedGet(
+      '/api/analytics/report-absence-periods?dateFrom=2026-06-01&dateTo=2026-06-30&employeeId=emp-wku-v053&workTimeTypeCode=WKU',
+    ).expect(200);
+
+    expect(overrideWorkRes.body).toHaveLength(2);
+    expect(overrideWorkRes.body[0]).toMatchObject({ dateFrom: '2026-06-03', dateTo: '2026-06-03', workingDays: 1 });
+    expect(overrideWorkRes.body[1]).toMatchObject({ dateFrom: '2026-06-05', dateTo: '2026-06-05', workingDays: 1 });
+
+    // B. Administrator marks a Tuesday (2026-09-08) as a free day (e.g. company holiday).
+    // WKU on Monday (2026-09-07) and Wednesday (2026-09-09) must bridge into 1 period.
+    calendarSpy.mockImplementation(async ({ where }: any) =>
+      where.date.toISOString().startsWith('2026-09-08')
+        ? { date: where.date, isWorkingDay: false, reason: 'Dzień wolny zakładowy' }
+        : null,
+    );
+    reportSpy.mockResolvedValue([
+      { employeeId: 'emp-wku-v053', employee, workTimeTypeCode: 'WKU', workTimeType: wkuType, hours: 8, date: new Date('2026-09-07T00:00:00.000Z') },
+      { employeeId: 'emp-wku-v053', employee, workTimeTypeCode: 'WKU', workTimeType: wkuType, hours: 8, date: new Date('2026-09-09T00:00:00.000Z') },
+    ] as any);
+
+    const overrideFreeRes = await authenticatedGet(
+      '/api/analytics/report-absence-periods?dateFrom=2026-09-01&dateTo=2026-09-30&employeeId=emp-wku-v053&workTimeTypeCode=WKU',
+    ).expect(200);
+
+    expect(overrideFreeRes.body).toHaveLength(1);
+    expect(overrideFreeRes.body[0]).toMatchObject({
+      dateFrom: '2026-09-07',
+      dateTo: '2026-09-09',
+      workingDays: 2,
+    });
+
+    // 5. XLSX export for WKU absence periods
+    vi.spyOn(prisma.employee, 'findUnique').mockResolvedValue(employee as any);
+    vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue(wkuType as any);
+
+    const xlsxRes = await authenticatedGet(
+      '/api/analytics/export/absence-periods?dateFrom=2026-09-01&dateTo=2026-09-30&employeeId=emp-wku-v053&workTimeTypeCode=WKU',
+    )
+      .buffer(true)
+      .parse(binaryParser)
+      .expect(200)
+      .expect('Content-Type', /spreadsheetml/);
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(xlsxRes.body);
+    const worksheet = workbook.getWorksheet('Okresy nieobecności');
+    expect(worksheet?.getRow(1).getCell(1).value).toBe('Raport: Raport okresów nieobecności');
+    expect(worksheet?.getRow(8).getCell(2).value).toBe('WKU (Służba wojskowa)');
+    expect(worksheet?.getRow(8).getCell(5).value).toBe(2);
   });
 
   it('exports the same clipped absence periods to XLSX with report metadata', async () => {
@@ -1254,7 +1514,7 @@ describe('Analytics reports', () => {
         workTimeTypeCode: 'SZK',
         hours: 8,
         orderNumber: null,
-        reason: 'Brak zlecenia',
+        reason: 'Typ nie jest nieobecnością i nie wymaga zlecenia',
         contribution: -8,
       });
 
@@ -1711,7 +1971,7 @@ describe('Analytics reports', () => {
       expect(szkValues[3]).toBe(8);
       expect(typeof szkValues[3]).toBe('number');
       expect(szkValues[4]).toBe('—');
-      expect(szkValues[5]).toBe('Brak zlecenia');
+      expect(szkValues[5]).toBe('Typ nie jest nieobecnością i nie wymaga zlecenia');
       expect(szkValues[6]).toBe(-8);
       expect(typeof szkValues[6]).toBe('number');
       expect(szkRowExcel!.getCell(4).numFmt).toBe('#,##0.00');
@@ -2144,7 +2404,7 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
     expect(response.body.diagnostics).toHaveLength(1);
     expect(response.body.diagnostics[0].hours).toBe(8);
     expect(response.body.diagnostics[0].contribution).toBe(-8);
-    expect(response.body.diagnostics[0].reason).toBe('Brak zlecenia');
+    expect(response.body.diagnostics[0].reason).toBe('Typ nie jest nieobecnością i nie wymaga zlecenia');
 
     // Invariant holds
     const sumContributions = Math.round(response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0) * 100) / 100;
@@ -2226,7 +2486,7 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
     expect(response.body.diagnostics).toHaveLength(1);
     expect(response.body.diagnostics[0].hours).toBe(8);
     expect(response.body.diagnostics[0].contribution).toBe(-8);
-    expect(response.body.diagnostics[0].reason).toBe('Brak zlecenia');
+    expect(response.body.diagnostics[0].reason).toBe('Typ nie jest nieobecnością i nie wymaga zlecenia');
 
     // Invariant holds
     const sumContributions = response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0);
@@ -2330,7 +2590,7 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
     expect(response.body.diagnostics).toHaveLength(1);
     expect(response.body.diagnostics[0].hours).toBe(8);
     expect(response.body.diagnostics[0].contribution).toBe(-8);
-    expect(response.body.diagnostics[0].reason).toBe('Brak zlecenia');
+    expect(response.body.diagnostics[0].reason).toBe('Typ nie jest nieobecnością i nie wymaga zlecenia');
 
     // Invariant holds
     const sumContributions = response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0);
@@ -2525,7 +2785,7 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
     expect(response.body.diagnostics).toHaveLength(1);
     expect(response.body.diagnostics[0].hours).toBe(8);
     expect(response.body.diagnostics[0].contribution).toBe(-8);
-    expect(response.body.diagnostics[0].reason).toBe('Brak zlecenia');
+    expect(response.body.diagnostics[0].reason).toBe('Typ nie jest nieobecnością i nie wymaga zlecenia');
 
     // Invariant holds
     const sumContributions = Math.round(response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0) * 100) / 100;

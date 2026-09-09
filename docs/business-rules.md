@@ -23,13 +23,21 @@ Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.5.2.
 
 ## Rejestrowanie czasu
 
-- Kalendarz zakładowy stosuje regułę bazową: poniedziałek–piątek są robocze, a sobota i niedziela wolne. Administrator może zapisać jeden jawny wyjątek dla konkretnej daty; wyjątek ma pierwszeństwo i może oznaczyć dzień weekendowy jako roboczy albo dzień tygodnia jako wolny. Usunięcie wyjątku przywraca regułę bazową. Kalendarz nie zawiera automatycznej bazy świąt.
+- Kalendarz zakładowy stosuje hierarchiczną regułę wyznaczania charakteru dnia:
+  1. **Wyjątek administratora (`company override`)**: jawny wpis w `CompanyCalendarDay` ma najwyższy priorytet (może oznaczyć święto/weekend jako dzień roboczy lub zwykły dzień tygodnia jako wolny).
+  2. **Ustawowe święto w Polsce (`public holiday`)**: system automatycznie rozpoznaje polskie święta ustawowe (13 dni dla lat do 2024 r. włącznie oraz 14 dni od 2025 r., w tym 24 grudnia – Wigilia Bożego Narodzenia; pozostałe: Nowy Rok, Trzech Króli, Niedziela Wielkanocna, Poniedziałek Wielkanocny, Święto Pracy, Święto Trzeciego Maja, Zielone Świątki, Boże Ciało, Wniebowzięcie NMP, Wszystkich Świętych, Święto Niepodległości, I i II dzień Bożego Narodzenia) i traktuje je jako dni wolne od pracy (`isWorkingDay=false`).
+  3. **Weekend (`weekend`)**: sobota i niedziela są dniami wolnymi (`isWorkingDay=false`).
+  4. **Standardowy dzień roboczy (`standard weekday`)**: poniedziałek–piątek są dniami roboczymi (`isWorkingDay=true`).
 - W dniu wolnym nie można zapisać typu `G` ani typu oznaczonego `isAbsence=true`. Dozwolona pozostaje praca nad zleceniem z typem niebędącym nieobecnością, np. istniejący `NS`.
 
 - Wpis wymaga daty, pracownika, liczby godzin większej od zera i istniejącego kodu rodzaju czasu pracy.
 - Wpis raportu czasu może zostać oznaczony jako „Brak karty” (`missingCard`) w sytuacji, gdy pracownik nie posiadał lub nie użył karty podczas rejestracji czasu pracy. Wartość ta jest przechowywana w bazie danych jako pole logiczne (domyślnie `false`).
 - Zlecenie jest wymagane tylko wtedy, gdy `WorkTimeType.requiresOrder=true`. Dla pozostałych typów API zapisuje `orderId=null`.
-- `WorkTimeType.isAbsence` niezależnie klasyfikuje typ jako nieobecność. Flagi `isAbsence` i `requiresOrder` mogą przyjmować dowolną kombinację i zmiana jednej nie modyfikuje drugiej.
+- `WorkTimeType.isAbsence` niezależnie klasyfikuje typ jako nieobecność pracownika. Flagi `isAbsence` (czy reprezentuje nieobecność) i `requiresOrder` (czy wymaga zlecenia produkcyjnego) są całkowicie niezależne i zmiana jednej nie modyfikuje drugiej.
+- Kanoniczne typy systemowe (`isSystem=true`) obejmują:
+  - Praca ze zleceniem: `G` (Standardowe godziny pracy), `NDR` (Nadgodziny), `NS` (Nadgodziny sobota/niedziela),
+  - Nieobecności: `UW` (Urlop wypoczynkowy), `UOK` (Urlop okolicznościowy), `UŻ` (Urlop na żądanie), `L4` (Zwolnienie chorobowe), `WKU` (Wojsko), `NN` (Nieobecność nieusprawiedliwiona), `NU` (Nieobecność usprawiedliwiona), `NUN` (Nieobecność usprawiedliwiona niepłatna), `NUP` (Nieobecność usprawiedliwiona płatna), `UB` (Urlop bezpłatny), `UO` (Urlop ojcowski), `UPP` (Urlop płatny pozostały), `OP` (Opieka nad dzieckiem art. 188 KP).
+- Typy systemowe są chronione przed usunięciem, a flaga `requiresOrder` jest dla nich zablokowana do edycji; administrator może korygować pole `isAbsence` oraz pełną nazwę słownikową.
 - Nowy wpis można utworzyć tylko dla aktywnego, nieusuniętego pracownika. Jeżeli typ wymaga zlecenia, API sprawdza istnienie nieusuniętego zlecenia; nie sprawdza jednak jego `status` ani `isActive` przy bezpośrednim wywołaniu API.
 - Schemat bazy ogranicza godziny do `Decimal(4,2)`. Kod sprawdza jedynie wartość `> 0`; maksymalna wartość i liczba miejsc po przecinku przychodząca z API są **do potwierdzenia** na poziomie zachowania PostgreSQL/Prisma.
 - Ostrzeżenia są miękkie: ponad 8 godzin kodu `G`, ponad 12 godzin łącznie i ponad 24 godziny łącznie. Interfejs pozwala wybrać „Ignoruj i zapisz”.
@@ -40,7 +48,7 @@ Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.5.2.
 
 - Operację mogą uruchomić role `admin` i `leader`. Interfejs wysyła identyfikator aktualnie wybranego pracownika oraz datę docelową.
 - Źródłem jest najnowsza data wcześniejsza od docelowej, na której ten pracownik ma co najmniej jeden aktywny wpis. Wpisy usunięte logicznie oraz wpisy powiązane z usuniętym zleceniem nie są kopiowane.
-- Pracownik musi istnieć, być aktywny i nieusunięty. Kopiowane są godziny, rodzaj czasu i opcjonalne zlecenie wyłącznie jego wpisów. Dotyczy to również nieobecności, takich jak UW i L4, gdy dniem docelowym jest dzień roboczy.
+- Pracownik musi istnieć, być aktywny i nieusunięty. Kopiowane są godziny, rodzaj czasu i opcjonalne zlecenie wyłącznie jego wpisów. Dotyczy to również nieobecności, takich jak UW, L4 i WKU, gdy dniem docelowym jest dzień roboczy.
 - Jeżeli data docelowa przypada w sobotę lub niedzielę, cała operacja jest odrzucana odpowiedzią `400 Bad Request` i kodem `WEEKEND_COPY_NOT_ALLOWED`, zanim powstaną jakiekolwiek wpisy. Blokada zależy od dnia docelowego, a nie od rodzaju wpisu źródłowego.
 - Jeżeli dzień docelowy zawiera już aktywny wpis tego pracownika, cała operacja jest odrzucana odpowiedzią `409 Conflict`; nie ma trybu dopisywania, scalania ani nadpisywania.
 - Maksymalny rozmiar źródła wynosi 100 aktywnych wpisów. Przekroczenie limitu kończy operację bez utworzenia danych.
@@ -64,10 +72,10 @@ Odpowiedź sukcesu (`201`) zawiera co najmniej `employeeId`, `sourceDate`, `targ
 ## Raport okresów nieobecności
 
 - Raport uwzględnia wyłącznie aktywne wpisy (`deletedAt=null`) powiązane z typem czasu, dla którego `isAbsence=true`.
-- Kolejne dni robocze jednego pracownika i jednego typu są łączone w okres; dni oznaczone przez kalendarz zakładowy jako wolne nie przerywają okresu i nie zwiększają liczby dni. Obejmuje to zarówno bazowe weekendy, jak i jawne wyjątki administratora.
+- Kolejne dni robocze jednego pracownika i jednego typu są łączone w okres; dni oznaczone przez kalendarz zakładowy jako wolne (ustawowe święta, weekendy, jawne wyjątki administratora) nie przerywają okresu i nie zwiększają liczby dni.
 - Brak wpisu w dniu roboczym rozdziela okres, a wielokrotne wpisy tego samego typu w tym samym dniu są liczone jako jeden dzień.
-- Filtr dat przycina dane przed grupowaniem. Raport korzysta z kalendarza zakładowego, ale nie zawiera automatycznej bazy polskich świąt ani indywidualnych harmonogramów pracowników; dzień świąteczny przypadający w dzień tygodnia wymaga jawnego wyjątku administratora.
-- **Ważne**: Automatycznie jako nieobecność sklasyfikowano wyłącznie kody standardowe `UW`, `UOK`, `UŻ`, `L4` (wersja 0.4.7). Wszelkie niestandardowe typy nieobecności (np. „art. 188”, „CH”, „OPIEKA” itp.) muszą zostać ręcznie oznaczone przez administratora w **Administracja → Słownik Rodzajów Czasu Pracy** (pole „Nieobecność” = Tak). Kod raportu **nie hardkoduje** listy kodów — filtruje dynamicznie po `isAbsence=true`.
+- Filtr dat przycina dane przed grupowaniem. Raport korzysta ze wspólnego kalendarza zakładowego z automatyczną obsługą polskich świąt (w tym Wigilii od 2025 roku) oraz wyjątków administratora.
+- **Ważne**: Standardowe kody nieobecności (`UW`, `UOK`, `UŻ`, `L4` oraz `WKU`) są sklasyfikowane jako nieobecności (`isAbsence=true`). Niestandardowe, własne typy nieobecności utworzone przez użytkownika mogą być w dowolnym momencie oznaczone jako nieobecność w **Administracja → Słownik Rodzajów Czasu Pracy** (pole „Nieobecność” = Tak). Kod raportu **nie hardkoduje** listy kodów — filtruje dynamicznie po `isAbsence=true`.
 
 ## Raport zamknięcia zleceń
 
@@ -77,6 +85,7 @@ Odpowiedź sukcesu (`201`) zawiera co najmniej `employeeId`, `sourceDate`, `targ
 - W trybie zamknięcia wyszukiwanie numeru zlecenia pozostaje aktywne. Filtry statusu oraz „tylko z godzinami” są sprzeczne z definicją trybu, dlatego interfejs je wyłącza, a API ignoruje.
 - `completionDate` jest porównywana jako data biznesowa w UTC, od początku `dateFrom` do końca `dateTo`, bez konwersji przez lokalną strefę czasową.
 - W trybie raportu zamknięcia dostępna jest automatyczna sekcja **„Kontrola rozliczenia czasu”** (zarówno w interfejsie pod tabelą zleceń, jak i w eksporcie XLSX/CSV), która porównuje łączny rozliczony czas (`Godziny wg zleceń` + dynamicznie zagregowane godziny wszystkich typów ze słownika oznaczonych jako `isAbsence=true`) z sumą godzin pracowników z raportu miesięcznego (`totalEmployeeHours`). Różnica równa zero oznacza status **ZGODNE** (`MATCHED`), natomiast różnica różna od zera oznacza status **NIEZGODNE** (`MISMATCHED`). Wszystkie odczyty sum kontrolnych oraz diagnostyki wykonywane są w ramach pojedynczej spójnej migawki transakcyjnej (`RepeatableRead`). Przy statusie NIEZGODNE system generuje szczegółową diagnostykę rekordów z podpisanym wkładem (`contribution`), a serwerowy strażnik niezmiennika gwarantuje, że zaokrąglona suma wkładów diagnostyki jest równa wyliczonej różnicy kontrolnej dla zwróconej migawki.
+- Diagnostyka podaje faktyczną przyczynę wykluczenia lub niezgodności wpisu: dla typów z `requiresOrder=true` bez zlecenia wskazuje `Brak zlecenia`, dla typów z `requiresOrder=false` i `isAbsence=false` wskazuje `Typ nie jest nieobecnością i nie wymaga zlecenia`, natomiast dla nieobecności przypisanych do zlecenia objętego rozliczeniem wskazuje `Nieobecność z zleceniem w rozliczeniu (podwójne naliczenie)` z wkładem dodatnim (`contribution = hours`).
 
 ## Audyt i daty
 

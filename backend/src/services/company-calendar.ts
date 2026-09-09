@@ -1,8 +1,9 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import prisma from '../utils/prisma';
 import { formatDateString, parseDateString } from '../utils/date';
+import { getPolishHolidayName } from '../utils/holidays';
 
-export type CalendarDecisionSource = 'standard weekday' | 'weekend' | 'company override';
+export type CalendarDecisionSource = 'standard weekday' | 'weekend' | 'public holiday' | 'company override';
 
 export interface WorkingDayDecision {
   date: string;
@@ -44,6 +45,16 @@ export async function getWorkingDayDecision(
       isWorkingDay: override.isWorkingDay,
       source: 'company override',
       ...(override.reason ? { reason: override.reason } : {}),
+    };
+  }
+
+  const holidayName = getPolishHolidayName(dateKey);
+  if (holidayName) {
+    return {
+      date: dateKey,
+      isWorkingDay: false,
+      source: 'public holiday',
+      reason: holidayName,
     };
   }
 
