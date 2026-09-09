@@ -1,9 +1,11 @@
 import { Router, Response } from 'express';
+import { z } from 'zod';
 import prisma from '../utils/prisma';
 import { AuthRequest, authenticateJWT, requireRole } from '../middlewares/auth';
 import { logChange } from '../utils/audit';
 import { OrderStatus } from '@prisma/client';
 import logger from '../utils/logger';
+import { generateExcelResponse } from '../utils/excel-report';
 
 const router = Router();
 
@@ -38,6 +40,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
         productName: order.productName,
         accountingAccount: order.accountingAccount,
         orderedBy: order.orderedBy,
+        notes: order.notes,
         plannedHours,
         quantity: order.quantity ? Number(order.quantity) : null,
         quantityUnit: order.quantityUnit,
@@ -83,12 +86,187 @@ router.get('/active', async (req: AuthRequest, res: Response) => {
   }
 });
 
+const exportOrdersSchema = z
+  .object({
+    searchQuery: z.string().optional().default(''),
+    statusFilter: z.enum(['ALL', 'OPEN', 'SUSPENDED', 'CLOSED']).optional().default('ALL'),
+    sortField: z.enum(['orderDate', 'plannedShipmentDate']).nullable().optional().default(null),
+    sortOrder: z.enum(['asc', 'desc']).optional().default('asc'),
+  })
+  .strict();
+
+// POST /export-xlsx - Export filtered and sorted orders list to Excel XLSX
+router.post('/export-xlsx', requireRole(['admin', 'leader']), async (req: AuthRequest, res: Response) => {
+  const parseResult = exportOrdersSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    return res.status(400).json({
+      message: 'Nieprawidłowe parametry eksportu zleceń.',
+      code: 'INVALID_EXPORT_PARAMS',
+      errors: parseResult.error.flatten().fieldErrors,
+    });
+  }
+
+  const { searchQuery, statusFilter, sortField, sortOrder } = parseResult.data;
+
+  try {
+    const orders = await prisma.order.findMany({
+      where: { deletedAt: null },
+      include: {
+        reports: {
+          where: { deletedAt: null },
+          select: { hours: true },
+        },
+      },
+    });
+
+    const formattedOrders = orders.map((order) => {
+      const actualHours = order.reports.reduce((sum, r) => sum + Number(r.hours), 0);
+      const plannedHours = Number(order.plannedHours);
+      const utilizationPercent = plannedHours > 0 ? (actualHours / plannedHours) * 100 : 0;
+
+      return {
+        ...order,
+        actualHours: Math.round(actualHours * 100) / 100,
+        plannedHours,
+        utilizationPercent: Math.round(utilizationPercent * 100) / 100,
+      };
+    });
+
+    // 1. Filtering
+    const searchLower = searchQuery.toLowerCase().trim();
+    const filteredOrders = formattedOrders.filter((o) => {
+      const matchesSearch =
+        !searchLower ||
+        (o.orderNumber?.toLowerCase() || '').includes(searchLower) ||
+        (o.orderedBy?.toLowerCase() || '').includes(searchLower) ||
+        (o.productCode?.toLowerCase() || '').includes(searchLower) ||
+        (o.productName?.toLowerCase() || '').includes(searchLower) ||
+        (o.accountingAccount?.toLowerCase() || '').includes(searchLower);
+
+      const matchesStatus = statusFilter === 'ALL' || o.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+
+    // 2. Sorting
+    const sortedOrders = [...filteredOrders].sort((a, b) => {
+      if (sortField) {
+        const valA = a[sortField] ? new Date(a[sortField] as any).getTime() : (sortOrder === 'asc' ? Infinity : -Infinity);
+        const valB = b[sortField] ? new Date(b[sortField] as any).getTime() : (sortOrder === 'asc' ? Infinity : -Infinity);
+
+        if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+        if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+        // Tie breaker: stable orderNumber asc
+        return a.orderNumber.localeCompare(b.orderNumber, 'pl');
+      }
+
+      // Default sort (sortField === null): match GET /api/orders default order (orderNumber desc)
+      return b.orderNumber.localeCompare(a.orderNumber, 'pl');
+    });
+
+    // 3. Build data rows (16 columns)
+    const headers = [
+      'Numer zlecenia',
+      'Data zlecenia',
+      'Planowana data wysyłki',
+      'Kod produktu',
+      'Nazwa produktu',
+      'Zamawiający',
+      'Konto księgowe',
+      'Ilość',
+      'Jednostka',
+      'Godziny na jednostkę',
+      'Godziny planowane',
+      'Godziny rzeczywiste',
+      'Wykorzystanie budżetu [%]',
+      'Status',
+      'Data zamknięcia',
+      'Uwagi',
+    ];
+
+    const data = sortedOrders.map((o) => {
+      const statusPolish =
+        o.status === 'OPEN' ? 'Otwarte' : o.status === 'SUSPENDED' ? 'Wstrzymane' : 'Zamknięte';
+
+      const orderNumberDisplay = o.isActive ? o.orderNumber : `${o.orderNumber} (nieaktywne)`;
+
+      return [
+        orderNumberDisplay,
+        o.orderDate ? new Date(o.orderDate).toISOString().split('T')[0] : '',
+        o.plannedShipmentDate ? new Date(o.plannedShipmentDate).toISOString().split('T')[0] : '',
+        o.productCode || '',
+        o.productName,
+        o.orderedBy || '',
+        o.accountingAccount || '',
+        o.quantity !== null ? Number(o.quantity) : null,
+        o.quantityUnit || '',
+        o.hoursPerUnit !== null ? Number(o.hoursPerUnit) : null,
+        Number(o.plannedHours),
+        Number(o.actualHours),
+        Number(o.utilizationPercent),
+        statusPolish,
+        o.completionDate ? new Date(o.completionDate).toISOString().split('T')[0] : '',
+        o.notes || '',
+      ];
+    });
+
+    // 4. Filename & Metadata
+    const now = new Date();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const filename = `baza_zlecen_${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.xlsx`;
+
+    const statusFilterVal =
+      statusFilter === 'OPEN'
+        ? 'Otwarte'
+        : statusFilter === 'SUSPENDED'
+        ? 'Wstrzymane'
+        : statusFilter === 'CLOSED'
+        ? 'Zamknięte'
+        : 'Wszystkie';
+
+    const searchQueryVal = searchLower ? searchQuery.trim() : 'Brak';
+
+    let sortVal = 'Brak';
+    if (sortField === 'orderDate') {
+      sortVal = sortOrder === 'asc' ? 'Data zlecenia rosnąco' : 'Data zlecenia malejąco';
+    } else if (sortField === 'plannedShipmentDate') {
+      sortVal = sortOrder === 'asc' ? 'Planowana wysyłka rosnąco' : 'Planowana wysyłka malejąco';
+    }
+
+    await generateExcelResponse({
+      res,
+      filename,
+      sheetName: 'Baza zleceń',
+      headers,
+      data,
+      metadata: {
+        reportTitle: 'Baza zleceń',
+        filters: [
+          { label: 'Zakres danych', value: 'Aktualny widok' },
+          { label: 'Filtr statusu', value: statusFilterVal },
+          { label: 'Wyszukiwanie', value: searchQueryVal },
+          { label: 'Sortowanie', value: sortVal },
+          { label: 'Liczba rekordów', value: `${data.length}` },
+        ],
+      },
+      numberColumns: [8, 10, 11, 12, 13],
+      dateColumns: [2, 3, 15],
+    });
+  } catch (error) {
+    logger.error(error, 'Błąd podczas eksportowania bazy zleceń do Excela');
+    return res.status(500).json({ message: 'Błąd podczas eksportowania bazy zleceń do Excela' });
+  }
+});
+
 // Admin-only paths below
 router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response) => {
-  const { orderNumber, orderDate, plannedShipmentDate, productCode, productName, accountingAccount, orderedBy, quantity, quantityUnit, hoursPerUnit, status, isActive } = req.body;
+  const { orderNumber, orderDate, plannedShipmentDate, productCode, productName, accountingAccount, orderedBy, notes, quantity, quantityUnit, hoursPerUnit, status, isActive, completionDate } = req.body;
 
   if (!orderNumber || !orderDate || !productName || quantity === undefined || hoursPerUnit === undefined || !status) {
     return res.status(400).json({ message: 'Numer zlecenia, data zlecenia, nazwa produktu, ilość, godziny/szt. oraz status są wymagane.' });
+  }
+
+  if (notes !== undefined && notes !== null && typeof notes !== 'string') {
+    return res.status(400).json({ message: 'Uwagi muszą być tekstem.' });
   }
 
   const parsedOrderDate = new Date(orderDate);
@@ -112,6 +290,35 @@ router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response)
   }
 
   const calculatedPlannedHours = parsedQuantity * parsedHoursPerUnit;
+  const orderStatusVal = (status as OrderStatus) || OrderStatus.OPEN;
+
+  let parsedCompletionDate: Date | null = null;
+  if (completionDate !== undefined && completionDate !== null && completionDate !== '') {
+    if (typeof completionDate === 'string' && completionDate.trim() === '') {
+      if (orderStatusVal === OrderStatus.CLOSED) {
+        return res.status(400).json({
+          message: 'Rzeczywista data zakończenia jest wymagana przy zamykaniu zlecenia.',
+          code: 'COMPLETION_DATE_REQUIRED',
+        });
+      }
+    } else {
+      const d = new Date(completionDate);
+      if (isNaN(d.getTime())) {
+        return res.status(400).json({
+          message: 'Rzeczywista data zakończenia jest wymagana przy zamykaniu zlecenia.',
+          code: 'COMPLETION_DATE_REQUIRED',
+        });
+      }
+      parsedCompletionDate = d;
+    }
+  }
+
+  if (orderStatusVal === OrderStatus.CLOSED && !parsedCompletionDate) {
+    return res.status(400).json({
+      message: 'Rzeczywista data zakończenia jest wymagana przy zamykaniu zlecenia.',
+      code: 'COMPLETION_DATE_REQUIRED',
+    });
+  }
 
   try {
     const existing = await prisma.order.findFirst({
@@ -122,10 +329,10 @@ router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response)
       return res.status(400).json({ message: `Zlecenie o numerze ${orderNumber} już istnieje` });
     }
 
-    const orderStatusVal = (status as OrderStatus) || OrderStatus.OPEN;
     const cleanProductCode = productCode && productCode.trim() !== '' ? productCode.trim() : null;
     const cleanAccountingAccount = accountingAccount && accountingAccount.trim() !== '' ? accountingAccount.trim() : null;
     const cleanOrderedBy = orderedBy && orderedBy.trim() !== '' ? orderedBy.trim() : null;
+    const cleanNotes = notes && notes.trim() !== '' ? notes.trim() : null;
 
     const order = await prisma.order.create({
       data: {
@@ -136,13 +343,14 @@ router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response)
         productName,
         accountingAccount: cleanAccountingAccount,
         orderedBy: cleanOrderedBy,
+        notes: cleanNotes,
         plannedHours: calculatedPlannedHours,
         quantity: parsedQuantity,
         quantityUnit: quantityUnit || 'szt.',
         hoursPerUnit: parsedHoursPerUnit,
         status: orderStatusVal,
         isActive: isActive !== undefined ? isActive : true,
-        completionDate: orderStatusVal === OrderStatus.CLOSED ? new Date() : null,
+        completionDate: parsedCompletionDate,
       },
     });
 
@@ -166,10 +374,14 @@ router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response)
 
 router.put('/:id', requireRole(['admin']), async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  const { orderNumber, orderDate, plannedShipmentDate, productCode, productName, accountingAccount, orderedBy, quantity, quantityUnit, hoursPerUnit, status, isActive } = req.body;
+  const { orderNumber, orderDate, plannedShipmentDate, productCode, productName, accountingAccount, orderedBy, notes, quantity, quantityUnit, hoursPerUnit, status, isActive, completionDate } = req.body;
 
   if (!orderNumber || !orderDate || !productName || quantity === undefined || hoursPerUnit === undefined || !status) {
     return res.status(400).json({ message: 'Wszystkie pola są wymagane.' });
+  }
+
+  if (notes !== undefined && notes !== null && typeof notes !== 'string') {
+    return res.status(400).json({ message: 'Uwagi muszą być tekstem.' });
   }
 
   const parsedOrderDate = new Date(orderDate);
@@ -215,17 +427,39 @@ router.put('/:id', requireRole(['admin']), async (req: AuthRequest, res: Respons
 
     const orderStatusVal = status as OrderStatus;
 
-    // Set completionDate when changing to CLOSED
-    let completionDate = oldOrder.completionDate;
-    if (orderStatusVal === OrderStatus.CLOSED && oldOrder.status !== OrderStatus.CLOSED) {
-      completionDate = new Date();
-    } else if (orderStatusVal !== OrderStatus.CLOSED) {
-      completionDate = null;
+    let finalCompletionDate: Date | null = oldOrder.completionDate;
+
+    if (completionDate !== undefined) {
+      if (completionDate === null || (typeof completionDate === 'string' && completionDate.trim() === '')) {
+        if (orderStatusVal === OrderStatus.CLOSED) {
+          return res.status(400).json({
+            message: 'Rzeczywista data zakończenia jest wymagana przy zamykaniu zlecenia.',
+            code: 'COMPLETION_DATE_REQUIRED',
+          });
+        }
+      } else {
+        const d = new Date(completionDate);
+        if (isNaN(d.getTime())) {
+          return res.status(400).json({
+            message: 'Rzeczywista data zakończenia jest wymagana przy zamykaniu zlecenia.',
+            code: 'COMPLETION_DATE_REQUIRED',
+          });
+        }
+        finalCompletionDate = d;
+      }
+    }
+
+    if (orderStatusVal === OrderStatus.CLOSED && !finalCompletionDate) {
+      return res.status(400).json({
+        message: 'Rzeczywista data zakończenia jest wymagana przy zamykaniu zlecenia.',
+        code: 'COMPLETION_DATE_REQUIRED',
+      });
     }
 
     const cleanProductCode = productCode && productCode.trim() !== '' ? productCode.trim() : null;
     const cleanAccountingAccount = accountingAccount && accountingAccount.trim() !== '' ? accountingAccount.trim() : null;
     const cleanOrderedBy = orderedBy && orderedBy.trim() !== '' ? orderedBy.trim() : null;
+    const cleanNotes = notes && notes.trim() !== '' ? notes.trim() : null;
 
     const updatedOrder = await prisma.order.update({
       where: { id },
@@ -237,13 +471,14 @@ router.put('/:id', requireRole(['admin']), async (req: AuthRequest, res: Respons
         productName,
         accountingAccount: cleanAccountingAccount,
         orderedBy: cleanOrderedBy,
+        notes: cleanNotes,
         plannedHours: calculatedPlannedHours,
         quantity: parsedQuantity,
         quantityUnit: quantityUnit || 'szt.',
         hoursPerUnit: parsedHoursPerUnit,
         status: orderStatusVal,
         isActive: isActive !== undefined ? isActive : true,
-        completionDate,
+        completionDate: finalCompletionDate,
       },
     });
 
@@ -284,6 +519,7 @@ router.delete('/:id', requireRole(['admin']), async (req: AuthRequest, res: Resp
       data: {
         deletedAt: new Date(),
         status: OrderStatus.CLOSED, // Automatically mark as CLOSED
+        completionDate: oldOrder.completionDate || new Date(),
       },
     });
 

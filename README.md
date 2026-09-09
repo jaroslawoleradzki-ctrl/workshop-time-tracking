@@ -74,7 +74,14 @@ Zapewnia administratorom syntetyczne spojrzenie na statusy produkcyjne:
 
 ### 4. Centrum Raportów (Raporty)
 * Generowanie okresowych zestawień i rozliczeń zleceniowych dla liderów oraz administracji.
+* Istniejący raport „Godziny wg zleceń” udostępnia tryb „Raport zamknięcia”, łączący otwarte zlecenia z godzinami oraz zlecenia zamknięte w wybranym okresie, także z zerową liczbą godzin.
+* Raport okresów nieobecności grupuje kolejne dni robocze tego samego pracownika i rodzaju nieobecności, pozwala filtrować wyniki oraz eksportować je do XLSX.
+* Każdy raport zachowuje własne filtry w bieżącej sesji karty przeglądarki; wartości są odtwarzane po zmianie widoku i odświeżeniu strony, a zamknięcie karty usuwa je automatycznie.
 * Eksport raportów do arkuszy Excel z automatycznym formatowaniem szerokości kolumn, autofiltrami i zamrożonym pierwszym wierszem nagłówkowym w celu wygodnej pracy w arkuszu.
+
+### 5. Kalendarz zakładowy
+* Administrator może definiować wyjątki dla konkretnych dat: dzień roboczy albo dzień wolny, z opcjonalnym opisem.
+* Bez wyjątku obowiązuje kalendarz poniedziałek–piątek robocze, sobota–niedziela wolne. Automatyczna baza świąt nie jest częścią systemu.
 
 ### 5. Administracja i Konfiguracja
 * **Pracownicy**: Zarządzanie danymi pracowników (imię, nazwisko, unikalny numer ewidencyjny). Wspiera masowy import z plików Excel.
@@ -299,6 +306,7 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 
 * [Rozpoczęcie sesji projektowej](docs/session-start.md) – obowiązkowa kontrola stanu i zasady przekazania między ChatGPT i Codexem.
 * [Status projektu](PROJECT_STATUS.md) – bieżąca wersja, ostatnio zakończone prace, wyniki weryfikacji i znane ustalenia.
+* [Backlog produktu](docs/BACKLOG.md) – planowane wersje, priorytety i opis przyrostów.
 * [Architektura](docs/architecture.md) – komponenty, model danych i przepływy.
 * [Konfiguracja](docs/configuration.md) – zmienne środowiskowe i różnice środowisk.
 * [Testowanie](docs/testing.md) – istniejące testy, polecenia i checklista regresji.
@@ -320,6 +328,8 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 
 ## Status projektu
 
-* **Aktualna wersja**: `0.3.1`
+* **Aktualna wersja**: `0.5.2`
 * **Docelowa gałąź integracyjna**: `development`
 * **Status prac**: Aktywny rozwój (Active development)
+
+W funkcji **Kopiuj ostatni dzień** kompletny zestaw wpisów, w tym nieobecności takie jak UW i L4, może być kopiowany pomiędzy dniami roboczymi. Jeżeli wybrany dzień docelowy jest sobotą lub niedzielą, cała operacja jest blokowana bez tworzenia rekordów.

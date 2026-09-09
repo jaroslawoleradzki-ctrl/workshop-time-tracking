@@ -15,6 +15,7 @@ import workTimeTypesRouter from './routes/work-time-types';
 import reportsRouter from './routes/reports';
 import analyticsRouter from './routes/analytics';
 import importsRouter from './routes/imports';
+import companyCalendarRouter from './routes/company-calendar';
 import prisma from './utils/prisma';
 import packageJson from '../package.json';
 
@@ -42,6 +43,7 @@ app.use('/api/work-time-types', workTimeTypesRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/imports', importsRouter);
+app.use('/api/company-calendar', companyCalendarRouter);
 
 // Base route for health check
 app.get('/api/health', async (req, res) => {

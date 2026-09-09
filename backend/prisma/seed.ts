@@ -52,13 +52,13 @@ async function main() {
 
   // 2. Seed work time types
   const workTimeTypes = [
-    { code: 'G', name: 'Standardowe godziny pracy', requiresOrder: true, isSystem: true },
-    { code: 'NDR', name: 'Nadgodziny', requiresOrder: true, isSystem: true },
-    { code: 'NS', name: 'Nadgodziny sobota/niedziela', requiresOrder: true, isSystem: true },
-    { code: 'UW', name: 'Urlop wypoczynkowy', requiresOrder: false, isSystem: true },
-    { code: 'UOK', name: 'Urlop okolicznościowy', requiresOrder: false, isSystem: true },
-    { code: 'UŻ', name: 'Urlop na żądanie', requiresOrder: false, isSystem: true },
-    { code: 'L4', name: 'Zwolnienie chorobowe', requiresOrder: false, isSystem: true },
+    { code: 'G', name: 'Standardowe godziny pracy', requiresOrder: true, isAbsence: false, isSystem: true },
+    { code: 'NDR', name: 'Nadgodziny', requiresOrder: true, isAbsence: false, isSystem: true },
+    { code: 'NS', name: 'Nadgodziny sobota/niedziela', requiresOrder: true, isAbsence: false, isSystem: true },
+    { code: 'UW', name: 'Urlop wypoczynkowy', requiresOrder: false, isAbsence: true, isSystem: true },
+    { code: 'UOK', name: 'Urlop okolicznościowy', requiresOrder: false, isAbsence: true, isSystem: true },
+    { code: 'UŻ', name: 'Urlop na żądanie', requiresOrder: false, isAbsence: true, isSystem: true },
+    { code: 'L4', name: 'Zwolnienie chorobowe', requiresOrder: false, isAbsence: true, isSystem: true },
   ];
 
   for (const type of workTimeTypes) {
@@ -67,6 +67,7 @@ async function main() {
       update: {
         name: type.name,
         requiresOrder: type.requiresOrder,
+        isAbsence: type.isAbsence,
         isSystem: type.isSystem,
       },
       create: type,

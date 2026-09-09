@@ -57,7 +57,7 @@ export function requireRole(roles: string[]) {
     }
 
     if (!roles.includes(req.user.role)) {
-      return res.status(430).json({ message: 'Brak uprawnień do wykonania tej operacji' });
+      return res.status(403).json({ message: 'Brak uprawnień do wykonania tej operacji' });
     }
 
     next();

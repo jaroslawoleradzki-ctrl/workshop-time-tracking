@@ -11,6 +11,16 @@ import {
   copyLastDayRequestSchema,
   getReportDayLockKey,
 } from '../services/copy-last-day';
+import {
+  AbsenceRangeError,
+  absenceRangeRequestSchema,
+  createAbsenceRange,
+  getAbsenceRangePreview,
+} from '../services/absence-range';
+import {
+  getWorkingDayDecision,
+  isWorkTimeReportAllowedOnCalendarDay,
+} from '../services/company-calendar';
 
 const router = Router();
 
@@ -144,6 +154,79 @@ router.post('/check-warnings', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// POST /absence-range/preview - Preview absence range entries without modifying DB
+router.post(
+  '/absence-range/preview',
+  requireRole(['admin', 'leader']),
+  async (req: AuthRequest, res: Response) => {
+    const parsedRequest = absenceRangeRequestSchema.safeParse(req.body);
+    if (!parsedRequest.success) {
+      return res.status(400).json({
+        message: 'Nieprawidłowe dane żądania podglądu nieobecności.',
+        code: 'INVALID_ABSENCE_RANGE_REQUEST',
+        errors: parsedRequest.error.flatten().fieldErrors,
+      });
+    }
+
+    try {
+      const result = await getAbsenceRangePreview(parsedRequest.data);
+      return res.json(result);
+    } catch (error) {
+      if (error instanceof AbsenceRangeError) {
+        return res.status(error.statusCode).json({
+          message: error.message,
+          code: error.code,
+        });
+      }
+      logger.error(error, 'Błąd podczas generowania podglądu nieobecności');
+      return res.status(500).json({ message: 'Błąd podczas generowania podglądu nieobecności' });
+    }
+  },
+);
+
+// POST /absence-range - Save absence range entries
+router.post(
+  '/absence-range',
+  requireRole(['admin', 'leader']),
+  async (req: AuthRequest, res: Response) => {
+    const requestId = randomUUID();
+    const parsedRequest = absenceRangeRequestSchema.safeParse(req.body);
+    if (!parsedRequest.success) {
+      return res.status(400).json({
+        message: 'Nieprawidłowe dane żądania zapisu nieobecności.',
+        code: 'INVALID_ABSENCE_RANGE_REQUEST',
+        errors: parsedRequest.error.flatten().fieldErrors,
+        requestId,
+      });
+    }
+
+    try {
+      const result = await createAbsenceRange({
+        ...parsedRequest.data,
+        userId: req.user!.id,
+        requestId,
+      });
+
+      const statusCode = result.created > 0 ? 201 : 200;
+      return res.status(statusCode).json(result);
+    } catch (error) {
+      if (error instanceof AbsenceRangeError) {
+        return res.status(error.statusCode).json({
+          message: error.message,
+          code: error.code,
+          requestId,
+        });
+      }
+      logger.error(error, 'Błąd podczas zapisywania zakresu nieobecności');
+      return res.status(500).json({
+        message: 'Błąd podczas zapisywania zakresu nieobecności',
+        code: 'ABSENCE_RANGE_SAVE_FAILED',
+        requestId,
+      });
+    }
+  },
+);
+
 // POST / - create a report
 router.post('/', async (req: AuthRequest, res: Response) => {
   const { date, employeeId, orderId, hours, workTimeTypeCode, missingCard } = req.body;
@@ -181,6 +264,15 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     });
     if (!type) {
       return res.status(400).json({ message: 'Kod czasu pracy nie istnieje' });
+    }
+
+    // 2b. Validate entries against the company calendar.
+    const calendarDay = await getWorkingDayDecision(workDate);
+    if (!isWorkTimeReportAllowedOnCalendarDay(calendarDay, type, orderId)) {
+      return res.status(400).json({
+        message: 'W dni wolne (sobota, niedziela) dozwolona jest wyłącznie rejestracja pracy nad zleceniem; typ G i nieobecności są niedozwolone.',
+        code: 'NON_WORKING_DAY_ENTRY_NOT_ALLOWED',
+      });
     }
 
     // 3. Enforce order requirement
@@ -272,6 +364,13 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
 
   const missingCardBool = missingCard === true;
 
+  const parsedDate = new Date(date);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return res.status(400).json({ message: 'Nieprawidłowa data wpisu' });
+  }
+  const workDate = parsedDate.toISOString().slice(0, 10);
+  const reportDate = new Date(`${workDate}T00:00:00.000Z`);
+
   try {
     const oldReport = await prisma.workTimeReport.findUnique({
       where: { id, deletedAt: null },
@@ -289,6 +388,14 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Kod czasu pracy nie istnieje' });
     }
 
+    const calendarDay = await getWorkingDayDecision(workDate);
+    if (!isWorkTimeReportAllowedOnCalendarDay(calendarDay, type, orderId)) {
+      return res.status(400).json({
+        message: 'W dni wolne (sobota, niedziela) dozwolona jest wyłącznie rejestracja pracy nad zleceniem; typ G i nieobecności są niedozwolone.',
+        code: 'NON_WORKING_DAY_ENTRY_NOT_ALLOWED',
+      });
+    }
+
     if (type.requiresOrder) {
       if (!orderId) {
         return res.status(400).json({ message: `Dla typu '${workTimeTypeCode}' wymagane jest podanie zlecenia` });
@@ -304,7 +411,7 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
     const updated = await prisma.workTimeReport.update({
       where: { id },
       data: {
-        date: new Date(date),
+        date: reportDate,
         employeeId,
         orderId: type.requiresOrder ? orderId : null,
         hours: hoursNum,

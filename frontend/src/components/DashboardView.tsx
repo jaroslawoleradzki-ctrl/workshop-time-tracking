@@ -12,7 +12,7 @@ import {
 
 interface DashboardStats {
   openOrdersCount: number;
-  closedOrdersCount: number;
+  closedThisMonthCount: number;
   hoursToday: number;
   hoursMonth: number;
   ordersExceeding: Array<{
@@ -101,8 +101,8 @@ export default function DashboardView({ token }: DashboardViewProps) {
 
         <div className="stat-card">
           <div className="stat-info">
-            <span className="stat-label">Zamknięte zlecenia</span>
-            <span className="stat-value">{stats.closedOrdersCount}</span>
+            <span className="stat-label">Zamknięte w tym miesiącu</span>
+            <span className="stat-value">{stats.closedThisMonthCount}</span>
           </div>
           <div className="stat-icon" style={{ color: 'var(--success-color)', backgroundColor: 'var(--success-bg)' }}>
             <FileCheck size={24} />

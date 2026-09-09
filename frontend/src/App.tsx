@@ -10,7 +10,8 @@ import {
   Sun, 
   Moon, 
   Lock,
-  ChevronDown
+  ChevronDown,
+  CalendarDays
 } from 'lucide-react';
 
 // View Components (to be created)
@@ -23,11 +24,12 @@ import UsersView from './components/UsersView';
 import ReportsView from './components/ReportsView';
 import ImportsView from './components/ImportsView';
 import { branding } from './config/branding';
+import CompanyCalendarView from './components/CompanyCalendarView';
 
 export interface UserSession {
   id: string;
   username: string;
-  role: 'admin' | 'leader';
+  role: 'admin' | 'leader' | 'employee';
   fullName: string;
 }
 
@@ -162,7 +164,7 @@ function App() {
   // Save currentTab to sessionStorage and auto-expand Administracja submenu if active page is inside it
   useEffect(() => {
     sessionStorage.setItem('current_tab', currentTab);
-    if (['users', 'dictionaries', 'imports'].includes(currentTab)) {
+    if (['users', 'dictionaries', 'imports', 'calendar'].includes(currentTab)) {
       setIsAdminOpen(true);
     }
   }, [currentTab]);
@@ -320,6 +322,9 @@ function App() {
       case 'reporting':
         return <ReportingPanel token={token} user={user} />;
       case 'orders':
+        if (user.role !== 'admin' && user.role !== 'leader') {
+          return <ReportingPanel token={token} user={user} />;
+        }
         return <OrdersView token={token} user={user} />;
       case 'employees':
         return <EmployeesView token={token} />;
@@ -329,6 +334,8 @@ function App() {
         return <UsersView token={token} currentUser={user} />;
       case 'imports':
         return <ImportsView token={token} />;
+      case 'calendar':
+        return user.role === 'admin' ? <CompanyCalendarView token={token} /> : <ReportingPanel token={token} user={user} />;
       case 'reports':
         return <ReportsView token={token} user={user} />;
       default:
@@ -369,6 +376,13 @@ function App() {
             {user.role === 'leader' ? (
               <>
                 <button
+                  onClick={() => setCurrentTab('orders')}
+                  className={`nav-item ${currentTab === 'orders' ? 'active' : ''}`}
+                >
+                  <FolderGit2 size={18} />
+                  <span>Zlecenia</span>
+                </button>
+                <button
                   onClick={() => setCurrentTab('reporting')}
                   className={`nav-item ${currentTab === 'reporting' ? 'active' : ''}`}
                 >
@@ -383,7 +397,7 @@ function App() {
                   <span>Raporty</span>
                 </button>
               </>
-            ) : (
+            ) : user.role === 'admin' ? (
               <>
                 {/* Robocza (Workspace) Section */}
                 <button
@@ -436,7 +450,7 @@ function App() {
                       return next;
                     });
                   }}
-                  className={`nav-item ${['users', 'dictionaries', 'imports'].includes(currentTab) ? 'parent-active' : ''}`}
+                  className={`nav-item ${['users', 'dictionaries', 'imports', 'calendar'].includes(currentTab) ? 'parent-active' : ''}`}
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -466,6 +480,13 @@ function App() {
                       <span>Słowniki</span>
                     </button>
                     <button
+                      onClick={() => setCurrentTab('calendar')}
+                      className={`nav-submenu-item ${currentTab === 'calendar' ? 'active' : ''}`}
+                    >
+                      <CalendarDays size={15} />
+                      <span>Kalendarz zakładowy</span>
+                    </button>
+                    <button
                       onClick={() => setCurrentTab('imports')}
                       className={`nav-submenu-item ${currentTab === 'imports' ? 'active' : ''}`}
                     >
@@ -474,6 +495,23 @@ function App() {
                     </button>
                   </div>
                 </div>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => setCurrentTab('reporting')}
+                  className={`nav-item ${currentTab === 'reporting' ? 'active' : ''}`}
+                >
+                  <Clock size={18} />
+                  <span>Raportowanie</span>
+                </button>
+                <button
+                  onClick={() => setCurrentTab('reports')}
+                  className={`nav-item ${currentTab === 'reports' ? 'active' : ''}`}
+                >
+                  <FileDown size={18} />
+                  <span>Raporty</span>
+                </button>
               </>
             )}
           </nav>
@@ -490,8 +528,8 @@ function App() {
         </aside>
 
         {/* Content Area */}
-        <main style={{ flex: 1, backgroundColor: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', minWidth: 0, maxWidth: '100%' }}>
-          <div className={`content-wrapper ${['orders', 'employees', 'users', 'dictionaries', 'reports'].includes(currentTab) ? 'orders-tab-wrapper' : ''}`}>
+        <main className="main-content">
+          <div className={`content-wrapper ${['orders', 'employees', 'users', 'dictionaries', 'imports', 'calendar', 'reports'].includes(currentTab) ? 'orders-tab-wrapper' : ''}`}>
             {renderActiveTab()}
           </div>
         </main>

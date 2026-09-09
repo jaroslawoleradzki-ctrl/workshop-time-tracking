@@ -7,6 +7,30 @@ Dokument przedstawia zrealizowane etapy rozwoju i kamienie milowe aplikacji Work
 
 ---
 
+## Wersja 0.4.7 — Raport okresów nieobecności
+
+- [x] ✔ Dodano niezależną klasyfikację typów czasu `isAbsence` i bezpieczną migrację standardowych kodów nieobecności.
+- [x] ✔ Dodano administracyjną obsługę właściwości „Nieobecność”.
+- [x] ✔ Dodano raport okresów nieobecności z filtrami, grupowaniem dni roboczych i eksportem XLSX.
+
+## Wersja 0.4.8 — Pamiętanie filtrów raportów w ramach sesji
+
+- [x] ✔ Dodano wspólny hook z wersjonowaną strukturą danych w `sessionStorage`.
+- [x] ✔ Odizolowano zestawy filtrów wszystkich pięciu raportów pod osobnymi kluczami.
+- [x] ✔ Dodano natychmiastowy zapis, odtwarzanie i reset filtrów wraz z testami regresyjnymi.
+
+## Wersja 0.4.9 — Raport zamknięcia
+
+- [x] ✔ Rozszerzono raport „Godziny wg zleceń” o tryb zamknięcia bez nowej zakładki.
+- [x] ✔ Uwzględniono zamknięte zlecenia bez wpisów czasu dzięki zapytaniu rozpoczynającemu od zleceń.
+- [x] ✔ Ujednolicono dane JSON/XLSX i dodano pamiętanie trybu oraz testy regresyjne.
+
+## Wersja 0.5.0 — Naprawa filtrowania w Raporcie Szczegółowym
+
+- [x] ✔ Naprawiono filtrowanie po zleceniu (`orderId`) w Raporcie Szczegółowym w API i bazie danych.
+- [x] ✔ Zapewniono pełną zgodność filtrowania w tabeli UI, eksporcie XLSX oraz eksporcie CSV wraz z danymi produktu.
+- [x] ✔ Dodano testy regresyjne backendu i frontendu.
+
 ## Sprint A
 *Status: Zakończony*
 - [x] ✔ Wdrożenie podstawowego systemu logowania liderów i administratorów (autoryzacja JWT, hash bcrypt).
@@ -37,9 +61,92 @@ Dokument przedstawia zrealizowane etapy rozwoju i kamienie milowe aplikacji Work
 ## Sprint 0.2.0
 *Status: Zakończony*
 - [x] ✔ Nowy dwusekcyjny układ menu bocznego (Robocza vs Administracja) dla administratora z collapsible dropdownem.
-- [x] ✔ Zabezpieczenie ról w nawigacji – rola Leader widzi wyłącznie zakładki Raportowanie oraz Raporty.
-- [x] ✔ Przeniesienie panelu użytkownika oraz czerwonego przycisku Wyloguj do górnego paska (Navbar).
-- [x] ✔ Stała, stabilna wysokość sidebara (`100vh`) i dedykowany pasek wersji systemu w stopce sidebara.
-- [x] ✔ Dodanie przycisku **Dzisiaj** (niebieski - primary) automatycznie odświeżającego wpisy dla wybranej daty.
-- [x] ✔ Pamięć stanu wybranej zakładki oraz otwartej sekcji Administracji po odświeżeniu strony w `sessionStorage`.
-- [x] ✔ Płynne animacje CSS Grid rozwijania podmenu oraz obrotu ikony Chevron.
+## Sprint 0.3.4
+*Status: Zakończony*
+- [x] ✔ Kolumna Ilość w raporcie „Godziny wg Zleceń” oraz eksportach CSV i XLSX.
+- [x] ✔ Filtr „Pokaż tylko zlecenia z zaraportowanymi godzinami” w raporcie i eksportach.
+- [x] ✔ Sortowanie Bazy Zleceń Produkcyjnych po dacie zlecenia i dacie wysyłki (rosnąco / malejąco).
+- [x] ✔ Sortowanie pracowników według nazwiska w raporcie pracowników.
+- [x] ✔ Zmiana nazwy kolumny „Suma godzin” na „Suma godzin z nadgodzinami”.
+- [x] ✔ Nowa kolumna „Suma godzin bez nadgodzin” w raporcie pracowników.
+- [x] ✔ Nowy układ kolumn raportu pracowników oraz dostosowanie eksportów CSV i XLSX.
+
+---
+
+## Sprint 0.3.5
+*Status: Zakończony*
+- [x] ✔ Udostępnienie ekranu „Baza Zleceń” dla użytkownika z rolą `Leader` w trybie tylko do odczytu.
+- [x] ✔ Zablokowanie przycisków dodawania, edycji, usuwania i zapisu danych dla Lidera w interfejsie.
+- [x] ✔ Zabezpieczenie endpointów modyfikujących w backendzie (`403 Forbidden` dla roli Leader).
+
+---
+
+## Sprint 0.3.6
+*Status: Zakończony*
+- [x] ✔ Dodano filtr statusów zleceń w Bazie Zleceń.
+
+---
+
+## Sprint 0.3.7
+*Status: Zakończony*
+- [x] ✔ Ujednolicono nagłówki metadanych dla wszystkich eksportów XLSX i CSV.
+
+---
+
+## Sprint 0.3.8
+*Status: Zakończony*
+- [x] ✔ Ujednolicono formatowanie nazwiska i imienia (`Nazwisko Imię`) w miesięcznym raporcie pracowników w widoku, XLSX oraz CSV.
+
+---
+
+## Sprint 0.3.9
+*Status: Do weryfikacji*
+- [x] ✔ Naprawiono główny layout aplikacji (stały navbar i sidebar, izolacja przewijania do `content-wrapper`, lepki nagłówek `.table th`, brak podwójnych scrollbarów).
+
+---
+
+## Sprint 0.4.0
+*Status: Do weryfikacji*
+- [x] ✔ Ujednolicenie kontraktu API Pulpitu Menedżerskiego (`GET /api/analytics/dashboard`).
+- [x] ✔ Poprawne zliczanie otwartych zleceń (`openOrdersCount`) oraz zleceń zamkniętych w bieżącym miesiącu (`closedThisMonthCount`).
+- [x] ✔ Analiza wykorzystania budżetu dla wszystkich otwartych zleceń bez limitu 5 zleceń.
+- [x] ✔ Poprawne zasilanie i sortowanie sekcji zleceń przekraczających budżet (`ordersExceeding` >100%) oraz blisko przekroczenia (`ordersApproaching` 80%–100%).
+- [x] ✔ Dodanie pełnego pakietu testów regresyjnych dla backendu i frontendu.
+
+---
+
+## Sprint 0.4.1
+*Status: Do weryfikacji*
+- [x] ✔ Blokada automatycznego kopiowania wpisów (`Copy Last Day`) na dni wolne (sobota, niedziela).
+- [x] ✔ Możliwość ręcznej rejestracji w weekend wyłącznie rzeczywistej pracy wykonywanej na zleceniu (`requiresOrder = true` i `orderId != null`).
+- [x] ✔ Blokada rejestracji i edycji wszelkich nieobecności w weekendy.
+- [x] ✔ Rozbudowany pakiet testów regresyjnych.
+
+---
+
+## Sprint 0.4.2
+*Status: Do weryfikacji*
+- [x] ✔ Przywrócenie sumowania wszystkich aktywnych godzin (`deletedAt = null`) na Pulpicie Menedżerskim (`hoursToday`, `hoursMonth`) dla zapewnienia funkcji kontrolnej (L4, urlopy, godziny bez zlecenia).
+- [x] ✔ Zachowanie w całości backendowej blokady nieprawidłowych wpisów weekendowych oraz blokady Copy Last Day z v0.4.1.
+- [x] ✔ Zaktualizowany pakiet testów regresyjnych dashboardu.
+
+---
+
+## Sprint 0.4.3
+*Status: Do weryfikacji*
+- [x] ✔ Wdrożenie seryjnej rejestracji nieobecności w zakresie dat dla wybranego pracownika.
+- [x] ✔ Dedykowane endpointy backendowe: podgląd (`POST /api/reports/absence-range/preview`) oraz zapis (`POST /api/reports/absence-range`).
+- [x] ✔ Automatyczne pomijanie sobót i niedziel oraz wykrywanie konfliktów z istniejącymi wpisami.
+- [x] ✔ Transakcyjny zapis z blokadą współbieżności i zdarzeniem audytowym `CREATE_ABSENCE_RANGE`.
+- [x] ✔ Komponent `AbsenceRangeModal.tsx` z wyliczaniem podglądu na żywo i automatycznym odświeżaniem listy wpisów.
+- [*] *Planowane w kolejnym przyroście: Obsługa świąt ustawowych oraz zakładowych dni wolnych.*
+
+---
+
+## Sprint 0.4.4
+*Status: Do weryfikacji*
+- [x] ✔ Wdrożenie eksportu aktualnie wyświetlanego widoku Bazy Zleceń do pliku Excel (.xlsx) na ekranie `OrdersView`.
+- [x] ✔ Backendowy endpoint `POST /api/orders/export-xlsx` z obsługą wyszukiwania, statusu, sortowania i walidacją parametrów.
+- [x] ✔ Wydzielenie wspólnego modułu ExcelJS `backend/src/utils/excel-report.ts` dla zapewnienia identycznej stylistyki i struktur nagłówków we wszystkich eksportach.
+- [x] ✔ Dostęp do eksportu dla ról Administrator oraz Leader.
+- [x] ✔ Pełny pakiet testów automatycznych backendowych i frontendowych z weryfikacją braku regresji w obecnych raportach XLSX.

@@ -3,6 +3,10 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '../utils/prisma';
 import { logChange } from '../utils/audit';
+import {
+  getWorkingDayDecision,
+  isWorkTimeReportAllowedOnCalendarDay,
+} from './company-calendar';
 
 export const MAX_COPY_SOURCE_REPORTS = 100;
 
@@ -60,7 +64,7 @@ interface CopyLastDayParams {
   client?: PrismaClient;
 }
 
-const eligibleOrderFilter = {
+const eligibleCopyFilter = {
   OR: [{ orderId: null }, { order: { deletedAt: null } }],
 };
 
@@ -101,6 +105,8 @@ export async function copyLastDayForEmployee({
           'Pracownik nie istnieje, jest nieaktywny lub został usunięty.',
         );
       }
+
+      const calendarDay = await getWorkingDayDecision(targetDate, tx);
 
       // This check must run after the advisory lock has been acquired. A
       // waiting concurrent request will therefore see the rows committed by
@@ -144,7 +150,7 @@ export async function copyLastDayForEmployee({
           employeeId,
           date: lastReport.date,
           deletedAt: null,
-          ...eligibleOrderFilter,
+          ...eligibleCopyFilter,
         },
         select: {
           employeeId: true,
@@ -173,6 +179,32 @@ export async function copyLastDayForEmployee({
           `Dzień źródłowy zawiera więcej niż ${MAX_COPY_SOURCE_REPORTS} aktywnych wpisów. Kopiowanie zostało zatrzymane.`,
           { sourceDate, sourceCount: sourceReports.length },
         );
+      }
+
+      if (!calendarDay.isWorkingDay) {
+        const sourceTypeCodes = [...new Set(sourceReports.map((report) => report.workTimeTypeCode))];
+        const sourceTypes = await Promise.all(
+          sourceTypeCodes.map((code) =>
+            tx.workTimeType.findUnique({
+              where: { code },
+              select: { code: true, isAbsence: true, requiresOrder: true },
+            }),
+          ),
+        );
+        const typesByCode = new Map(sourceTypes.filter(Boolean).map((type) => [type!.code, type!]));
+        const invalidReport = sourceReports.find((report) => {
+          const type = typesByCode.get(report.workTimeTypeCode);
+          return !type || !isWorkTimeReportAllowedOnCalendarDay(calendarDay, type, report.orderId);
+        });
+
+        if (invalidReport) {
+          throw new CopyLastDayError(
+            400,
+            'NON_WORKING_DAY_ENTRY_NOT_ALLOWED',
+            'Na dzień wolny można skopiować wyłącznie dozwolony typ pracy lub nadgodzin z podanym zleceniem.',
+            { sourceDate, sourceCount: sourceReports.length },
+          );
+        }
       }
 
       const created = await tx.workTimeReport.createMany({

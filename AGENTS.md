@@ -101,25 +101,18 @@ Zgodnie ze skryptami w `package.json` uruchom odpowiednio:
 
 ---
 
-## Procedura Wydania (Release Procedure)
-Każde oficjalne wydanie wersji produkcyjnej (Release) musi zawierać następujące kroki:
-1. Scalenie gałęzi: `development` → `main`
-2. Synchronizacja wersji we wszystkich standardowych plikach (`package.json`, `package-lock.json`, `docker-compose.yml`, `README.md`)
-3. Kompilacja backendu (`npm run build` w `backend/`)
-4. Kompilacja frontendu (`npm run build` w `frontend/`)
-5. Uruchomienie skryptu walidacyjnego: `./scripts/verify-release.sh` i upewnienie się, że zwraca status PASS.
-6. Utworzenie commita
-7. Wysłanie zmian gałęzi `main` na zdalne repozytorium (Push main)
-8. Utworzenie tagu Git z opisem (annotated tag):
-   `git tag -a vX.Y.Z -m "Release X.Y.Z"`
-9. Wysłanie tagu na zdalne repozytorium:
-   `git push origin vX.Y.Z`
-10. Utworzenie Wydania na GitHubie (GitHub Release)
-11. Wdrożenie u klienta (Deployment)
-12. Weryfikacja działania na produkcji (smoke test)
+## Playbooks
 
-> [!IMPORTANT]
-> Wydanie wersji (Release) nie jest uznane za zakończone, dopóki tag Git, GitHub Release, wdrożenie produkcyjne oraz weryfikacja na produkcji nie zostaną w pełni ukończone.
+* **Release Playbook (SOP)**: `docs/playbooks/RELEASE.md`
+  > [!IMPORTANT]
+  > Wszystkie przyszłe wydania wersji (Release) bez wyjątku **muszą bezwzględnie korzystać z procedury zdefiniowanej w tym playbooku**.
+
+---
+
+## Procedura Wydania (Release Procedure)
+Oficjalne wydanie wersji produkcyjnej (Release) musi być wykonywane wyłącznie w oparciu o pełną Standardową Procedurę Operacyjną opisaną w Playbooku [`docs/playbooks/RELEASE.md`](docs/playbooks/RELEASE.md).
+
+Procedura ta obejmuje weryfikację gotowości, automatyczną walidację, scalenie gałęzi `development` do `main`, utworzenie tagu Git, publikację GitHub Release oraz zwrotną synchronizację.
 
 ---
 

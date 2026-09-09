@@ -14,10 +14,11 @@ flowchart LR
 
 ## Odpowiedzialności i warstwy
 
-- React renderuje UI, przechowuje token i użytkownika w `localStorage`, stan nawigacji w `sessionStorage`, waliduje formularze i wywołuje względne `/api`.
+- React renderuje UI, przechowuje token i użytkownika w `localStorage`, stan nawigacji oraz niezależne, wersjonowane filtry raportów w `sessionStorage`, waliduje formularze i wywołuje względne `/api`. Wspólny hook `useReportFilters` odpowiada za inicjalny odczyt, natychmiastowy zapis i reset; każdy raport korzysta z osobnego klucza `report.*`.
 - Nginx serwuje build SPA i przekazuje `/api` do backendu.
 - Express składa middleware CORS/JSON/logowania, uwierzytelnianie JWT, kontrolę ról i routery: auth, users, employees, orders, work-time-types, reports, analytics, imports.
 - Routery zawierają większość walidacji i logiki biznesowej oraz bezpośrednio wywołują Prisma. Krytyczna operacja kopiowania czasu ma wydzielony serwis transakcyjny; ogólnej warstwy repozytoriów nie ma.
+- Endpoint JSON i eksport XLSX raportu zleceń korzystają ze wspólnego generatora `getOrderReportRows`. W trybie zamknięcia zapytanie rozpoczyna się od nieusuniętych zleceń `OPEN` lub `CLOSED` w zakresie `completionDate`, a filtrowane wpisy czasu są opcjonalnie dołączane, dzięki czemu zachowane są również zlecenia z sumą zero. Logika sum kontrolnych zamknięcia (`getClosureControlSummary`) agreguje godziny wg zleceń, dynamiczne typy `WorkTimeType.isAbsence=true` oraz sumę godzin pracowników z raportu miesięcznego i jest współdzielona przez dedykowany endpoint `GET /api/analytics/closure-control-summary` oraz generator eksportu XLSX `GET /api/analytics/export/by-order`.
 - Prisma mapuje modele i migracje na PostgreSQL. Logger Pino zapisuje żądania i błędy na stdout/stderr.
 
 ## Model danych
@@ -33,7 +34,9 @@ erDiagram
   WORK_TIME_TYPE ||--o{ WORK_TIME_REPORT : classifies
 ```
 
-`User` nie jest powiązany z `Employee`. `WorkTimeReport` łączy pracownika, opcjonalne zlecenie, typ czasu i użytkowników tworzącego/modyfikującego. `Order` ma status, aktywność i plan godzin. `ImportHistory` przechowuje wynik importu, a `AuditLog` migawkę zmiany.
+`User` nie jest powiązany z `Employee`. `WorkTimeReport` łączy pracownika, opcjonalne zlecenie, typ czasu i użytkowników tworzącego/modyfikującego. `WorkTimeType.isAbsence` klasyfikuje typ jako nieobecność niezależnie od `requiresOrder`; raport okresów nieobecności korzysta z relacji do tego słownika i nie przechowuje dodatkowego znacznika w samym wpisie. `Order` ma status, aktywność i plan godzin. `ImportHistory` przechowuje wynik importu, a `AuditLog` migawkę zmiany.
+
+`CompanyCalendarDay` przechowuje administracyjne wyjątki kalendarza z unikalną datą, statusem roboczym i opcjonalnym powodem. Serwis `getWorkingDayDecision` (wspierany przez moduł `holidays.ts` z algorytmem wyznaczania polskich świąt ustawowych) jest jedynym źródłem decyzji o dniu roboczym; korzystają z niego walidacja wpisów, zakresy nieobecności oraz raport okresów nieobecności.
 
 ## Przepływy
 
@@ -66,7 +69,7 @@ Kopiowanie ostatniego dnia: React wysyła `employeeId` i datę docelową. API wy
 
 `Employee`, `Order` i `WorkTimeReport` używają `deletedAt`; większość odczytów filtruje `null`. Usunięcie pracownika dodatkowo go dezaktywuje, a zlecenia ustawia na `CLOSED`. Import może przywrócić pracownika lub zlecenie.
 
-AuditLog jest tworzony pomocniczą funkcją dla zmian pracowników, zleceń i wpisów. Domyślnie dotychczasowe wywołania jedynie logują błąd audytu. Operacja kopiowania przekazuje klienta bieżącej transakcji i wymaga ponownego rzucenia błędu, dlatego brak audytu cofa cały kopiowany komplet. Routery zwracają polskie komunikaty i odpowiednie kody 4xx/5xx; końcowy middleware obsługuje błędy nieprzechwycone. React pokazuje błędy lokalnie, a globalne 401/403 czyszczą sesję. Middleware ról zwraca niestandardowy kod 430 przy braku roli.
+AuditLog jest tworzony pomocniczą funkcją dla zmian pracowników, zleceń i wpisów. Domyślnie dotychczasowe wywołania jedynie logują błąd audytu. Operacja kopiowania przekazuje klienta bieżącej transakcji i wymaga ponownego rzucenia błędu, dlatego brak audytu cofa cały kopiowany komplet. Routery zwracają polskie komunikaty i odpowiednie kody 4xx/5xx; końcowy middleware obsługuje błędy nieprzechwycone. React pokazuje błędy lokalnie, a globalne 401/403 czyszczą sesję. Middleware ról zwraca standardowy kod 403 (Forbidden) przy braku wymaganej roli.
 
 ## Daty i wdrożenie
 
