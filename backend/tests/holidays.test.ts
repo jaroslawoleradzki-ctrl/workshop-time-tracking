@@ -24,23 +24,44 @@ describe('Polish holidays utility', () => {
     expect(getEasterSunday(2038)).toEqual({ year: 2038, month: 4, day: 25 });
   });
 
-  it('contains all 13 statutory Polish public holidays for 2026', () => {
-    const holidays = getPolishHolidaysForYear(2026);
-    expect(holidays.size).toBe(13);
+  it('contains 13 statutory Polish public holidays for 2024 (pre-2025 baseline without Wigilia)', () => {
+    const holidays2024 = getPolishHolidaysForYear(2024);
+    expect(holidays2024.size).toBe(13);
+    expect(holidays2024.has('2024-12-24')).toBe(false);
+    expect(isPolishHoliday('2024-12-24')).toBe(false);
+    expect(getPolishHolidayName('2024-12-24')).toBeNull();
+    expect(holidays2024.get('2024-12-25')).toBe('Pierwszy dzień Bożego Narodzenia');
+    expect(holidays2024.get('2024-12-26')).toBe('Drugi dzień Bożego Narodzenia');
+  });
 
-    expect(holidays.get('2026-01-01')).toBe('Nowy Rok');
-    expect(holidays.get('2026-01-06')).toBe('Święto Trzech Króli');
-    expect(holidays.get('2026-04-05')).toBe('Niedziela Wielkanocna');
-    expect(holidays.get('2026-04-06')).toBe('Poniedziałek Wielkanocny');
-    expect(holidays.get('2026-05-01')).toBe('Święto Pracy');
-    expect(holidays.get('2026-05-03')).toBe('Święto Narodowe Trzeciego Maja');
-    expect(holidays.get('2026-05-24')).toBe('Zielone Świątki');
-    expect(holidays.get('2026-06-04')).toBe('Boże Ciało');
-    expect(holidays.get('2026-08-15')).toBe('Wniebowzięcie Najświętszej Maryi Panny');
-    expect(holidays.get('2026-11-01')).toBe('Wszystkich Świętych');
-    expect(holidays.get('2026-11-11')).toBe('Narodowe Święto Niepodległości');
-    expect(holidays.get('2026-12-25')).toBe('Pierwszy dzień Bożego Narodzenia');
-    expect(holidays.get('2026-12-26')).toBe('Drugi dzień Bożego Narodzenia');
+  it('contains all 14 statutory Polish public holidays for 2025 and 2026 including Wigilia Bożego Narodzenia', () => {
+    // 2025 (14 holidays)
+    const holidays2025 = getPolishHolidaysForYear(2025);
+    expect(holidays2025.size).toBe(14);
+    expect(holidays2025.get('2025-12-24')).toBe('Wigilia Bożego Narodzenia');
+    expect(isPolishHoliday('2025-12-24')).toBe(true);
+    expect(getPolishHolidayName('2025-12-24')).toBe('Wigilia Bożego Narodzenia');
+    expect(holidays2025.get('2025-12-25')).toBe('Pierwszy dzień Bożego Narodzenia');
+    expect(holidays2025.get('2025-12-26')).toBe('Drugi dzień Bożego Narodzenia');
+
+    // 2026 (14 holidays)
+    const holidays2026 = getPolishHolidaysForYear(2026);
+    expect(holidays2026.size).toBe(14);
+
+    expect(holidays2026.get('2026-01-01')).toBe('Nowy Rok');
+    expect(holidays2026.get('2026-01-06')).toBe('Święto Trzech Króli');
+    expect(holidays2026.get('2026-04-05')).toBe('Niedziela Wielkanocna');
+    expect(holidays2026.get('2026-04-06')).toBe('Poniedziałek Wielkanocny');
+    expect(holidays2026.get('2026-05-01')).toBe('Święto Pracy');
+    expect(holidays2026.get('2026-05-03')).toBe('Święto Narodowe Trzeciego Maja');
+    expect(holidays2026.get('2026-05-24')).toBe('Zielone Świątki');
+    expect(holidays2026.get('2026-06-04')).toBe('Boże Ciało');
+    expect(holidays2026.get('2026-08-15')).toBe('Wniebowzięcie Najświętszej Maryi Panny');
+    expect(holidays2026.get('2026-11-01')).toBe('Wszystkich Świętych');
+    expect(holidays2026.get('2026-11-11')).toBe('Narodowe Święto Niepodległości');
+    expect(holidays2026.get('2026-12-24')).toBe('Wigilia Bożego Narodzenia');
+    expect(holidays2026.get('2026-12-25')).toBe('Pierwszy dzień Bożego Narodzenia');
+    expect(holidays2026.get('2026-12-26')).toBe('Drugi dzień Bożego Narodzenia');
   });
 
   it('correctly calculates movable holidays for different years (2025 and 2028)', () => {
@@ -60,6 +81,12 @@ describe('Polish holidays utility', () => {
   });
 
   it('identifies public holidays and regular working days via helper functions', () => {
+    expect(isPolishHoliday('2024-12-24')).toBe(false);
+    expect(getPolishHolidayName('2024-12-24')).toBeNull();
+
+    expect(isPolishHoliday('2025-12-24')).toBe(true);
+    expect(getPolishHolidayName('2025-12-24')).toBe('Wigilia Bożego Narodzenia');
+
     expect(isPolishHoliday('2026-01-01')).toBe(true);
     expect(getPolishHolidayName('2026-01-01')).toBe('Nowy Rok');
 
@@ -68,6 +95,9 @@ describe('Polish holidays utility', () => {
 
     expect(isPolishHoliday('2026-11-11')).toBe(true);
     expect(getPolishHolidayName('2026-11-11')).toBe('Narodowe Święto Niepodległości');
+
+    expect(isPolishHoliday('2026-12-24')).toBe(true);
+    expect(getPolishHolidayName('2026-12-24')).toBe('Wigilia Bożego Narodzenia');
 
     // Regular weekday
     expect(isPolishHoliday('2026-01-02')).toBe(false);

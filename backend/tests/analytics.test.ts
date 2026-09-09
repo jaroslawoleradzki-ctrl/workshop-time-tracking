@@ -541,6 +541,56 @@ describe('Analytics reports', () => {
     expect(totalWorkingDays).toBe(5);
   });
 
+  it('correctly bridges absence period across Wigilia (2025-12-24) and Christmas holidays without inventing hours, and splits in 2024', async () => {
+    const employee = { id: 'emp-wigilia', fullName: 'Wigilia Test', firstName: 'Wigilia', lastName: 'Test' };
+    const l4Type = { code: 'L4', name: 'Zwolnienie chorobowe', isAbsence: true, requiresOrder: false };
+
+    vi.spyOn(prisma.companyCalendarDay, 'findUnique').mockResolvedValue(null);
+
+    // 2025: 23 Dec (Tue, work), 24 Dec (Wed, Wigilia - holiday), 25 Dec (Thu, holiday), 26 Dec (Fri, holiday), 27-28 Dec (Sat-Sun, weekend), 29 Dec (Mon, work)
+    // Both 23 Dec and 29 Dec have L4 reports. Because 24-28 Dec are all free (Wigilia + Christmas + Weekend), they form a single bridged period!
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([
+      { employeeId: 'emp-wigilia', employee, workTimeTypeCode: 'L4', workTimeType: l4Type, hours: 8, date: new Date('2025-12-23T00:00:00.000Z') },
+      { employeeId: 'emp-wigilia', employee, workTimeTypeCode: 'L4', workTimeType: l4Type, hours: 8, date: new Date('2025-12-29T00:00:00.000Z') },
+    ] as any);
+
+    const res2025 = await authenticatedGet(
+      '/api/analytics/report-absence-periods?dateFrom=2025-12-01&dateTo=2025-12-31&employeeId=emp-wigilia',
+    ).expect(200);
+
+    expect(res2025.body).toHaveLength(1);
+    expect(res2025.body[0]).toMatchObject({
+      employeeId: 'emp-wigilia',
+      workTimeTypeCode: 'L4',
+      dateFrom: '2025-12-23',
+      dateTo: '2025-12-29',
+      workingDays: 2, // exactly 2 working days (23rd and 29th) - 24th is bridged and does NOT invent hours
+    });
+
+    // 2024 (pre-2025): 23 Dec (Mon, work) and 27 Dec (Fri, work).
+    // In 2024, 24 Dec was a normal working Tuesday. Since there was no L4 on 24 Dec, the period is SPLIT into 2 periods.
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([
+      { employeeId: 'emp-wigilia', employee, workTimeTypeCode: 'L4', workTimeType: l4Type, hours: 8, date: new Date('2024-12-23T00:00:00.000Z') },
+      { employeeId: 'emp-wigilia', employee, workTimeTypeCode: 'L4', workTimeType: l4Type, hours: 8, date: new Date('2024-12-27T00:00:00.000Z') },
+    ] as any);
+
+    const res2024 = await authenticatedGet(
+      '/api/analytics/report-absence-periods?dateFrom=2024-12-01&dateTo=2024-12-31&employeeId=emp-wigilia',
+    ).expect(200);
+
+    expect(res2024.body).toHaveLength(2);
+    expect(res2024.body[0]).toMatchObject({
+      dateFrom: '2024-12-23',
+      dateTo: '2024-12-23',
+      workingDays: 1,
+    });
+    expect(res2024.body[1]).toMatchObject({
+      dateFrom: '2024-12-27',
+      dateTo: '2024-12-27',
+      workingDays: 1,
+    });
+  });
+
   it('exports the same clipped absence periods to XLSX with report metadata', async () => {
     vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([{
       employeeId: EMPLOYEE_ID,

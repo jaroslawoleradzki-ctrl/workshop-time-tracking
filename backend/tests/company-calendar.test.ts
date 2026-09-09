@@ -105,6 +105,13 @@ describe('company calendar', () => {
       reason: 'Narodowe Święto Niepodległości',
     });
 
+    // 2026-12-24: Wigilia Bożego Narodzenia (Thursday)
+    expect(await getWorkingDayDecision('2026-12-24', db)).toMatchObject({
+      isWorkingDay: false,
+      source: 'public holiday',
+      reason: 'Wigilia Bożego Narodzenia',
+    });
+
     // 2026-12-25: Pierwszy dzień Bożego Narodzenia (Friday)
     expect(await getWorkingDayDecision('2026-12-25', db)).toMatchObject({
       isWorkingDay: false,
@@ -117,6 +124,47 @@ describe('company calendar', () => {
       isWorkingDay: false,
       source: 'public holiday',
       reason: 'Drugi dzień Bożego Narodzenia',
+    });
+  });
+
+  it('handles 24 December correctly across year boundary (pre-2025 regular weekday vs 2025+ public holiday with override precedence)', async () => {
+    // 2024-12-24 (Tuesday): regular weekday in 2024
+    const db2024 = client();
+    const dec24_2024 = await getWorkingDayDecision('2024-12-24', db2024);
+    expect(dec24_2024).toMatchObject({
+      isWorkingDay: true,
+      source: 'standard weekday',
+    });
+
+    // 2025-12-24 (Wednesday): statutory public holiday without override
+    const db2025 = client();
+    const dec24_2025 = await getWorkingDayDecision('2025-12-24', db2025);
+    expect(dec24_2025).toMatchObject({
+      isWorkingDay: false,
+      source: 'public holiday',
+      reason: 'Wigilia Bożego Narodzenia',
+    });
+
+    // 2025-12-24 with explicit company override to working day
+    const db2025Override = client([
+      { date: '2025-12-24', isWorkingDay: true, reason: 'Praca w Wigilię' },
+    ]);
+    const dec24_2025Override = await getWorkingDayDecision('2025-12-24', db2025Override);
+    expect(dec24_2025Override).toMatchObject({
+      isWorkingDay: true,
+      source: 'company override',
+      reason: 'Praca w Wigilię',
+    });
+
+    // 2026-12-24 with explicit company override to working day
+    const db2026Override = client([
+      { date: '2026-12-24', isWorkingDay: true, reason: 'Dyżur produkcyjny' },
+    ]);
+    const dec24_2026Override = await getWorkingDayDecision('2026-12-24', db2026Override);
+    expect(dec24_2026Override).toMatchObject({
+      isWorkingDay: true,
+      source: 'company override',
+      reason: 'Dyżur produkcyjny',
     });
   });
 

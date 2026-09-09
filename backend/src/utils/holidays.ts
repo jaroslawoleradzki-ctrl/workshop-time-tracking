@@ -49,6 +49,9 @@ export function getPolishHolidaysForYear(year: number): Map<string, string> {
   holidays.set(`${year}-08-15`, 'Wniebowzięcie Najświętszej Maryi Panny');
   holidays.set(`${year}-11-01`, 'Wszystkich Świętych');
   holidays.set(`${year}-11-11`, 'Narodowe Święto Niepodległości');
+  if (year >= 2025) {
+    holidays.set(`${year}-12-24`, 'Wigilia Bożego Narodzenia');
+  }
   holidays.set(`${year}-12-25`, 'Pierwszy dzień Bożego Narodzenia');
   holidays.set(`${year}-12-26`, 'Drugi dzień Bożego Narodzenia');
 

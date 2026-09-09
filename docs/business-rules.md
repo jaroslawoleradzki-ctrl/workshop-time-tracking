@@ -25,7 +25,7 @@ Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.5.2.
 
 - Kalendarz zakładowy stosuje hierarchiczną regułę wyznaczania charakteru dnia:
   1. **Wyjątek administratora (`company override`)**: jawny wpis w `CompanyCalendarDay` ma najwyższy priorytet (może oznaczyć święto/weekend jako dzień roboczy lub zwykły dzień tygodnia jako wolny).
-  2. **Ustawowe święto w Polsce (`public holiday`)**: system automatycznie rozpoznaje 13 polskich świąt ustawowych (Nowy Rok, Trzech Króli, Niedziela Wielkanocna, Poniedziałek Wielkanocny, Święto Pracy, Święto Trzeciego Maja, Zielone Świątki, Boże Ciało, Wniebowzięcie NMP, Wszystkich Świętych, Święto Niepodległości, I i II dzień Bożego Narodzenia) i traktuje je jako dni wolne od pracy (`isWorkingDay=false`).
+  2. **Ustawowe święto w Polsce (`public holiday`)**: system automatycznie rozpoznaje polskie święta ustawowe (13 dni dla lat do 2024 r. włącznie oraz 14 dni od 2025 r., w tym 24 grudnia – Wigilia Bożego Narodzenia; pozostałe: Nowy Rok, Trzech Króli, Niedziela Wielkanocna, Poniedziałek Wielkanocny, Święto Pracy, Święto Trzeciego Maja, Zielone Świątki, Boże Ciało, Wniebowzięcie NMP, Wszystkich Świętych, Święto Niepodległości, I i II dzień Bożego Narodzenia) i traktuje je jako dni wolne od pracy (`isWorkingDay=false`).
   3. **Weekend (`weekend`)**: sobota i niedziela są dniami wolnymi (`isWorkingDay=false`).
   4. **Standardowy dzień roboczy (`standard weekday`)**: poniedziałek–piątek są dniami roboczymi (`isWorkingDay=true`).
 - W dniu wolnym nie można zapisać typu `G` ani typu oznaczonego `isAbsence=true`. Dozwolona pozostaje praca nad zleceniem z typem niebędącym nieobecnością, np. istniejący `NS`.
