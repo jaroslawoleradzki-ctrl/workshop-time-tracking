@@ -23,7 +23,7 @@ Zakres wersji `0.5.4` (rework po niezależnym przeglądzie):
 
 ## Weryfikacja wersji 0.5.4
 
-- backend: 191 testów zakończonych powodzeniem (15 plików testowych), w tym 4 testy na rzeczywistej bazie PostgreSQL w kontenerze,
+- backend: 192 testów zakończonych powodzeniem (15 plików testowych), w tym 5 testów na rzeczywistej bazie PostgreSQL w kontenerze weryfikujących ścisłą ścieżkę produkcyjną (`prisma migrate deploy` oraz `node dist/prisma/seed.js`),
 - backend: build (`npm run build`) zakończony powodzeniem,
 - backend: walidacja schematu Prisma (`npx prisma validate`) oraz generowanie klienta (`npx prisma generate`) — zakończone powodzeniem,
 - frontend: 93 testy zakończone powodzeniem (10 plików testowych),

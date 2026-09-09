@@ -1,8 +1,14 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { execSync } from 'node:child_process';
-import { readFileSync, readdirSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { cpSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import * as jwt from 'jsonwebtoken';
+import request from 'supertest';
 import { PrismaClient } from '@prisma/client';
+import app from '../src/app';
+import prisma from '../src/utils/prisma';
+import { TEST_JWT_SECRET } from './setup-env';
 
 const CONTAINER_NAME = 'wtt-disposable-migration-test-pg';
 const DB_PORT = '5438';
@@ -16,6 +22,8 @@ const UPGRADE_URL = `postgresql://${DB_USER}:${DB_PASS}@localhost:${DB_PORT}/${U
 const FRESH_URL = `postgresql://${DB_USER}:${DB_PASS}@localhost:${DB_PORT}/${FRESH_DB}?schema=public`;
 
 let hasDocker = false;
+
+const ALL_COLLIDING_CODES = ['WKU', 'OP', 'NN', 'NU', 'NUN', 'NUP', 'UB', 'UO', 'UPP'] as const;
 
 describe('Executable Database Migration and Production Seed Tests (v0.5.4)', () => {
   beforeAll(async () => {
@@ -56,6 +64,12 @@ describe('Executable Database Migration and Production Seed Tests (v0.5.4)', () 
     // Create databases for upgrade and fresh scenarios
     execSync(`docker exec ${CONTAINER_NAME} psql -U ${DB_USER} -c "CREATE DATABASE ${UPGRADE_DB};"`, { stdio: 'ignore' });
     execSync(`docker exec ${CONTAINER_NAME} psql -U ${DB_USER} -c "CREATE DATABASE ${FRESH_DB};"`, { stdio: 'ignore' });
+
+    // Build backend to ensure production artifacts (dist/prisma/seed.js) are up to date
+    execSync('npm run build', {
+      cwd: resolve(__dirname, '..'),
+      stdio: 'ignore',
+    });
   }, 60000);
 
   afterAll(async () => {
@@ -66,37 +80,49 @@ describe('Executable Database Migration and Production Seed Tests (v0.5.4)', () 
     }
   });
 
-  describe('Scenario A: Upgrading an existing database with custom WKU, custom OP, and colliding types', () => {
+  describe('Scenario A: Upgrading an existing database (v0.5.3 -> v0.5.4) with all 9 colliding custom types', () => {
     let prismaUpgrade: PrismaClient;
+    let beforeTypesMap: Map<string, { name: string; requiresOrder: boolean; isAbsence: boolean; isSystem: boolean; updatedAt: Date }>;
 
     beforeAll(async () => {
       if (!hasDocker) return;
 
-      const migrationsDir = resolve(__dirname, '../prisma/migrations');
-      const allMigrations = readdirSync(migrationsDir, { withFileTypes: true })
-        .filter((d) => d.isDirectory() && d.name.startsWith('20'))
-        .map((d) => d.name)
-        .sort();
+      const backendRoot = resolve(__dirname, '..');
+      const realPrismaDir = resolve(backendRoot, 'prisma');
 
-      // Apply migrations 1 through 9 (pre-v0.5.4)
-      const preFeatureMigrations = allMigrations.filter(
-        (name) => !name.includes('20260908120000_canonical_work_time_types_hardening'),
-      );
+      // 1. Prepare temporary directory containing migrations 1 through 9 (pre-v0.5.4)
+      const tempDir = join(tmpdir(), `prisma-pre-v054-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      const tempPrismaDir = join(tempDir, 'prisma');
+      const tempMigrationsDir = join(tempPrismaDir, 'migrations');
+      mkdirSync(tempMigrationsDir, { recursive: true });
 
-      for (const m of preFeatureMigrations) {
-        const sqlFile = resolve(migrationsDir, m, 'migration.sql');
-        const sql = readFileSync(sqlFile, 'utf8');
-        execSync(`docker exec -i ${CONTAINER_NAME} psql -U ${DB_USER} -d ${UPGRADE_DB}`, {
-          input: sql,
-          stdio: ['pipe', 'ignore', 'pipe'],
-        });
+      // Copy schema.prisma
+      cpSync(join(realPrismaDir, 'schema.prisma'), join(tempPrismaDir, 'schema.prisma'));
+
+      // Copy pre-v0.5.4 migrations (exclude 20260908120000)
+      const migrationDirs = readdirSync(join(realPrismaDir, 'migrations'), { withFileTypes: true })
+        .filter((d) => d.isDirectory() && d.name.startsWith('20') && !d.name.includes('20260908120000'))
+        .map((d) => d.name);
+
+      for (const m of migrationDirs) {
+        cpSync(join(realPrismaDir, 'migrations', m), join(tempMigrationsDir, m), { recursive: true });
       }
+
+      // Execute prisma migrate deploy with pre-v0.5.4 migrations to populate _prisma_migrations authentic history
+      execSync(`npx prisma migrate deploy --schema="${join(tempPrismaDir, 'schema.prisma')}"`, {
+        cwd: backendRoot,
+        env: { ...process.env, DATABASE_URL: UPGRADE_URL },
+        stdio: 'ignore',
+      });
+
+      // Clean up temporary pre-v0.5.4 migrations folder
+      rmSync(tempDir, { recursive: true, force: true });
 
       prismaUpgrade = new PrismaClient({
         datasources: { db: { url: UPGRADE_URL } },
       });
 
-      // 1. Seed standard system types (G, NDR, NS, UW, UOK, UŻ, L4) as they existed in v0.5.3
+      // 2. Seed standard system types (G, NDR, NS, UW, UOK, UŻ, L4) as they existed in v0.5.3
       const standardTypes = [
         { code: 'G', name: 'Standardowe godziny pracy', requiresOrder: true, isAbsence: false, isSystem: true },
         { code: 'NDR', name: 'Nadgodziny', requiresOrder: true, isAbsence: false, isSystem: true },
@@ -110,41 +136,21 @@ describe('Executable Database Migration and Production Seed Tests (v0.5.4)', () 
         await prismaUpgrade.workTimeType.create({ data: st });
       }
 
-      // 2. Insert custom/client types that existed in production before v0.5.4:
-      // - Custom WKU: client-created (is_system=false, custom name, requires_order=false, is_absence=false)
-      await prismaUpgrade.workTimeType.create({
-        data: {
-          code: 'WKU',
-          name: 'Wojsko / WCR Klienta',
-          requiresOrder: false,
-          isAbsence: false,
-          isSystem: false,
-        },
-      });
+      // 3. Insert all 9 colliding types as custom pre-upgrade records (is_system=false):
+      // WKU, OP, NN, NU, NUN, NUP, UB, UO, UPP
+      for (const code of ALL_COLLIDING_CODES) {
+        await prismaUpgrade.workTimeType.create({
+          data: {
+            code,
+            name: `Custom ${code}`,
+            requiresOrder: false,
+            isAbsence: false,
+            isSystem: false,
+          },
+        });
+      }
 
-      // - Custom OP: client-created (is_system=false, custom name, requires_order=false, is_absence=false)
-      await prismaUpgrade.workTimeType.create({
-        data: {
-          code: 'OP',
-          name: 'Opieka nad dzieckiem (Klient)',
-          requiresOrder: false,
-          isAbsence: false,
-          isSystem: false,
-        },
-      });
-
-      // - Custom NN: client-created (is_system=false, custom name, requires_order=false, is_absence=false)
-      await prismaUpgrade.workTimeType.create({
-        data: {
-          code: 'NN',
-          name: 'Nieobecność nieusprawiedliwiona (Custom)',
-          requiresOrder: false,
-          isAbsence: false,
-          isSystem: false,
-        },
-      });
-
-      // - Unrelated custom type: XYZ
+      // 4. Insert an unrelated custom type (XYZ)
       await prismaUpgrade.workTimeType.create({
         data: {
           code: 'XYZ',
@@ -155,7 +161,7 @@ describe('Executable Database Migration and Production Seed Tests (v0.5.4)', () 
         },
       });
 
-      // 3. Insert historical employee, user, order, and reports referencing these types
+      // 5. Insert historical user, employee, order, and reports referencing custom types
       const user = await prismaUpgrade.user.create({
         data: {
           username: 'admin',
@@ -190,56 +196,52 @@ describe('Executable Database Migration and Production Seed Tests (v0.5.4)', () 
         },
       });
 
-      // Historical reports referencing WKU, OP, NN, XYZ, and G
-      await prismaUpgrade.workTimeReport.createMany({
-        data: [
+      // Create reports referencing all 9 colliding codes + XYZ + G
+      const reportRows = [
+        ...ALL_COLLIDING_CODES.map((code, idx) => ({
+          id: `10000000-0000-4000-8000-${String(idx + 1).padStart(12, '0')}`,
+          employeeId: emp.id,
+          workTimeTypeCode: code,
+          date: new Date(`2026-08-${String(idx + 1).padStart(2, '0')}T00:00:00.000Z`),
+          hours: 8,
+          orderId: null,
+          createdByUserId: user.id,
+        })),
+        {
+          id: '20000000-0000-4000-8000-000000000001',
+          employeeId: emp.id,
+          workTimeTypeCode: 'XYZ',
+          date: new Date('2026-08-20T00:00:00.000Z'),
+          hours: 8,
+          orderId: order.id,
+          createdByUserId: user.id,
+        },
+        {
+          id: '20000000-0000-4000-8000-000000000002',
+          employeeId: emp.id,
+          workTimeTypeCode: 'G',
+          date: new Date('2026-08-21T00:00:00.000Z'),
+          hours: 8,
+          orderId: order.id,
+          createdByUserId: user.id,
+        },
+      ];
+      await prismaUpgrade.workTimeReport.createMany({ data: reportRows });
+
+      // Capture BEFORE state for comparison
+      const beforeTypes = await prismaUpgrade.workTimeType.findMany();
+      beforeTypesMap = new Map(
+        beforeTypes.map((t) => [
+          t.code,
           {
-            id: '11111111-1111-4000-8000-000000000001',
-            employeeId: emp.id,
-            workTimeTypeCode: 'WKU',
-            date: new Date('2026-08-10T00:00:00.000Z'),
-            hours: 8,
-            orderId: null,
-            createdByUserId: user.id,
+            name: t.name,
+            requiresOrder: t.requiresOrder,
+            isAbsence: t.isAbsence,
+            isSystem: t.isSystem,
+            updatedAt: t.updatedAt,
           },
-          {
-            id: '22222222-2222-4000-8000-000000000002',
-            employeeId: emp.id,
-            workTimeTypeCode: 'OP',
-            date: new Date('2026-08-11T00:00:00.000Z'),
-            hours: 8,
-            orderId: null,
-            createdByUserId: user.id,
-          },
-          {
-            id: '33333333-3333-4000-8000-000000000003',
-            employeeId: emp.id,
-            workTimeTypeCode: 'NN',
-            date: new Date('2026-08-12T00:00:00.000Z'),
-            hours: 8,
-            orderId: null,
-            createdByUserId: user.id,
-          },
-          {
-            id: '44444444-4444-4000-8000-000000000004',
-            employeeId: emp.id,
-            workTimeTypeCode: 'XYZ',
-            date: new Date('2026-08-13T00:00:00.000Z'),
-            hours: 8,
-            orderId: order.id,
-            createdByUserId: user.id,
-          },
-          {
-            id: '55555555-5555-4000-8000-000000000005',
-            employeeId: emp.id,
-            workTimeTypeCode: 'G',
-            date: new Date('2026-08-14T00:00:00.000Z'),
-            hours: 8,
-            orderId: order.id,
-            createdByUserId: user.id,
-          },
-        ],
-      });
+        ]),
+      );
     }, 60000);
 
     afterAll(async () => {
@@ -248,136 +250,221 @@ describe('Executable Database Migration and Production Seed Tests (v0.5.4)', () 
       }
     });
 
-    it('applies migration 20260908120000 and runs seed.ts safely preserving custom records', async () => {
+    it('upgrades via exact production path: prisma migrate deploy then node dist/prisma/seed.js', async () => {
       if (!hasDocker) return;
 
-      // 1. Execute migration 10 SQL
-      const migrationFile = resolve(
-        __dirname,
-        '../prisma/migrations/20260908120000_canonical_work_time_types_hardening/migration.sql',
-      );
-      const migrationSql = readFileSync(migrationFile, 'utf8');
-      execSync(`docker exec -i ${CONTAINER_NAME} psql -U ${DB_USER} -d ${UPGRADE_DB}`, {
-        input: migrationSql,
-        stdio: ['pipe', 'ignore', 'pipe'],
-      });
+      const backendRoot = resolve(__dirname, '..');
 
-      // 2. Execute production seed (equivalent to backend startup)
-      execSync(`npx ts-node prisma/seed.ts`, {
-        cwd: resolve(__dirname, '..'),
+      // Verify _prisma_migrations before v0.5.4 has exactly 9 migrations
+      const preMigrationsCount: [{ count: bigint }] = await prismaUpgrade.$queryRaw`
+        SELECT COUNT(*) as count FROM "_prisma_migrations" WHERE finished_at IS NOT NULL;
+      `;
+      expect(Number(preMigrationsCount[0].count)).toBe(9);
+
+      // STEP 1: Production migration command
+      execSync('npx prisma migrate deploy', {
+        cwd: backendRoot,
         env: { ...process.env, DATABASE_URL: UPGRADE_URL },
         stdio: 'ignore',
       });
 
-      // 3. Assert WKU row: requires_order=false, is_absence=true, NAME UNCHANGED, IS_SYSTEM UNCHANGED
-      const wku = await prismaUpgrade.workTimeType.findUnique({ where: { code: 'WKU' } });
-      expect(wku).not.toBeNull();
-      expect(wku!.requiresOrder).toBe(false);
-      expect(wku!.isAbsence).toBe(true);
-      expect(wku!.name).toBe('Wojsko / WCR Klienta'); // Preserved client name!
-      expect(wku!.isSystem).toBe(false); // Preserved client ownership!
+      // Verify _prisma_migrations now has 10 migrations and v0.5.4 migration is applied
+      const postMigrations: Array<{ migration_name: string; rolled_back_at: Date | null }> =
+        await prismaUpgrade.$queryRaw`
+          SELECT migration_name, rolled_back_at FROM "_prisma_migrations" ORDER BY started_at ASC;
+        `;
+      expect(postMigrations).toHaveLength(10);
+      const lastMigration = postMigrations[9];
+      expect(lastMigration.migration_name).toContain('20260908120000_canonical_work_time_types_hardening');
+      expect(lastMigration.rolled_back_at).toBeNull();
 
-      // 4. Assert OP row: completely unchanged
-      const op = await prismaUpgrade.workTimeType.findUnique({ where: { code: 'OP' } });
-      expect(op).not.toBeNull();
-      expect(op!.requiresOrder).toBe(false);
-      expect(op!.isAbsence).toBe(false);
-      expect(op!.name).toBe('Opieka nad dzieckiem (Klient)');
-      expect(op!.isSystem).toBe(false); // Remained custom!
+      // STEP 2: Production seed command using compiled JavaScript artifact
+      execSync('node dist/prisma/seed.js', {
+        cwd: backendRoot,
+        env: { ...process.env, DATABASE_URL: UPGRADE_URL },
+        stdio: 'ignore',
+      });
 
-      // 5. Assert NN row: completely unchanged
-      const nn = await prismaUpgrade.workTimeType.findUnique({ where: { code: 'NN' } });
-      expect(nn).not.toBeNull();
-      expect(nn!.requiresOrder).toBe(false);
-      expect(nn!.isAbsence).toBe(false);
-      expect(nn!.name).toBe('Nieobecność nieusprawiedliwiona (Custom)');
-      expect(nn!.isSystem).toBe(false); // Remained custom, no takeover!
+      // 3. Verify BEFORE vs AFTER for all 9 colliding codes
+      const afterTypes = await prismaUpgrade.workTimeType.findMany();
+      const afterTypesMap = new Map(afterTypes.map((t) => [t.code, t]));
 
-      // 6. Assert unrelated custom type XYZ: completely unchanged
-      const xyz = await prismaUpgrade.workTimeType.findUnique({ where: { code: 'XYZ' } });
-      expect(xyz).not.toBeNull();
-      expect(xyz!.requiresOrder).toBe(true);
-      expect(xyz!.isAbsence).toBe(false);
-      expect(xyz!.name).toBe('Projekt specjalny XYZ');
-      expect(xyz!.isSystem).toBe(false);
+      // 3a. WKU: requiresOrder -> false, isAbsence -> true, name PRESERVED, isSystem PRESERVED (false)
+      const beforeWku = beforeTypesMap.get('WKU')!;
+      const afterWku = afterTypesMap.get('WKU')!;
+      expect(afterWku).toBeDefined();
+      expect(afterWku.name).toBe(beforeWku.name); // 'Custom WKU' preserved!
+      expect(afterWku.isSystem).toBe(false); // isSystem remains false!
+      expect(afterWku.requiresOrder).toBe(false);
+      expect(afterWku.isAbsence).toBe(true); // Updated to true!
 
-      // 7. Assert established canonical system types: remain system types
-      const g = await prismaUpgrade.workTimeType.findUnique({ where: { code: 'G' } });
-      expect(g!.isSystem).toBe(true);
-      const l4 = await prismaUpgrade.workTimeType.findUnique({ where: { code: 'L4' } });
-      expect(l4!.isSystem).toBe(true);
-      expect(l4!.isAbsence).toBe(true);
+      // 3b. The other 8 colliding codes (OP, NN, NU, NUN, NUP, UB, UO, UPP): completely UNMODIFIED
+      const remainingCodes = ['OP', 'NN', 'NU', 'NUN', 'NUP', 'UB', 'UO', 'UPP'] as const;
+      for (const code of remainingCodes) {
+        const before = beforeTypesMap.get(code)!;
+        const after = afterTypesMap.get(code)!;
+        expect(after).toBeDefined();
+        expect(after.name).toBe(before.name);
+        expect(after.isSystem).toBe(false);
+        expect(after.requiresOrder).toBe(before.requiresOrder);
+        expect(after.isAbsence).toBe(before.isAbsence);
+        // Timestamp must NOT have been bumped because neither migration nor seed modified it
+        expect(after.updatedAt.getTime()).toBe(before.updatedAt.getTime());
+      }
 
-      // 8. Assert historical work_time_reports are intact
+      // 3c. Unrelated custom type XYZ: completely UNMODIFIED
+      const beforeXyz = beforeTypesMap.get('XYZ')!;
+      const afterXyz = afterTypesMap.get('XYZ')!;
+      expect(afterXyz.name).toBe(beforeXyz.name);
+      expect(afterXyz.isSystem).toBe(false);
+      expect(afterXyz.requiresOrder).toBe(beforeXyz.requiresOrder);
+      expect(afterXyz.isAbsence).toBe(beforeXyz.isAbsence);
+      expect(afterXyz.updatedAt.getTime()).toBe(beforeXyz.updatedAt.getTime());
+
+      // 3d. Established canonical system types: remain is_system = true
+      const canonicalCodes = ['G', 'NDR', 'NS', 'UW', 'UOK', 'UŻ', 'L4'];
+      for (const code of canonicalCodes) {
+        const afterCanonical = afterTypesMap.get(code)!;
+        expect(afterCanonical.isSystem).toBe(true);
+      }
+
+      // 4. Assert historical work_time_reports retain correct foreign keys and data
       const reports = await prismaUpgrade.workTimeReport.findMany({
         orderBy: { date: 'asc' },
       });
-      expect(reports).toHaveLength(5);
-      expect(reports[0].workTimeTypeCode).toBe('WKU');
-      expect(Number(reports[0].hours)).toBe(8);
-      expect(reports[1].workTimeTypeCode).toBe('OP');
-      expect(Number(reports[1].hours)).toBe(8);
-      expect(reports[2].workTimeTypeCode).toBe('NN');
-      expect(Number(reports[2].hours)).toBe(8);
-      expect(reports[3].workTimeTypeCode).toBe('XYZ');
-      expect(Number(reports[3].hours)).toBe(8);
-      expect(reports[4].workTimeTypeCode).toBe('G');
-      expect(Number(reports[4].hours)).toBe(8);
+      expect(reports).toHaveLength(11);
+      for (let i = 0; i < ALL_COLLIDING_CODES.length; i++) {
+        expect(reports[i].workTimeTypeCode).toBe(ALL_COLLIDING_CODES[i]);
+        expect(Number(reports[i].hours)).toBe(8);
+      }
+      expect(reports[9].workTimeTypeCode).toBe('XYZ');
+      expect(reports[10].workTimeTypeCode).toBe('G');
     });
 
-    it('is safe, idempotent, and deterministic upon repeated migration and seed execution', async () => {
+    it('verifies API behavior and permissions after upgrade: custom types (isSystem=false) are not locked like system types', async () => {
       if (!hasDocker) return;
 
-      const beforeWku = await prismaUpgrade.workTimeType.findUnique({ where: { code: 'WKU' } });
+      // Mock prisma calls in app to use prismaUpgrade
+      vi.spyOn(prisma.user, 'findUnique').mockImplementation((args: any) => prismaUpgrade.user.findUnique(args));
+      vi.spyOn(prisma.workTimeType, 'findUnique').mockImplementation((args: any) => prismaUpgrade.workTimeType.findUnique(args));
+      vi.spyOn(prisma.workTimeType, 'findMany').mockImplementation((args: any) => prismaUpgrade.workTimeType.findMany(args));
+      vi.spyOn(prisma.workTimeType, 'create').mockImplementation((args: any) => prismaUpgrade.workTimeType.create(args));
+      vi.spyOn(prisma.workTimeType, 'update').mockImplementation((args: any) => prismaUpgrade.workTimeType.update(args));
+      vi.spyOn(prisma.workTimeType, 'delete').mockImplementation((args: any) => prismaUpgrade.workTimeType.delete(args));
+      vi.spyOn(prisma.workTimeReport, 'count').mockImplementation((args: any) => prismaUpgrade.workTimeReport.count(args));
 
-      // Run migration 10 again
-      const migrationFile = resolve(
-        __dirname,
-        '../prisma/migrations/20260908120000_canonical_work_time_types_hardening/migration.sql',
+      const adminUser = await prismaUpgrade.user.findFirst({ where: { username: 'admin' } });
+      const authToken = jwt.sign(
+        { id: adminUser!.id, username: adminUser!.username, role: adminUser!.role, fullName: adminUser!.fullName },
+        TEST_JWT_SECRET,
       );
-      const migrationSql = readFileSync(migrationFile, 'utf8');
-      execSync(`docker exec -i ${CONTAINER_NAME} psql -U ${DB_USER} -d ${UPGRADE_DB}`, {
-        input: migrationSql,
-        stdio: ['pipe', 'ignore', 'pipe'],
-      });
 
-      // Run seed again
-      execSync(`npx ts-node prisma/seed.ts`, {
-        cwd: resolve(__dirname, '..'),
+      // 1. Custom WKU: admin CAN update requiresOrder because isSystem=false
+      const updateWkuRes = await request(app)
+        .put('/api/work-time-types/WKU')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ name: 'Custom WKU Updated', requiresOrder: true, isAbsence: true });
+      expect(updateWkuRes.status).toBe(200);
+      expect(updateWkuRes.body.requiresOrder).toBe(true);
+      expect(updateWkuRes.body.name).toBe('Custom WKU Updated');
+
+      // Revert WKU back to requiresOrder=false
+      await request(app)
+        .put('/api/work-time-types/WKU')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ name: 'Custom WKU', requiresOrder: false, isAbsence: true });
+
+      // 2. System type G: admin CANNOT change requiresOrder because isSystem=true
+      const updateGRes = await request(app)
+        .put('/api/work-time-types/G')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ name: 'Standardowe godziny pracy', requiresOrder: false });
+      expect(updateGRes.status).toBe(200);
+      expect(updateGRes.body.requiresOrder).toBe(true); // Locked, cannot change
+
+      // 3. System type deletion: blocked with system dictionary error
+      const deleteGRes = await request(app)
+        .delete('/api/work-time-types/G')
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(deleteGRes.status).toBe(400);
+      expect(deleteGRes.body.message).toContain('systemowego');
+
+      // 4. Custom type with reports (WKU): deletion blocked because of existing reports, NOT because it's system
+      const deleteWkuRes = await request(app)
+        .delete('/api/work-time-types/WKU')
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(deleteWkuRes.status).toBe(400);
+      expect(deleteWkuRes.body.message).toContain('istnieją zaraportowane godziny');
+
+      // 5. Custom type without reports: can be created and deleted via API
+      const createTempRes = await request(app)
+        .post('/api/work-time-types')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ code: 'TMPDEL', name: 'Temporary Custom Type', requiresOrder: false, isAbsence: false });
+      expect(createTempRes.status).toBe(201);
+      expect(createTempRes.body.isSystem).toBe(false);
+
+      const deleteTempRes = await request(app)
+        .delete('/api/work-time-types/TMPDEL')
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(deleteTempRes.status).toBe(200);
+
+      vi.restoreAllMocks();
+    });
+
+    it('is safe, idempotent, and deterministic upon repeated production startup (migrate deploy + seed.js)', async () => {
+      if (!hasDocker) return;
+
+      const backendRoot = resolve(__dirname, '..');
+      const beforeRepeatWku = await prismaUpgrade.workTimeType.findUnique({ where: { code: 'WKU' } });
+      const beforeTypes = await prismaUpgrade.workTimeType.findMany();
+
+      // Repeated execution of production deployment sequence
+      execSync('npx prisma migrate deploy', {
+        cwd: backendRoot,
         env: { ...process.env, DATABASE_URL: UPGRADE_URL },
         stdio: 'ignore',
       });
 
-      const afterWku = await prismaUpgrade.workTimeType.findUnique({ where: { code: 'WKU' } });
-      expect(afterWku!.name).toBe(beforeWku!.name);
-      expect(afterWku!.isSystem).toBe(beforeWku!.isSystem);
-      expect(afterWku!.requiresOrder).toBe(beforeWku!.requiresOrder);
-      expect(afterWku!.isAbsence).toBe(beforeWku!.isAbsence);
-      // updatedAt was NOT touched because flags were already correct
-      expect(afterWku!.updatedAt.getTime()).toBe(beforeWku!.updatedAt.getTime());
+      execSync('node dist/prisma/seed.js', {
+        cwd: backendRoot,
+        env: { ...process.env, DATABASE_URL: UPGRADE_URL },
+        stdio: 'ignore',
+      });
 
-      // Historical reports remain untouched
-      const count = await prismaUpgrade.workTimeReport.count();
-      expect(count).toBe(5);
+      const afterRepeatWku = await prismaUpgrade.workTimeType.findUnique({ where: { code: 'WKU' } });
+      expect(afterRepeatWku!.name).toBe(beforeRepeatWku!.name);
+      expect(afterRepeatWku!.isSystem).toBe(beforeRepeatWku!.isSystem);
+      expect(afterRepeatWku!.requiresOrder).toBe(beforeRepeatWku!.requiresOrder);
+      expect(afterRepeatWku!.isAbsence).toBe(beforeRepeatWku!.isAbsence);
+      expect(afterRepeatWku!.updatedAt.getTime()).toBe(beforeRepeatWku!.updatedAt.getTime());
+
+      const afterTypes = await prismaUpgrade.workTimeType.findMany();
+      expect(afterTypes).toHaveLength(beforeTypes.length);
+
+      const reportsCount = await prismaUpgrade.workTimeReport.count();
+      expect(reportsCount).toBe(11);
     });
   });
 
-  describe('Scenario B: Fresh installation (prisma migrate deploy + seed.ts)', () => {
+  describe('Scenario B: Fresh installation via exact production path (prisma migrate deploy + node dist/prisma/seed.js)', () => {
     let prismaFresh: PrismaClient;
 
     beforeAll(async () => {
       if (!hasDocker) return;
 
-      // Run prisma migrate deploy on clean FRESH_DB
-      execSync(`npx prisma migrate deploy`, {
-        cwd: resolve(__dirname, '..'),
+      const backendRoot = resolve(__dirname, '..');
+
+      // 1. Run prisma migrate deploy on clean FRESH_DB
+      execSync('npx prisma migrate deploy', {
+        cwd: backendRoot,
         env: { ...process.env, DATABASE_URL: FRESH_URL },
         stdio: 'ignore',
       });
 
-      // Run production seed
-      execSync(`npx ts-node prisma/seed.ts`, {
-        cwd: resolve(__dirname, '..'),
+      // 2. Run production seed via compiled artifact
+      execSync('node dist/prisma/seed.js', {
+        cwd: backendRoot,
         env: { ...process.env, DATABASE_URL: FRESH_URL },
         stdio: 'ignore',
       });
@@ -422,16 +509,18 @@ describe('Executable Database Migration and Production Seed Tests (v0.5.4)', () 
     it('repeated migrate deploy and seed on fresh database is completely idempotent', async () => {
       if (!hasDocker) return;
 
+      const backendRoot = resolve(__dirname, '..');
+
       // Run migrate deploy again
-      execSync(`npx prisma migrate deploy`, {
-        cwd: resolve(__dirname, '..'),
+      execSync('npx prisma migrate deploy', {
+        cwd: backendRoot,
         env: { ...process.env, DATABASE_URL: FRESH_URL },
         stdio: 'ignore',
       });
 
-      // Run seed again
-      execSync(`npx ts-node prisma/seed.ts`, {
-        cwd: resolve(__dirname, '..'),
+      // Run production seed again via compiled artifact
+      execSync('node dist/prisma/seed.js', {
+        cwd: backendRoot,
         env: { ...process.env, DATABASE_URL: FRESH_URL },
         stdio: 'ignore',
       });
