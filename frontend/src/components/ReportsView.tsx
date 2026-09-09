@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { 
-  FileDown, 
-  Search, 
-  RefreshCw, 
+import {
+  FileDown,
+  Search,
+  RefreshCw,
   Trash2,
   Calendar,
   Lock,
@@ -35,6 +35,19 @@ export interface AbsenceSummaryItem {
   hours: number;
 }
 
+export interface ReconciliationDiagnosticRecord {
+  employeeId: string;
+  employeeName: string;
+  date: string;
+  workTimeTypeCode: string;
+  workTimeTypeName: string;
+  hours: number;
+  orderId: string | null;
+  orderNumber: string | null;
+  reason: string;
+  contribution: number;
+}
+
 export interface ClosureControlSummary {
   ordersHours: number;
   absences: AbsenceSummaryItem[];
@@ -44,6 +57,7 @@ export interface ClosureControlSummary {
   difference: number;
   status: 'MATCHED' | 'MISMATCHED';
   statusLabel: 'Zgodne' | 'Niezgodne';
+  diagnostics?: ReconciliationDiagnosticRecord[];
 }
 
 type ReportTab = 'by-order' | 'by-employee' | 'by-account' | 'detailed' | 'absence-periods';
@@ -77,7 +91,7 @@ const DEFAULT_REPORT_FILTERS: ReportFilters = {
 export default function ReportsView({ token, user }: ReportsViewProps) {
   const isAdmin = user.role === 'admin';
   const [activeReportTab, setActiveReportTab] = useState<ReportTab>('by-order');
-  
+
   // Dictionaries for filters
   const [employees, setEmployees] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
@@ -122,7 +136,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
     const fetchDictionaries = async () => {
       try {
         const headers = { 'Authorization': `Bearer ${token}` };
-        
+
         // Fetch all employees (including inactive, since we need to show historical reports)
         const empRes = await fetch('/api/employees', { headers });
         const empData = await empRes.json();
@@ -281,7 +295,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!res.ok) throw new Error('Pobieranie nie powiodło się');
-      
+
       const blob = await res.blob();
       const blobUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -493,15 +507,15 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
       </div>
 
       {/* Tabs */}
-      <div style={{ 
-        display: 'flex', 
-        borderBottom: '1px solid var(--border-color)', 
+      <div style={{
+        display: 'flex',
+        borderBottom: '1px solid var(--border-color)',
         marginBottom: '1.5rem',
         overflowX: 'auto',
         gap: '0.5rem',
         paddingBottom: '2px'
       }}>
-        <button 
+        <button
           onClick={() => setActiveReportTab('by-order')}
           className={`nav-item ${activeReportTab === 'by-order' ? 'active' : ''}`}
           style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
@@ -509,7 +523,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
           <FolderOpen size={16} />
           Godziny wg Zleceń
         </button>
-        <button 
+        <button
           onClick={() => setActiveReportTab('by-employee')}
           className={`nav-item ${activeReportTab === 'by-employee' ? 'active' : ''}`}
           style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
@@ -517,7 +531,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
           <User size={16} />
           Wg Pracowników (Miesięczny)
         </button>
-        <button 
+        <button
           onClick={() => setActiveReportTab('by-account')}
           className={`nav-item ${activeReportTab === 'by-account' ? 'active' : ''}`}
           style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
@@ -525,7 +539,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
           <DollarSign size={16} />
           Wg Kont Księgowych
         </button>
-        <button 
+        <button
           onClick={() => setActiveReportTab('detailed')}
           className={`nav-item ${activeReportTab === 'detailed' ? 'active' : ''}`}
           style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
@@ -566,12 +580,12 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
             <>
               <div className="form-group">
                 <label className="form-label" htmlFor="report-order-number">Numer zlecenia</label>
-                <input 
+                <input
                   id="report-order-number"
-                  type="text" 
-                  className="form-control" 
-                  placeholder="np. ZL-2026" 
-                  value={filterOrderNum} 
+                  type="text"
+                  className="form-control"
+                  placeholder="np. ZL-2026"
+                  value={filterOrderNum}
                   onChange={e => updateFilters({ orderNumber: e.target.value })}
                 />
               </div>
@@ -586,9 +600,9 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
               </div>
               <div className="form-group" style={{ display: 'flex', alignItems: 'center', marginTop: '1.5rem' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }}>
-                  <input 
-                    type="checkbox" 
-                    checked={filterOnlyWithHours} 
+                  <input
+                    type="checkbox"
+                    checked={filterOnlyWithHours}
                     disabled={filterClosureReport}
                     onChange={e => updateFilters({ onlyWithHours: e.target.checked })}
                   />
@@ -623,12 +637,12 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
           {activeReportTab === 'by-account' && (
             <div className="form-group">
               <label className="form-label" htmlFor="report-account">Konto księgowe</label>
-              <input 
+              <input
                 id="report-account"
-                type="text" 
-                className="form-control" 
-                placeholder="np. KK-902" 
-                value={filterAccount} 
+                type="text"
+                className="form-control"
+                placeholder="np. KK-902"
+                value={filterAccount}
                 onChange={e => updateFilters({ accountingAccount: e.target.value })}
               />
             </div>
@@ -660,9 +674,9 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
 
       {/* Export & Actions Row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-        <button 
-          className="btn btn-secondary btn-sm" 
-          onClick={fetchReportData} 
+        <button
+          className="btn btn-secondary btn-sm"
+          onClick={fetchReportData}
           disabled={loading}
           style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
         >
@@ -713,8 +727,8 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                     const devVal = row.deviation;
                     const devStyle = devVal < 0 ? { color: 'var(--danger-color)', fontWeight: 600 } : { color: 'var(--success-color)' };
                     const useVal = row.percent;
-                    const useBadge = 
-                      useVal > 100 ? 'badge-danger' : 
+                    const useBadge =
+                      useVal > 100 ? 'badge-danger' :
                       useVal >= 80 ? 'badge-suspended' : 'badge-open';
 
                     return (
@@ -853,7 +867,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                       </td>
                       {isAdmin && (
                         <td>
-                          <button 
+                          <button
                             className="btn btn-danger btn-sm"
                             style={{ padding: '0.25rem 0.4rem', backgroundColor: 'transparent', color: 'var(--danger-color)', borderColor: 'var(--danger-border)' }}
                             onClick={() => handleDeleteEntry(row.id)}
@@ -1008,15 +1022,67 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                       {controlSummary.status === 'MATCHED'
                         ? '✓ Całkowity czas pracowników został w 100% rozliczony na zlecenia i usprawiedliwione nieobecności.'
                         : `⚠ Wykryto niezgodność rozliczenia czasu (${(Number(controlSummary.difference) || 0).toFixed(2)} h). Sprawdź nieprzypisane wpisy lub brakujące zlecenia.`}
-                    </span>
+</span>
                   </div>
+
+                  {/* Diagnostyka niezgodności - wyświetlana tylko gdy status MISMATCHED i są dane diagnostyczne */}
+                  {controlSummary.status === 'MISMATCHED' && controlSummary.diagnostics && controlSummary.diagnostics.length > 0 && (
+                    <div style={{ marginTop: '1rem', padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--danger-border)', backgroundColor: 'rgba(198, 40, 40, 0.05)' }}>
+                      <h5 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', fontWeight: 700, color: 'var(--danger-color)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <span>🔍</span>
+                        Diagnostyka niezgodności ({controlSummary.diagnostics.length} rekordów)
+                      </h5>
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                          <thead>
+                            <tr style={{ backgroundColor: 'var(--danger-color)', color: 'white' }}>
+                              <th style={{ padding: '0.35rem', textAlign: 'left' }}>Pracownik</th>
+                              <th style={{ padding: '0.35rem', textAlign: 'left' }}>Data</th>
+                              <th style={{ padding: '0.35rem', textAlign: 'left' }}>Typ</th>
+                              <th style={{ padding: '0.35rem', textAlign: 'right' }}>Godziny</th>
+                              <th style={{ padding: '0.35rem', textAlign: 'left' }}>Zlecenie</th>
+                              <th style={{ padding: '0.35rem', textAlign: 'left' }}>Przyczyna</th>
+                              <th style={{ padding: '0.35rem', textAlign: 'right' }}>Wkład</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {controlSummary.diagnostics.map((diag, idx) => (
+                              <tr key={`${diag.employeeId}-${diag.date}-${diag.workTimeTypeCode}-${idx}`} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                                <td style={{ padding: '0.35rem' }}>{diag.employeeName}</td>
+                                <td style={{ padding: '0.35rem', whiteSpace: 'nowrap' }}>{diag.date}</td>
+                                <td style={{ padding: '0.35rem' }}>{diag.workTimeTypeCode} <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>({diag.workTimeTypeName})</span></td>
+                                <td style={{ padding: '0.35rem', textAlign: 'right', fontWeight: 600 }}>{(Number(diag.hours) || 0).toFixed(2)} h</td>
+                                <td style={{ padding: '0.35rem' }}>{diag.orderNumber || '—'}</td>
+                                <td style={{ padding: '0.35rem' }}>{diag.reason}</td>
+                                <td style={{ padding: '0.35rem', textAlign: 'right', fontWeight: 600, color: diag.contribution > 0 ? 'var(--danger-color)' : 'var(--success-color)' }}>
+                                  {diag.contribution > 0 ? '+' : ''}{(Number(diag.contribution) || 0).toFixed(2)} h
+                                </td>
+                              </tr>
+                            ))}
+                            <tr style={{ fontWeight: 700, backgroundColor: 'rgba(0,0,0,0.02)' }}>
+                              <td style={{ padding: '0.35rem' }} colSpan={6}>Suma wkładów:</td>
+                              <td style={{ padding: '0.35rem', textAlign: 'right' }}>
+                                {controlSummary.diagnostics.reduce((sum, d) => sum + (Number(d.contribution) || 0), 0) > 0 ? '+' : ''}
+                                {controlSummary.diagnostics.reduce((sum, d) => sum + (Number(d.contribution) || 0), 0).toFixed(2)} h
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                      <p style={{ marginTop: '0.5rem', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                        Suma wkładów powinna równać się różnicy: <strong>{(Number(controlSummary.difference) || 0).toFixed(2)} h</strong>.
+                        Wkład dodatni = rozliczono więcej niż pracownik (np. nieobecność z zleceniem).
+                        Wkład ujemny = pracownik ma więcej niż rozliczono (np. brak zlecenia).
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           )}
         </div>
       )}
-      
+
       {activeReportTab === 'detailed' && !isAdmin && (
         <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
           <Lock size={12} />

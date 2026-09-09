@@ -61,7 +61,7 @@ Od wersji `0.3.7` wszystkie pliki raportowe dla użytkownika (Zlecenia, Miesięc
 
 W plikach XLSX zamrożenie okien (`ySplit`) oraz zakreślenie `autoFilter` odnoszą się wyłącznie do właściwego wiersza nagłówka tabeli danych. Pliki CSV raportowe posiadają kodowanie UTF-8 z BOM (`\uFEFF`), separator `;`, poprawnie escapowane znaki specjalne i cudzysłowy oraz wiersze metadanych przed tabelą.
 
-W eksporcie według zleceń `closureReport=true` wymaga obu dat. Arkusz zawiera dokładnie te same zlecenia i kolejność co odpowiedź JSON trybu zamknięcia, włącznie ze zleceniami zamkniętymi bez godzin w okresie.
+W eksporcie według zleceń `closureReport=true` wymaga obu dat. Arkusz zawiera dokładnie te same zlecenia i kolejność co odpowiedź JSON trybu zamknięcia, włącznie ze zleceniami zamkniętymi bez godzin w okresie. Pod tabelą zleceń generowana jest sekcja **Kontrola rozliczenia czasu** (zestawienie godzin zleceń, typów nieobecności, sumy rozliczonej, sumy godzin pracowników, różnicy oraz statusu Zgodne/Niezgodne). Przy statusie **Niezgodne** plik XLSX zawiera dodatkową sekcję **Diagnostyka niezgodności** z 7 kolumnami: `Pracownik`, `Data`, `Typ`, `Godziny`, `Zlecenie`, `Przyczyna`, `Wkład w różnicę` (z formatowaniem liczbowym ze znakiem `+#,##0.00;-#,##0.00;0.00`).
 
 > [!NOTE]
 > Techniczne szablony importowe (`szablon_pracownicy.xlsx`, `szablon_zlecen.xlsx`) nie są raportami użytkownika i pozostały bez zmian.
