@@ -3,6 +3,27 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.5.4] - 2026-09-09
+
+### Fixed
+- Naprawiono klasyfikację kodu `WKU` w słowniku rodzajów czasu pracy: `requiresOrder = false` oraz `isAbsence = true`, eliminując fałszywe rozbieżności kontroli rozliczenia i niepoprawny komunikat o braku zlecenia.
+- Bezpieczna migracja bazy danych `20260908120000_canonical_work_time_types_hardening`: aktualizuje wyłącznie kod `WKU`, zachowując nienaruszoną nazwę klienta (`name`) oraz stan własności (`is_system = false`), bez modyfikacji pozostałych kodów oraz tabeli `work_time_reports`.
+- Bezpieczny seed produkcyjny (`seed.ts`): ograniczono wyłącznie do 7 ustalonych kanonicznych kodów systemowych (`G`, `NDR`, `NS`, `UW`, `UOK`, `UŻ`, `L4`), zachowując nazwy administratora i zapobiegając przejmowaniu typów własnych (np. OP, NN itp.).
+- Naprawiono wyrównanie kolumn w tabeli Słownika Rodzajów Czasu Pracy (`DictionariesView.tsx`): mapowanie nagłówków `Kod`, `Pełna nazwa`, `Wymaga zlecenia`, `Nieobecność`, `Status słownika`, `Akcje`.
+- Poprawiono semantykę diagnostyki kontroli rozliczenia w `analytics.ts`: rozróżniono powód `Typ nie jest nieobecnością i nie wymaga zlecenia` od `Brak zlecenia` oraz dodano precyzyjną diagnostykę podwójnego naliczenia nieobecności ze zleceniem w rozliczeniu.
+
+### Added
+- Wykonywalne testy migracji i seeda na kontenerze PostgreSQL (`executable-database-migration.test.ts`), sprawdzające zachowanie rekordów custom WKU, custom OP, kolizji, typów własnych oraz instalacji od zera.
+- Testy integracji WKU z kalendarzem i nieobecnościami v0.5.3 (`analytics.test.ts`, `ReportsView.test.tsx`): mostkowanie przez weekendy, święta ustawowe, Wigilię 2025+, nadrzędność wyjątków kalendarza zakładowego, eksport XLSX i CSV.
+
+## [0.5.3] - 2026-09-09
+
+### Added
+- Automatyczne wyznaczanie polskich świąt ustawowych w nowym module `backend/src/utils/holidays.ts` (w tym Wigilii 24 grudnia od roku 2025).
+- Kalendarz zakładowy: nadrzędność wyjątków administratora nad dniami roboczymi i świętami.
+- Mostkowanie w Raporcie Okresów Nieobecności przez święta i weekendy bez sztucznego zwiększania liczby dni roboczych (`workingDays`).
+- Podsumowanie łącznej liczby dni nieobecności w stopce tabeli oraz spójny eksport CSV.
+
 ## [0.5.2] - 2026-09-04
 
 ### Fixed

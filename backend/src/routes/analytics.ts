@@ -632,7 +632,13 @@ export async function getReconciliationDiagnostics(
       } else {
         // Not in reconciliation at all
         contribution = -hours;
-        reason = !orderId ? 'Brak zlecenia' : 'Zlecenie nieobjęte raportem zamknięcia';
+        if (orderId) {
+          reason = 'Zlecenie nieobjęte raportem zamknięcia';
+        } else if (!report.workTimeType.requiresOrder) {
+          reason = 'Typ nie jest nieobecnością i nie wymaga zlecenia';
+        } else {
+          reason = 'Brak zlecenia';
+        }
       }
     }
 

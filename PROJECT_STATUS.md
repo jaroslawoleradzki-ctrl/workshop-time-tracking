@@ -3,24 +3,49 @@
 ## Stan bieżący
 
 - Projekt: Workshop Time Tracking
-- Aktualna wersja produkcyjna: `0.3.8`
-- Aktualna wersja development: `0.5.2`
+- Aktualna wersja produkcyjna: `0.5.4`
+- Aktualna wersja development: `0.5.4`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: v0.5.2 — produkcja follow-up: naprawa zapisu NS w dni wolne, domyślny typ czasu wg dnia tygodnia, dzień tygodnia przy dacie, diagnostyka niezgodności sum kontrolnych
+- Stan prac: v0.5.4 wydane; uszczelnienie słownika rodzajów czasu pracy (WorkTimeTypes hardening) po niezależnym przeglądzie: bezpieczna korekta WKU (requires_order=false, is_absence=true) z zachowaniem nazwy i statusu własności, wąska migracja i bezpieczny seed bez przejmowania typów własnych (OP, NN itp.), naprawa wyrównania kolumn tabeli słowników w UI, ujednolicenie semantyki diagnostyki rozliczenia, wykonywalne testy bazy danych PostgreSQL oraz testy integracji z mechanizmami v0.5.3
 
-Zakres wersji `0.5.2`:
+Zakres wersji `0.5.4` (rework po niezależnym przeglądzie):
 
-- Zapewniono pełną spójność migawki bazy danych (Prisma interactive transaction z `isolationLevel: RepeatableRead`) dla wyliczania sum kontrolnych i diagnostyki rozliczenia oraz wprowadzono serwerowego strażnika niezmiennika (`round(SUM(diagnostics.contribution), 2) === round(totalSettledHours - totalEmployeeHours, 2)`).
-- Zweryfikowano i pokryto testami integracyjnymi backendu oraz komponentów frontendu regułę zapisu wpisów NS (Nadgodziny sobota/niedziela) w dni wolne (sobota/niedziela) przy podaniu prawidłowego zlecenia oraz obsługę błędów odrzucenia (historyczny incydent ze środowiska produkcyjnego nadal wymaga weryfikacji bazy produkcyjnej w trybie READ-ONLY).
-- Poprawiono obsługę błędów frontendu przy zapisie wpisów czasu – użytkownik otrzymuje czytelny komunikat w przypadku odrzucenia przez backend.
-- Automatyczny domyślny typ czasu pracy w formularzu raportowania: dni robocze (poniedziałek–piątek) → G, sobota i niedziela → NS.
-- Wyświetlanie skrótu dnia tygodnia (pn, wt, śr, czw, pt, sob, nd) przy polu daty raportowania.
-- Diagnostyka niezgodności sum kontrolnych zamknięcia miesiąca: przy statusie NIEZGODNE pokazuje konkretne wpisy powodujące różnicę (pracownik, data, typ, godziny, zlecenie, przyczyna, podpisany wkład w różnicę rozliczenia) zarówno dla kierunku ujemnego (Direction A), dodatniego (Direction B), jak i mieszanego.
-- Rozszerzono eksport XLSX raportu zamknięcia o pełną 7-kolumnową sekcję diagnostyki przy statusie NIEZGODNE z formatowaniem numerycznym.
-- Logika resetowania formularza nowego wpisu uwzględnia dzień tygodnia dla domyślnego typu czasu pracy.
-- Edycja istniejącego wpisu zachowuje jego typ czasu pracy.
-- Zmiana nie wymaga migracji bazy danych.
+- Bezpieczna korekta semantyki kodu `WKU` w słowniku: `requires_order = false`, `is_absence = true`.
+- Zachowanie nienaruszonej nazwy klienta (`name`) oraz statusu własności (`is_system = false`) dla istniejącego rekordu WKU.
+- Przeprojektowanie migracji bazy danych `20260908120000_canonical_work_time_types_hardening`: aktualizuje wyłącznie WKU w wąskim, precyzyjnym zakresie, bez wprowadzania niezatwierdzonych kodów wieloznacznych (`NN`, `NU`, `NUN`, `NUP`, `UB`, `UO`, `UPP`, `OP`) i bez przejmowania typów własnych klienta (w tym `OP`).
+- Bezpieczny seed produkcyjny (`seed.ts`): ograniczony wyłącznie do 7 ustalonych kanonicznych kodów systemowych (`G`, `NDR`, `NS`, `UW`, `UOK`, `UŻ`, `L4`), zachowujący nazwy zmodyfikowane przez administratora i chroniący typy własne.
+- Naprawa mapowania kolumn w widoku tabeli Słownika Rodzajów Czasu Pracy (`DictionariesView.tsx`): `Kod`, `Pełna nazwa`, `Wymaga zlecenia`, `Nieobecność`, `Status słownika`, `Akcje`.
+- Poprawa semantyki diagnostyki rozliczenia w `analytics.ts`: precyzyjne rozróżnienie „Brak zlecenia” od „Typ nie jest nieobecnością i nie wymaga zlecenia” oraz wykrywanie podwójnego naliczenia nieobecności ze zleceniem w rozliczeniu.
+- Zachowano pełną zgodność niezmiennika sumy wkładów diagnostyki (`sum(contribution) === difference`) oraz spójność migawki transakcyjnej (`RepeatableRead`).
+- Dodanie wykonywalnych testów migracji i seeda na kontenerze PostgreSQL (`executable-database-migration.test.ts`), testujących zachowanie custom WKU, custom OP, kolizji, typów własnych, historycznych raportów oraz instalacji od zera.
+- Dodanie testów integracyjnych WKU z mechanizmami v0.5.3 (`analytics.test.ts`, `ReportsView.test.tsx`): weekendy, święta ustawowe, Wigilia 2025+, nadrzędność wyjątków kalendarza, poprawność `workingDays`, brak naliczania godzin w dni wolne, eksport XLSX i CSV.
+
+## Weryfikacja wersji 0.5.4
+
+- backend: 192 testów zakończonych powodzeniem (15 plików testowych), w tym 5 testów na rzeczywistej bazie PostgreSQL w kontenerze weryfikujących ścisłą ścieżkę produkcyjną (`prisma migrate deploy` oraz `node dist/prisma/seed.js`),
+- backend: build (`npm run build`) zakończony powodzeniem,
+- backend: walidacja schematu Prisma (`npx prisma validate`) oraz generowanie klienta (`npx prisma generate`) — zakończone powodzeniem,
+- frontend: 93 testy zakończone powodzeniem (10 plików testowych),
+- frontend: build (`npm run build`) zakończony powodzeniem,
+- frontend: lint (`npm run lint`) zakończony powodzeniem z wynikiem 0 ostrzeżeń,
+- git diff --check: brak błędów białych znaków.
+
+Zakres wersji `0.5.3`:
+
+- Dodano automatyczne wyznaczanie polskich świąt ustawowych w module `backend/src/utils/holidays.ts` (w tym uwzględnienie Wigilii Bożego Narodzenia 24 grudnia od 2025 roku).
+- Kalendarz zakładowy: nadrzędność wyjątków administratora nad domyślnymi regułami dni roboczych, weekendów i świąt.
+- Raport okresów nieobecności: uwzględnienie dni wolnych (świąt ustawowych, weekendów, wyjątków kalendarza) w mostkowaniu okresów, bez sztucznego zwiększania liczby dni roboczych (`workingDays`).
+- Dodano łączne podsumowanie liczby dni nieobecności w stopce tabeli oraz spójny eksport CSV.
+
+## Weryfikacja wersji 0.5.3
+
+- backend: 186 testów zakończonych powodzeniem (14 plików testowych),
+- backend: build (`npm run build`) zakończony powodzeniem,
+- backend: walidacja schematu Prisma (`npx prisma validate`) — schemat poprawny,
+- frontend: 92 testy zakończone powodzeniem (10 plików testowych),
+- frontend: build (`npm run build`) zakończony powodzeniem,
+- frontend: lint (`npm run lint`) zakończony powodzeniem z wynikiem 0 ostrzeżeń.
 
 ## Weryfikacja wersji 0.5.2
 
