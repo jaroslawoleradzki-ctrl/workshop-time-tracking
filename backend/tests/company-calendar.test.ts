@@ -17,19 +17,241 @@ function client(overrides: Array<{ date: string; isWorkingDay: boolean; reason?:
 
 describe('company calendar', () => {
   afterEach(() => vi.restoreAllMocks());
-  it('treats Monday as working and Saturday/Sunday as non-working by default', async () => {
+  it('treats regular weekday as working and Saturday/Sunday as non-working by default', async () => {
     const db = client();
-    expect((await getWorkingDayDecision('2026-08-10', db)).isWorkingDay).toBe(true);
-    expect((await getWorkingDayDecision('2026-08-15', db)).isWorkingDay).toBe(false);
-    expect((await getWorkingDayDecision('2026-08-16', db)).isWorkingDay).toBe(false);
+    // 2026-08-10 is regular Monday (no holiday)
+    const monday = await getWorkingDayDecision('2026-08-10', db);
+    expect(monday).toMatchObject({ isWorkingDay: true, source: 'standard weekday' });
+
+    // 2026-08-16 is Sunday (no holiday)
+    const sunday = await getWorkingDayDecision('2026-08-16', db);
+    expect(sunday).toMatchObject({ isWorkingDay: false, source: 'weekend' });
+
+    // 2026-08-22 is Saturday (no holiday)
+    const saturday = await getWorkingDayDecision('2026-08-22', db);
+    expect(saturday).toMatchObject({ isWorkingDay: false, source: 'weekend' });
   });
 
-  it('gives a company override precedence over the base calendar', async () => {
-    const db = client([{ date: '2026-08-14', isWorkingDay: false, reason: 'Dzień wolny za święto' }, { date: '2026-08-15', isWorkingDay: true }]);
-    const freeFriday = await getWorkingDayDecision('2026-08-14', db);
-    const workingSaturday = await getWorkingDayDecision('2026-08-15', db);
-    expect(freeFriday).toMatchObject({ isWorkingDay: false, source: 'company override', reason: 'Dzień wolny za święto' });
-    expect(workingSaturday).toMatchObject({ isWorkingDay: true, source: 'company override' });
+  it('automatically identifies statutory Polish public holidays in 2026 as non-working days', async () => {
+    const db = client();
+
+    // 2026-01-01: Nowy Rok (Thursday)
+    expect(await getWorkingDayDecision('2026-01-01', db)).toMatchObject({
+      isWorkingDay: false,
+      source: 'public holiday',
+      reason: 'Nowy Rok',
+    });
+
+    // 2026-01-06: Święto Trzech Króli (Tuesday)
+    expect(await getWorkingDayDecision('2026-01-06', db)).toMatchObject({
+      isWorkingDay: false,
+      source: 'public holiday',
+      reason: 'Święto Trzech Króli',
+    });
+
+    // Wielkanoc 2026-04-05 (Sunday)
+    expect(await getWorkingDayDecision('2026-04-05', db)).toMatchObject({
+      isWorkingDay: false,
+      source: 'public holiday',
+      reason: 'Niedziela Wielkanocna',
+    });
+
+    // Poniedziałek Wielkanocny 2026-04-06 (Monday)
+    expect(await getWorkingDayDecision('2026-04-06', db)).toMatchObject({
+      isWorkingDay: false,
+      source: 'public holiday',
+      reason: 'Poniedziałek Wielkanocny',
+    });
+
+    // 2026-05-01: Święto Pracy (Friday)
+    expect(await getWorkingDayDecision('2026-05-01', db)).toMatchObject({
+      isWorkingDay: false,
+      source: 'public holiday',
+      reason: 'Święto Pracy',
+    });
+
+    // 2026-05-03: Święto Narodowe Trzeciego Maja (Sunday)
+    expect(await getWorkingDayDecision('2026-05-03', db)).toMatchObject({
+      isWorkingDay: false,
+      source: 'public holiday',
+      reason: 'Święto Narodowe Trzeciego Maja',
+    });
+
+    // Boże Ciało 2026-06-04 (Thursday)
+    expect(await getWorkingDayDecision('2026-06-04', db)).toMatchObject({
+      isWorkingDay: false,
+      source: 'public holiday',
+      reason: 'Boże Ciało',
+    });
+
+    // 2026-08-15: Wniebowzięcie NMP (Saturday)
+    expect(await getWorkingDayDecision('2026-08-15', db)).toMatchObject({
+      isWorkingDay: false,
+      source: 'public holiday',
+      reason: 'Wniebowzięcie Najświętszej Maryi Panny',
+    });
+
+    // 2026-11-01: Wszystkich Świętych (Sunday)
+    expect(await getWorkingDayDecision('2026-11-01', db)).toMatchObject({
+      isWorkingDay: false,
+      source: 'public holiday',
+      reason: 'Wszystkich Świętych',
+    });
+
+    // 2026-11-11: Narodowe Święto Niepodległości (Wednesday)
+    expect(await getWorkingDayDecision('2026-11-11', db)).toMatchObject({
+      isWorkingDay: false,
+      source: 'public holiday',
+      reason: 'Narodowe Święto Niepodległości',
+    });
+
+    // 2026-12-24: Wigilia Bożego Narodzenia (Thursday)
+    expect(await getWorkingDayDecision('2026-12-24', db)).toMatchObject({
+      isWorkingDay: false,
+      source: 'public holiday',
+      reason: 'Wigilia Bożego Narodzenia',
+    });
+
+    // 2026-12-25: Pierwszy dzień Bożego Narodzenia (Friday)
+    expect(await getWorkingDayDecision('2026-12-25', db)).toMatchObject({
+      isWorkingDay: false,
+      source: 'public holiday',
+      reason: 'Pierwszy dzień Bożego Narodzenia',
+    });
+
+    // 2026-12-26: Drugi dzień Bożego Narodzenia (Saturday)
+    expect(await getWorkingDayDecision('2026-12-26', db)).toMatchObject({
+      isWorkingDay: false,
+      source: 'public holiday',
+      reason: 'Drugi dzień Bożego Narodzenia',
+    });
+  });
+
+  it('handles 24 December correctly across year boundary (pre-2025 regular weekday vs 2025+ public holiday with override precedence)', async () => {
+    // 2024-12-24 (Tuesday): regular weekday in 2024
+    const db2024 = client();
+    const dec24_2024 = await getWorkingDayDecision('2024-12-24', db2024);
+    expect(dec24_2024).toMatchObject({
+      isWorkingDay: true,
+      source: 'standard weekday',
+    });
+
+    // 2025-12-24 (Wednesday): statutory public holiday without override
+    const db2025 = client();
+    const dec24_2025 = await getWorkingDayDecision('2025-12-24', db2025);
+    expect(dec24_2025).toMatchObject({
+      isWorkingDay: false,
+      source: 'public holiday',
+      reason: 'Wigilia Bożego Narodzenia',
+    });
+
+    // 2025-12-24 with explicit company override to working day
+    const db2025Override = client([
+      { date: '2025-12-24', isWorkingDay: true, reason: 'Praca w Wigilię' },
+    ]);
+    const dec24_2025Override = await getWorkingDayDecision('2025-12-24', db2025Override);
+    expect(dec24_2025Override).toMatchObject({
+      isWorkingDay: true,
+      source: 'company override',
+      reason: 'Praca w Wigilię',
+    });
+
+    // 2026-12-24 with explicit company override to working day
+    const db2026Override = client([
+      { date: '2026-12-24', isWorkingDay: true, reason: 'Dyżur produkcyjny' },
+    ]);
+    const dec24_2026Override = await getWorkingDayDecision('2026-12-24', db2026Override);
+    expect(dec24_2026Override).toMatchObject({
+      isWorkingDay: true,
+      source: 'company override',
+      reason: 'Dyżur produkcyjny',
+    });
+  });
+
+  it('gives a company override highest precedence over public holidays, weekdays and weekends', async () => {
+    const db = client([
+      // Holiday (2026-11-11) overridden as working
+      { date: '2026-11-11', isWorkingDay: true, reason: 'Pilna produkcja' },
+      // Regular weekday (2026-11-12) overridden as non-working
+      { date: '2026-11-12', isWorkingDay: false, reason: 'Dzień wolny za święto' },
+      // Regular weekend Saturday (2026-11-14) overridden as working
+      { date: '2026-11-14', isWorkingDay: true, reason: 'Sobota pracująca' },
+    ]);
+
+    const workingHoliday = await getWorkingDayDecision('2026-11-11', db);
+    expect(workingHoliday).toMatchObject({
+      isWorkingDay: true,
+      source: 'company override',
+      reason: 'Pilna produkcja',
+    });
+
+    const freeWeekday = await getWorkingDayDecision('2026-11-12', db);
+    expect(freeWeekday).toMatchObject({
+      isWorkingDay: false,
+      source: 'company override',
+      reason: 'Dzień wolny za święto',
+    });
+
+    const workingWeekend = await getWorkingDayDecision('2026-11-14', db);
+    expect(workingWeekend).toMatchObject({
+      isWorkingDay: true,
+      source: 'company override',
+      reason: 'Sobota pracująca',
+    });
+  });
+
+  it('returns public holidays and overrides via GET /api/company-calendar endpoint', async () => {
+    vi.spyOn(prisma.user, 'findUnique').mockResolvedValue({
+      id: '10000000-0000-4000-8000-000000000001', username: 'admin', passwordHash: '', fullName: 'Admin', role: 'admin', isActive: true,
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    vi.spyOn(prisma.companyCalendarDay, 'findMany').mockResolvedValue([
+      {
+        id: 'override-nov-12',
+        date: new Date('2026-11-12T00:00:00.000Z'),
+        isWorkingDay: false,
+        reason: 'Dodatkowy dzień wolny',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
+
+    const token = jwt.sign({ id: '10000000-0000-4000-8000-000000000001', username: 'admin', role: 'admin', fullName: 'Admin' }, TEST_JWT_SECRET);
+    const res = await request(app)
+      .get('/api/company-calendar?dateFrom=2026-11-10&dateTo=2026-11-13')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(res.body).toEqual([
+      {
+        date: '2026-11-10',
+        isWorkingDay: true,
+        source: 'standard weekday',
+        reason: null,
+        overrideId: null,
+      },
+      {
+        date: '2026-11-11',
+        isWorkingDay: false,
+        source: 'public holiday',
+        reason: 'Narodowe Święto Niepodległości',
+        overrideId: null,
+      },
+      {
+        date: '2026-11-12',
+        isWorkingDay: false,
+        source: 'company override',
+        reason: 'Dodatkowy dzień wolny',
+        overrideId: 'override-nov-12',
+      },
+      {
+        date: '2026-11-13',
+        isWorkingDay: true,
+        source: 'standard weekday',
+        reason: null,
+        overrideId: null,
+      },
+    ]);
   });
 
   it('requires authentication and restricts mutations to administrators', async () => {

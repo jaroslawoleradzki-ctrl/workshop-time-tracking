@@ -23,7 +23,11 @@ Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.5.2.
 
 ## Rejestrowanie czasu
 
-- Kalendarz zakładowy stosuje regułę bazową: poniedziałek–piątek są robocze, a sobota i niedziela wolne. Administrator może zapisać jeden jawny wyjątek dla konkretnej daty; wyjątek ma pierwszeństwo i może oznaczyć dzień weekendowy jako roboczy albo dzień tygodnia jako wolny. Usunięcie wyjątku przywraca regułę bazową. Kalendarz nie zawiera automatycznej bazy świąt.
+- Kalendarz zakładowy stosuje hierarchiczną regułę wyznaczania charakteru dnia:
+  1. **Wyjątek administratora (`company override`)**: jawny wpis w `CompanyCalendarDay` ma najwyższy priorytet (może oznaczyć święto/weekend jako dzień roboczy lub zwykły dzień tygodnia jako wolny).
+  2. **Ustawowe święto w Polsce (`public holiday`)**: system automatycznie rozpoznaje polskie święta ustawowe (13 dni dla lat do 2024 r. włącznie oraz 14 dni od 2025 r., w tym 24 grudnia – Wigilia Bożego Narodzenia; pozostałe: Nowy Rok, Trzech Króli, Niedziela Wielkanocna, Poniedziałek Wielkanocny, Święto Pracy, Święto Trzeciego Maja, Zielone Świątki, Boże Ciało, Wniebowzięcie NMP, Wszystkich Świętych, Święto Niepodległości, I i II dzień Bożego Narodzenia) i traktuje je jako dni wolne od pracy (`isWorkingDay=false`).
+  3. **Weekend (`weekend`)**: sobota i niedziela są dniami wolnymi (`isWorkingDay=false`).
+  4. **Standardowy dzień roboczy (`standard weekday`)**: poniedziałek–piątek są dniami roboczymi (`isWorkingDay=true`).
 - W dniu wolnym nie można zapisać typu `G` ani typu oznaczonego `isAbsence=true`. Dozwolona pozostaje praca nad zleceniem z typem niebędącym nieobecnością, np. istniejący `NS`.
 
 - Wpis wymaga daty, pracownika, liczby godzin większej od zera i istniejącego kodu rodzaju czasu pracy.
@@ -68,10 +72,10 @@ Odpowiedź sukcesu (`201`) zawiera co najmniej `employeeId`, `sourceDate`, `targ
 ## Raport okresów nieobecności
 
 - Raport uwzględnia wyłącznie aktywne wpisy (`deletedAt=null`) powiązane z typem czasu, dla którego `isAbsence=true`.
-- Kolejne dni robocze jednego pracownika i jednego typu są łączone w okres; dni oznaczone przez kalendarz zakładowy jako wolne nie przerywają okresu i nie zwiększają liczby dni. Obejmuje to zarówno bazowe weekendy, jak i jawne wyjątki administratora.
+- Kolejne dni robocze jednego pracownika i jednego typu są łączone w okres; dni oznaczone przez kalendarz zakładowy jako wolne (ustawowe święta, weekendy, jawne wyjątki administratora) nie przerywają okresu i nie zwiększają liczby dni.
 - Brak wpisu w dniu roboczym rozdziela okres, a wielokrotne wpisy tego samego typu w tym samym dniu są liczone jako jeden dzień.
-- Filtr dat przycina dane przed grupowaniem. Raport korzysta z kalendarza zakładowego, ale nie zawiera automatycznej bazy polskich świąt ani indywidualnych harmonogramów pracowników; dzień świąteczny przypadający w dzień tygodnia wymaga jawnego wyjątku administratora.
-- **Ważne**: Standardowe kody nieobecności (`UW`, `UOK`, `UŻ`, `L4`, `WKU`, `NN`, `NU`, `NUN`, `NUP`, `UB`, `UO`, `UPP`, `OP`) są automatycznie sklasyfikowane jako nieobecności (`isAbsence=true`). Niestandardowe, własne typy nieobecności utworzone przez użytkownika mogą być w dowolnym momencie oznaczone jako nieobecność w **Administracja → Słownik Rodzajów Czasu Pracy** (pole „Nieobecność” = Tak). Kod raportu **nie hardkoduje** listy kodów — filtruje dynamicznie po `isAbsence=true`.
+- Filtr dat przycina dane przed grupowaniem. Raport korzysta ze wspólnego kalendarza zakładowego z automatyczną obsługą polskich świąt (w tym Wigilii od 2025 roku) oraz wyjątków administratora.
+- **Ważne**: Standardowe kody nieobecności (`UW`, `UOK`, `UŻ`, `L4` oraz `WKU`) są sklasyfikowane jako nieobecności (`isAbsence=true`). Niestandardowe, własne typy nieobecności utworzone przez użytkownika mogą być w dowolnym momencie oznaczone jako nieobecność w **Administracja → Słownik Rodzajów Czasu Pracy** (pole „Nieobecność” = Tak). Kod raportu **nie hardkoduje** listy kodów — filtruje dynamicznie po `isAbsence=true`.
 
 ## Raport zamknięcia zleceń
 

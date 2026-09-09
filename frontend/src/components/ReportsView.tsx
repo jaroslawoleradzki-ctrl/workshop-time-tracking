@@ -905,6 +905,16 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                   </tr>
                 ))}
               </tbody>
+              {Array.isArray(reportData) && reportData.length > 0 && (
+                <tfoot>
+                  <tr style={{ background: 'var(--bg-tertiary)', fontWeight: 700, borderTop: '2px solid var(--border-color)' }}>
+                    <td colSpan={4} style={{ textAlign: 'left', fontWeight: 700 }}>Łącznie dni nieobecności:</td>
+                    <td style={{ textAlign: 'right', fontWeight: 700 }}>
+                      {reportData.reduce((sum, r) => sum + (Number(r.workingDays) || 0), 0)}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
             </ScrollableTable>
           )}
         </div>
