@@ -520,7 +520,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
           type="button"
           onClick={() => setActiveReportTab('by-order')}
           className={`nav-item report-tab ${activeReportTab === 'by-order' ? 'active' : ''}`}
-          style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none', flexShrink: 0, whiteSpace: 'nowrap', flex: '0 0 auto' }}
+          style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
         >
           <FolderOpen size={16} />
           Godziny wg Zleceń
@@ -529,7 +529,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
           type="button"
           onClick={() => setActiveReportTab('by-employee')}
           className={`nav-item report-tab ${activeReportTab === 'by-employee' ? 'active' : ''}`}
-          style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none', flexShrink: 0, whiteSpace: 'nowrap', flex: '0 0 auto' }}
+          style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
         >
           <User size={16} />
           Wg Pracowników (Miesięczny)
@@ -538,7 +538,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
           type="button"
           onClick={() => setActiveReportTab('by-account')}
           className={`nav-item report-tab ${activeReportTab === 'by-account' ? 'active' : ''}`}
-          style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none', flexShrink: 0, whiteSpace: 'nowrap', flex: '0 0 auto' }}
+          style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
         >
           <DollarSign size={16} />
           Wg Kont Księgowych
@@ -547,7 +547,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
           type="button"
           onClick={() => setActiveReportTab('detailed')}
           className={`nav-item report-tab ${activeReportTab === 'detailed' ? 'active' : ''}`}
-          style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none', flexShrink: 0, whiteSpace: 'nowrap', flex: '0 0 auto' }}
+          style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
         >
           <Search size={16} />
           Raport Szczegółowy
@@ -556,7 +556,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
           type="button"
           onClick={() => setActiveReportTab('absence-periods')}
           className={`nav-item report-tab ${activeReportTab === 'absence-periods' ? 'active' : ''}`}
-          style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none', flexShrink: 0, whiteSpace: 'nowrap', flex: '0 0 auto' }}
+          style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
         >
           <CalendarOff size={16} />
           Okresy Nieobecności
