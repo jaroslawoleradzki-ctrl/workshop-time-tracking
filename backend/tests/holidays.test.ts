@@ -16,8 +16,12 @@ describe('Polish holidays utility', () => {
     expect(getEasterSunday(2026)).toEqual({ year: 2026, month: 4, day: 5 });
     // 2027: March 28
     expect(getEasterSunday(2027)).toEqual({ year: 2027, month: 3, day: 28 });
+    // 2028: April 16 (leap year)
+    expect(getEasterSunday(2028)).toEqual({ year: 2028, month: 4, day: 16 });
     // 2030: April 21
     expect(getEasterSunday(2030)).toEqual({ year: 2030, month: 4, day: 21 });
+    // 2038: April 25 (latest possible Easter)
+    expect(getEasterSunday(2038)).toEqual({ year: 2038, month: 4, day: 25 });
   });
 
   it('contains all 13 statutory Polish public holidays for 2026', () => {
@@ -37,6 +41,22 @@ describe('Polish holidays utility', () => {
     expect(holidays.get('2026-11-11')).toBe('Narodowe Święto Niepodległości');
     expect(holidays.get('2026-12-25')).toBe('Pierwszy dzień Bożego Narodzenia');
     expect(holidays.get('2026-12-26')).toBe('Drugi dzień Bożego Narodzenia');
+  });
+
+  it('correctly calculates movable holidays for different years (2025 and 2028)', () => {
+    // 2025: Easter on 2025-04-20
+    const h2025 = getPolishHolidaysForYear(2025);
+    expect(h2025.get('2025-04-20')).toBe('Niedziela Wielkanocna');
+    expect(h2025.get('2025-04-21')).toBe('Poniedziałek Wielkanocny');
+    expect(h2025.get('2025-06-08')).toBe('Zielone Świątki');
+    expect(h2025.get('2025-06-19')).toBe('Boże Ciało');
+
+    // 2028 (leap year): Easter on 2028-04-16
+    const h2028 = getPolishHolidaysForYear(2028);
+    expect(h2028.get('2028-04-16')).toBe('Niedziela Wielkanocna');
+    expect(h2028.get('2028-04-17')).toBe('Poniedziałek Wielkanocny');
+    expect(h2028.get('2028-06-04')).toBe('Zielone Świątki');
+    expect(h2028.get('2028-06-15')).toBe('Boże Ciało');
   });
 
   it('identifies public holidays and regular working days via helper functions', () => {

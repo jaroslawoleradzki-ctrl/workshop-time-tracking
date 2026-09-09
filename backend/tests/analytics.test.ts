@@ -475,6 +475,72 @@ describe('Analytics reports', () => {
     expect(holidayResponse.body[0]).toMatchObject({ dateFrom: '2026-06-03', dateTo: '2026-06-05', workingDays: 2 });
   });
 
+  it('correctly handles absence periods with multiple employees, multiple absence types, and Easter Monday / Nov 11 holiday bridging', async () => {
+    const employee1 = { id: 'emp-1', fullName: 'Adam Nowak', firstName: 'Adam', lastName: 'Nowak' };
+    const employee2 = { id: 'emp-2', fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' };
+    const l4Type = { code: 'L4', name: 'Zwolnienie chorobowe', isAbsence: true, requiresOrder: false };
+    const uwType = { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false };
+
+    // Employee 1:
+    // - UW on 2026-04-03 (Friday before Easter) and 2026-04-07 (Tuesday after Easter Monday 2026-04-06)
+    //   -> Easter Sunday (04-05) + Easter Monday (04-06) should bridge into 1 period: 2026-04-03 to 2026-04-07, 2 working days.
+    // - L4 on 2026-04-08 (Wednesday) -> different type, must NOT merge with UW! 1 period: 2026-04-08 to 2026-04-08, 1 working day.
+    //
+    // Employee 2:
+    // - L4 on 2026-11-10 (Tuesday) and 2026-11-12 (Thursday) spanning 2026-11-11 (Święto Niepodległości - Wednesday)
+    //   -> 1 period: 2026-11-10 to 2026-11-12, 2 working days.
+    vi.spyOn(prisma.companyCalendarDay, 'findUnique').mockResolvedValue(null);
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([
+      { employeeId: 'emp-1', employee: employee1, workTimeTypeCode: 'UW', workTimeType: uwType, hours: 8, date: new Date('2026-04-03T00:00:00.000Z') },
+      { employeeId: 'emp-1', employee: employee1, workTimeTypeCode: 'UW', workTimeType: uwType, hours: 8, date: new Date('2026-04-07T00:00:00.000Z') },
+      { employeeId: 'emp-1', employee: employee1, workTimeTypeCode: 'L4', workTimeType: l4Type, hours: 8, date: new Date('2026-04-08T00:00:00.000Z') },
+      { employeeId: 'emp-2', employee: employee2, workTimeTypeCode: 'L4', workTimeType: l4Type, hours: 8, date: new Date('2026-11-10T00:00:00.000Z') },
+      { employeeId: 'emp-2', employee: employee2, workTimeTypeCode: 'L4', workTimeType: l4Type, hours: 8, date: new Date('2026-11-12T00:00:00.000Z') },
+    ] as any);
+
+    const res = await authenticatedGet('/api/analytics/report-absence-periods').expect(200);
+
+    // Should have 3 separate periods in total
+    expect(res.body).toHaveLength(3);
+
+    // 1. Kowalski Jan - L4
+    const kowalskiL4 = res.body.find((r: any) => r.employeeName === 'Kowalski Jan' && r.workTimeTypeCode === 'L4');
+    expect(kowalskiL4).toMatchObject({
+      employeeId: 'emp-2',
+      employeeName: 'Kowalski Jan',
+      workTimeTypeCode: 'L4',
+      dateFrom: '2026-11-10',
+      dateTo: '2026-11-12',
+      workingDays: 2,
+    });
+
+    // 2. Nowak Adam - L4
+    const nowakL4 = res.body.find((r: any) => r.employeeName === 'Nowak Adam' && r.workTimeTypeCode === 'L4');
+    expect(nowakL4).toMatchObject({
+      employeeId: 'emp-1',
+      employeeName: 'Nowak Adam',
+      workTimeTypeCode: 'L4',
+      dateFrom: '2026-04-08',
+      dateTo: '2026-04-08',
+      workingDays: 1,
+    });
+
+    // 3. Nowak Adam - UW
+    const nowakUW = res.body.find((r: any) => r.employeeName === 'Nowak Adam' && r.workTimeTypeCode === 'UW');
+    expect(nowakUW).toMatchObject({
+      employeeId: 'emp-1',
+      employeeName: 'Nowak Adam',
+      workTimeTypeCode: 'UW',
+      dateFrom: '2026-04-03',
+      dateTo: '2026-04-07',
+      workingDays: 2,
+    });
+
+    // Sum of workingDays = 2 + 1 + 2 = 5
+    const totalWorkingDays = res.body.reduce((sum: number, r: any) => sum + r.workingDays, 0);
+    expect(totalWorkingDays).toBe(5);
+  });
+
   it('exports the same clipped absence periods to XLSX with report metadata', async () => {
     vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([{
       employeeId: EMPLOYEE_ID,
