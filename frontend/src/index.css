@@ -177,6 +177,13 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 4px 12px var(--primary-glow);
 }
 
+.report-tab,
+.nav-item.report-tab {
+  flex: 0 0 auto;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 /* Header / Navbar */
 .navbar {
   height: 70px;
@@ -726,7 +733,7 @@ h1, h2, h3, h4, h5, h6 {
     flex-direction: row;
     flex-wrap: wrap;
   }
-  .nav-item {
+  .sidebar .nav-item {
     flex: 1 1 calc(50% - 0.5rem);
     justify-content: center;
   }
@@ -742,7 +749,7 @@ h1, h2, h3, h4, h5, h6 {
   .nav-links {
     gap: 0.25rem;
   }
-  .nav-item {
+  .sidebar .nav-item {
     flex: 1 1 100%;
     padding: 0.6rem;
   }

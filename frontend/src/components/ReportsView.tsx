@@ -513,43 +513,49 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
         marginBottom: '1.5rem',
         overflowX: 'auto',
         gap: '0.5rem',
-        paddingBottom: '2px'
+        paddingBottom: '2px',
+        flexShrink: 0
       }}>
         <button
+          type="button"
           onClick={() => setActiveReportTab('by-order')}
-          className={`nav-item ${activeReportTab === 'by-order' ? 'active' : ''}`}
+          className={`nav-item report-tab ${activeReportTab === 'by-order' ? 'active' : ''}`}
           style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
         >
           <FolderOpen size={16} />
           Godziny wg Zleceń
         </button>
         <button
+          type="button"
           onClick={() => setActiveReportTab('by-employee')}
-          className={`nav-item ${activeReportTab === 'by-employee' ? 'active' : ''}`}
+          className={`nav-item report-tab ${activeReportTab === 'by-employee' ? 'active' : ''}`}
           style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
         >
           <User size={16} />
           Wg Pracowników (Miesięczny)
         </button>
         <button
+          type="button"
           onClick={() => setActiveReportTab('by-account')}
-          className={`nav-item ${activeReportTab === 'by-account' ? 'active' : ''}`}
+          className={`nav-item report-tab ${activeReportTab === 'by-account' ? 'active' : ''}`}
           style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
         >
           <DollarSign size={16} />
           Wg Kont Księgowych
         </button>
         <button
+          type="button"
           onClick={() => setActiveReportTab('detailed')}
-          className={`nav-item ${activeReportTab === 'detailed' ? 'active' : ''}`}
+          className={`nav-item report-tab ${activeReportTab === 'detailed' ? 'active' : ''}`}
           style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
         >
           <Search size={16} />
           Raport Szczegółowy
         </button>
         <button
+          type="button"
           onClick={() => setActiveReportTab('absence-periods')}
-          className={`nav-item ${activeReportTab === 'absence-periods' ? 'active' : ''}`}
+          className={`nav-item report-tab ${activeReportTab === 'absence-periods' ? 'active' : ''}`}
           style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
         >
           <CalendarOff size={16} />
