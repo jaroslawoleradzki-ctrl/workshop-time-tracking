@@ -831,6 +831,95 @@ describe('Analytics reports', () => {
     expect(filteredRes.body[0].orderNumber).toBe('ZL-001');
   });
 
+  it('keeps period hours while calculating order progress cumulatively through the report end', async () => {
+    const july = new Date('2026-07-01T00:00:00.000Z');
+    const august = new Date('2026-08-01T00:00:00.000Z');
+    const orders = [
+      {
+        orderNumber: 'ZL-CUMULATIVE-OPEN', productName: 'Wielomiesięczne', productCode: null,
+        accountingAccount: null, quantity: null, quantityUnit: 'szt.', plannedHours: 100,
+        orderDate: july, status: 'OPEN', completionDate: null,
+        reports: [
+          { hours: 30, date: new Date('2026-07-15T00:00:00.000Z') },
+          { hours: 20, date: new Date('2026-08-15T00:00:00.000Z') },
+          { hours: 10, date: new Date('2026-09-15T00:00:00.000Z') },
+          { hours: 8, date: new Date('2026-08-20T00:00:00.000Z'), deletedAt: new Date('2026-08-21T00:00:00.000Z') },
+        ],
+      },
+      {
+        orderNumber: 'ZL-CURRENT-CLOSED', productName: 'Tylko sierpień', productCode: null,
+        accountingAccount: null, quantity: null, quantityUnit: 'szt.', plannedHours: 10,
+        orderDate: august, status: 'CLOSED', completionDate: new Date('2026-08-31T00:00:00.000Z'),
+        reports: [{ hours: 10, date: new Date('2026-08-10T00:00:00.000Z') }],
+      },
+      {
+        orderNumber: 'ZL-CUMULATIVE-SUSPENDED', productName: 'Wstrzymane', productCode: null,
+        accountingAccount: null, quantity: null, quantityUnit: 'szt.', plannedHours: 50,
+        orderDate: july, status: 'SUSPENDED', completionDate: null,
+        reports: [{ hours: 15, date: new Date('2026-07-15T00:00:00.000Z') }, { hours: 3, date: new Date('2026-08-15T00:00:00.000Z') }],
+      },
+      {
+        orderNumber: 'ZL-HISTORICAL-ONLY', productName: 'Bez godzin w sierpniu', productCode: null,
+        accountingAccount: null, quantity: null, quantityUnit: 'szt.', plannedHours: 10,
+        orderDate: july, status: 'OPEN', completionDate: null,
+        reports: [{ hours: 6, date: new Date('2026-07-15T00:00:00.000Z') }],
+      },
+      {
+        orderNumber: 'ZL-ZERO-PLAN', productName: 'Plan zerowy', productCode: null,
+        accountingAccount: null, quantity: null, quantityUnit: 'szt.', plannedHours: 0,
+        orderDate: july, status: 'OPEN', completionDate: null,
+        reports: [{ hours: 10, date: new Date('2026-07-15T00:00:00.000Z') }, { hours: 5, date: new Date('2026-08-15T00:00:00.000Z') }],
+      },
+    ];
+    const orderQuery = vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+      const reportEnd = args.include.reports.where.date.lte;
+      return orders.map(order => ({
+        ...order,
+        reports: order.reports.filter(report =>
+          !report.deletedAt && (!reportEnd || report.date <= reportEnd),
+        ),
+      })) as any;
+    });
+
+    const range = 'dateFrom=2026-08-01&dateTo=2026-08-31';
+    const response = await authenticatedGet(`/api/analytics/report-by-order?${range}`).expect(200);
+    const cumulative = response.body.find((row: any) => row.orderNumber === 'ZL-CUMULATIVE-OPEN');
+    expect(cumulative).toMatchObject({ actualHours: 20, deviation: 50, percent: 50, status: 'OPEN' });
+    expect(orderQuery).toHaveBeenCalledWith(expect.objectContaining({
+      include: expect.objectContaining({
+        reports: expect.objectContaining({
+          where: expect.objectContaining({ deletedAt: null, date: { lte: new Date('2026-08-31T00:00:00.000Z') } }),
+        }),
+      }),
+    }));
+    expect(response.body.find((row: any) => row.orderNumber === 'ZL-CURRENT-CLOSED'))
+      .toMatchObject({ actualHours: 10, deviation: 0, percent: 100, status: 'CLOSED' });
+    expect(response.body.find((row: any) => row.orderNumber === 'ZL-CUMULATIVE-SUSPENDED'))
+      .toMatchObject({ actualHours: 3, deviation: 32, percent: 36, status: 'SUSPENDED' });
+    expect(response.body.find((row: any) => row.orderNumber === 'ZL-ZERO-PLAN'))
+      .toMatchObject({ actualHours: 5, deviation: -15, percent: 0 });
+
+    const xlsxResponse = await authenticatedGet(`/api/analytics/export/by-order?${range}`)
+      .buffer(true)
+      .parse(binaryParser)
+      .expect(200);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(xlsxResponse.body);
+    const worksheet = workbook.getWorksheet('Zlecenia')!;
+    const headerRowNumber = worksheet.getColumn(1).values.findIndex(value => value === 'Numer zlecenia');
+    const xlsxCumulativeRow = (worksheet.getRows(headerRowNumber + 1, orders.length) || [])
+      .find(row => row.getCell(1).value === 'ZL-CUMULATIVE-OPEN')!;
+    expect([xlsxCumulativeRow.getCell(7).value, xlsxCumulativeRow.getCell(8).value, xlsxCumulativeRow.getCell(9).value])
+      .toEqual([20, 50, 50]);
+
+    const onlyWithHours = await authenticatedGet(`/api/analytics/report-by-order?${range}&onlyWithHours=true`).expect(200);
+    expect(onlyWithHours.body.some((row: any) => row.orderNumber === 'ZL-HISTORICAL-ONLY')).toBe(false);
+
+    const closure = await authenticatedGet(`/api/analytics/report-by-order?${range}&closureReport=true`).expect(200);
+    expect(closure.body.find((row: any) => row.orderNumber === 'ZL-CUMULATIVE-OPEN'))
+      .toMatchObject({ actualHours: 20, deviation: 50, percent: 50 });
+  });
+
   describe('closure report by order', () => {
     it.each([
       ['OPEN with hours in range is visible', 'ZL-001', true, 5],

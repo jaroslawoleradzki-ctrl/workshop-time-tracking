@@ -509,9 +509,11 @@ export async function getOrderReportRows(
       reports: {
         where: {
           deletedAt: null,
-          date: reportDateRange,
+          // Fetch all non-deleted reports up to the report end.  The same set
+          // supplies periodActualHours and cumulativeActualHours below.
+          date: { lte: reportDateRange.lte },
         },
-        select: { hours: true },
+        select: { hours: true, date: true },
       },
     },
     orderBy: { orderNumber: 'asc' },
@@ -519,9 +521,20 @@ export async function getOrderReportRows(
 
   let rows = orders.map((order): OrderReportRow => {
     const plannedHours = Number(order.plannedHours);
-    const actualHours = order.reports.reduce((sum, report) => sum + Number(report.hours), 0);
-    const deviation = plannedHours - actualHours;
-    const percent = plannedHours > 0 ? (actualHours / plannedHours) * 100 : 0;
+    const orderStartDate = order.orderDate
+      ? new Date(`${formatDateKey(order.orderDate)}T00:00:00.000Z`)
+      : undefined;
+    const periodActualHours = order.reports
+      .filter(report =>
+        (!reportDateRange.gte || report.date >= reportDateRange.gte) &&
+        (!reportDateRange.lte || report.date <= reportDateRange.lte),
+      )
+      .reduce((sum, report) => sum + Number(report.hours), 0);
+    const cumulativeActualHours = order.reports
+      .filter(report => !orderStartDate || report.date >= orderStartDate)
+      .reduce((sum, report) => sum + Number(report.hours), 0);
+    const deviation = plannedHours - cumulativeActualHours;
+    const percent = plannedHours > 0 ? (cumulativeActualHours / plannedHours) * 100 : 0;
 
     return {
       orderNumber: order.orderNumber,
@@ -531,7 +544,7 @@ export async function getOrderReportRows(
       quantity: order.quantity !== null ? Number(order.quantity) : null,
       quantityUnit: order.quantityUnit || 'szt.',
       plannedHours,
-      actualHours: Math.round(actualHours * 100) / 100,
+      actualHours: Math.round(periodActualHours * 100) / 100,
       deviation: Math.round(deviation * 100) / 100,
       percent: Math.round(percent * 100) / 100,
       status: order.status,
