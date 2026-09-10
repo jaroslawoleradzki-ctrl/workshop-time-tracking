@@ -3,6 +3,18 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.5.5] - 2026-09-10
+
+### Fixed
+- Naprawiono regresję widoczności zakładek w Centrum Raportów (`ReportsView.tsx`, `index.css`): wyizolowano przyciski zakładek dedykowaną klasą `.report-tab` (`flex: 0 0 auto`, `flex-shrink: 0`, `white-space: nowrap`), uniezależniając je od globalnych stylów `.nav-item`.
+- Zawężono reguły responsywne w media queries (`max-width: 900px` oraz `max-width: 600px`) wyłącznie do paska bocznego (`.sidebar .nav-item`), eliminując niepożądane zawijanie i kompresję zakładek raportów na tabletach i ekranach mobilnych.
+- Zapewniono przewijanie poziome (`overflow-x: auto`) kontenera zakładek na wąskich viewportach przy zachowaniu stałych szerokości etykiet.
+- Zagwarantowano stałą widoczność i pełną dostępność wszystkich 5 zakładek raportowych (`Wg zleceń`, `Wg pracowników`, `Szczegółowy`, `Podsumowanie`, `Okresy nieobecności`) po uruchomieniu sekcji Raportu zamknięcia (`closure-control-summary`).
+- Zachowano dotychczasowy model uprawnień bez zmian — role `admin` oraz `leader` posiadają pełny i równorzędny dostęp do Centrum Raportów.
+
+### Added
+- Wprowadzono zestaw testów regresyjnych zakładek raportów (`ReportsView.test.tsx`) weryfikujących obecność wszystkich 5 zakładek dla ról admin i leader, zachowanie zakładek po włączeniu raportu zamknięcia, przełączanie aktywnej zakładki oraz statyczny guard reguł CSS w `index.css`.
+
 ## [0.5.4] - 2026-09-09
 
 ### Fixed
