@@ -60,20 +60,58 @@ describe('ReportingPanel — pure function tests', () => {
     expect(getDefaultWorkType('2026-07-15', baseWorkTypes)).toBe('G'); // Wednesday
     expect(getDefaultWorkType('2026-07-16', baseWorkTypes)).toBe('G'); // Thursday
     expect(getDefaultWorkType('2026-07-17', baseWorkTypes)).toBe('G'); // Friday
+
+    expect(getDefaultWorkType({ date: '2026-09-14', isWorkingDay: true, source: 'standard weekday' }, baseWorkTypes)).toBe('G');
   });
 
   it('getDefaultWorkType returns NS for weekends when NS exists', () => {
     expect(getDefaultWorkType('2026-07-18', baseWorkTypes)).toBe('NS'); // Saturday
     expect(getDefaultWorkType('2026-07-19', baseWorkTypes)).toBe('NS'); // Sunday
+
+    expect(getDefaultWorkType({ date: '2026-09-13', isWorkingDay: false, source: 'weekend' }, baseWorkTypes)).toBe('NS');
   });
 
-  it('getDefaultWorkType returns G for weekends when NS does not exist', () => {
+  it('getDefaultWorkType returns empty string for non-working weekends when NS does not exist', () => {
     const workTypesWithoutNS = [
       { code: 'G', name: 'Godziny standardowe', requiresOrder: false, isAbsence: false },
       { code: 'UW', name: 'Urlop wypoczynkowy', requiresOrder: false, isAbsence: true },
     ];
-    expect(getDefaultWorkType('2026-07-18', workTypesWithoutNS)).toBe('G');
-    expect(getDefaultWorkType('2026-07-19', workTypesWithoutNS)).toBe('G');
+    expect(getDefaultWorkType('2026-07-18', workTypesWithoutNS)).toBe('');
+    expect(getDefaultWorkType('2026-07-19', workTypesWithoutNS)).toBe('');
+    expect(getDefaultWorkType({ date: '2026-07-18', isWorkingDay: false, source: 'weekend' }, workTypesWithoutNS)).toBe('');
+  });
+
+  it('getDefaultWorkType returns empty string (not G) for statutory public holiday on weekdays', () => {
+    expect(getDefaultWorkType({
+      date: '2026-11-11',
+      isWorkingDay: false,
+      source: 'public holiday',
+      reason: 'Narodowe Święto Niepodległości',
+    }, baseWorkTypes)).toBe('');
+  });
+
+  it('getDefaultWorkType returns empty string (not G) for company day off on weekdays', () => {
+    expect(getDefaultWorkType({
+      date: '2026-08-14',
+      isWorkingDay: false,
+      source: 'company override',
+      reason: 'Dzień wolny za 15.08',
+    }, baseWorkTypes)).toBe('');
+  });
+
+  it('getDefaultWorkType returns G (not NS) for company working-day override on Saturday/Sunday', () => {
+    expect(getDefaultWorkType({
+      date: '2026-11-14',
+      isWorkingDay: true,
+      source: 'company override',
+      reason: 'Sobota pracująca',
+    }, baseWorkTypes)).toBe('G');
+  });
+
+  it('getDefaultWorkType handles null/undefined with safe fallback', () => {
+    expect(getDefaultWorkType(null, baseWorkTypes, '2026-07-13')).toBe('G');
+    expect(getDefaultWorkType(null, baseWorkTypes, '2026-07-19')).toBe('NS');
+    expect(getDefaultWorkType(undefined, baseWorkTypes, '2026-07-13')).toBe('G');
   });
 });
 
@@ -107,6 +145,16 @@ describe('ReportingPanel — kopiowanie ostatniego dnia', () => {
       }
       if (url.startsWith('/api/reports/by-employee-date')) return response([]);
       if (url === '/api/reports/copy-last-day') return copyHandler();
+      if (url.startsWith('/api/company-calendar/day/')) {
+        const date = url.slice('/api/company-calendar/day/'.length);
+        const weekend = isWeekend(date);
+        return response({
+          date,
+          isWorkingDay: !weekend,
+          source: weekend ? 'weekend' : 'standard weekday',
+          reason: null,
+        });
+      }
 
       throw new Error(`Nieobsłużone żądanie testowe: ${url}`);
     });
@@ -525,6 +573,16 @@ describe('ReportingPanel — default work type and NS/G save & load interaction'
       if (url.startsWith('/api/reports/by-employee-date')) {
         return response([]);
       }
+      if (url.startsWith('/api/company-calendar/day/')) {
+        const date = url.slice('/api/company-calendar/day/'.length);
+        const weekend = isWeekend(date);
+        return response({
+          date,
+          isWorkingDay: !weekend,
+          source: weekend ? 'weekend' : 'standard weekday',
+          reason: null,
+        });
+      }
       if (url === '/api/reports/check-warnings') {
         return response({
           warnStandard: false,
@@ -776,6 +834,16 @@ describe('ReportingPanel — default work type and NS/G save & load interaction'
       if (url === '/api/orders/active') return response(baseOrders);
       if (url === '/api/work-time-types') return response(baseWorkTypes);
       if (url.startsWith('/api/reports/by-employee-date')) return response([]);
+      if (url.startsWith('/api/company-calendar/day/')) {
+        const date = url.slice('/api/company-calendar/day/'.length);
+        const weekend = isWeekend(date);
+        return response({
+          date,
+          isWorkingDay: !weekend,
+          source: weekend ? 'weekend' : 'standard weekday',
+          reason: null,
+        });
+      }
       if (url === '/api/reports/check-warnings') {
         return response({
           warnStandard: false,
@@ -807,6 +875,12 @@ describe('ReportingPanel — default work type and NS/G save & load interaction'
     const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
     fireEvent.change(dateInput, { target: { value: '2026-09-06' } });
 
+    // Wait for workTypeSelect to become NS
+    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    await waitFor(() => {
+      expect(workTypeSelect.value).toBe('NS');
+    });
+
     // Select order
     const orderInput = screen.getByPlaceholderText('Wpisz numer zlecenia lub produktu...');
     fireEvent.focus(orderInput);
@@ -835,6 +909,16 @@ describe('ReportingPanel — default work type and NS/G save & load interaction'
       if (url === '/api/orders/active') return response(baseOrders);
       if (url === '/api/work-time-types') return response(baseWorkTypes);
       if (url.startsWith('/api/reports/by-employee-date')) return response([]);
+      if (url.startsWith('/api/company-calendar/day/')) {
+        const date = url.slice('/api/company-calendar/day/'.length);
+        const weekend = isWeekend(date);
+        return response({
+          date,
+          isWorkingDay: !weekend,
+          source: weekend ? 'weekend' : 'standard weekday',
+          reason: null,
+        });
+      }
       throw new Error(`Unhandled: ${url}`);
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -864,6 +948,314 @@ describe('ReportingPanel — default work type and NS/G save & load interaction'
     // Assert client-side validation message
     await waitFor(() => {
       expect(screen.getByText("Dla rodzaju 'NS' numer zlecenia jest wymagany.")).toBeInTheDocument();
+    });
+  });
+});
+
+describe('ReportingPanel — calendar-aware default work type (v0.5.8)', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  const baseWorkTypes = [
+    { code: 'G', name: 'Godziny standardowe', requiresOrder: false, isAbsence: false },
+    { code: 'NS', name: 'Nadgodziny sobota/niedziela', requiresOrder: true, isAbsence: false },
+    { code: 'UW', name: 'Urlop wypoczynkowy', requiresOrder: false, isAbsence: true },
+  ];
+
+  const baseEmployee = {
+    id: EMPLOYEE_ID,
+    fullName: 'Jan Kowalski',
+    firstName: 'Jan',
+    lastName: 'Kowalski',
+    isActive: true,
+  };
+
+  const baseOrders = [
+    { id: 'order-1', orderNumber: 'ZL-001', productCode: 'P1', productName: 'Produkt 1', accountingAccount: '123' },
+  ];
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  const setupPanel = (calendarHandler?: (date: string) => Promise<JsonResponse> | JsonResponse, customWorkTypes = baseWorkTypes) => {
+    fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/employees?activeOnly=true') return response([baseEmployee]);
+      if (url === '/api/orders/active') return response(baseOrders);
+      if (url === '/api/work-time-types') return response(customWorkTypes);
+      if (url.startsWith('/api/reports/by-employee-date')) return response([]);
+      if (url.startsWith('/api/company-calendar/day/')) {
+        const date = url.slice('/api/company-calendar/day/'.length);
+        if (calendarHandler) return calendarHandler(date);
+        const weekend = isWeekend(date);
+        return response({
+          date,
+          isWorkingDay: !weekend,
+          source: weekend ? 'weekend' : 'standard weekday',
+          reason: null,
+        });
+      }
+      throw new Error(`Unhandled: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <ReportingPanel
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+  };
+
+  // 1. zwykły poniedziałek -> G
+  it('1. sets default work type G on a regular Monday', async () => {
+    setupPanel((date) => {
+      if (date === '2026-09-14') {
+        return response({ date, isWorkingDay: true, source: 'standard weekday' });
+      }
+      return response({ date, isWorkingDay: !isWeekend(date), source: isWeekend(date) ? 'weekend' : 'standard weekday' });
+    });
+
+    await screen.findByDisplayValue('Jan Kowalski');
+    const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
+    fireEvent.change(dateInput, { target: { value: '2026-09-14' } });
+
+    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    await waitFor(() => {
+      expect(workTypeSelect.value).toBe('G');
+    });
+  });
+
+  // 2. zwykła niedziela -> NS
+  it('2. sets default work type NS on a regular Sunday', async () => {
+    setupPanel((date) => {
+      if (date === '2026-09-13') {
+        return response({ date, isWorkingDay: false, source: 'weekend' });
+      }
+      return response({ date, isWorkingDay: !isWeekend(date), source: isWeekend(date) ? 'weekend' : 'standard weekday' });
+    });
+
+    await screen.findByDisplayValue('Jan Kowalski');
+    const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
+    fireEvent.change(dateInput, { target: { value: '2026-09-13' } });
+
+    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    await waitFor(() => {
+      expect(workTypeSelect.value).toBe('NS');
+    });
+  });
+
+  // 3. zmiana: niedziela -> wtorek => NS -> G
+  it('3. updates default work type from NS to G when date changes from Sunday to Tuesday', async () => {
+    setupPanel();
+
+    await screen.findByDisplayValue('Jan Kowalski');
+    const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
+    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+
+    fireEvent.change(dateInput, { target: { value: '2026-09-13' } });
+    await waitFor(() => {
+      expect(workTypeSelect.value).toBe('NS');
+    });
+
+    fireEvent.change(dateInput, { target: { value: '2026-09-15' } });
+    await waitFor(() => {
+      expect(workTypeSelect.value).toBe('G');
+    });
+  });
+
+  // 4. święto ustawowe pn–pt => nie ustawia G
+  it('4. does not default to G on a statutory public holiday occurring on a weekday', async () => {
+    setupPanel((date) => {
+      if (date === '2026-11-11') {
+        return response({
+          date,
+          isWorkingDay: false,
+          source: 'public holiday',
+          reason: 'Narodowe Święto Niepodległości',
+        });
+      }
+      return response({ date, isWorkingDay: !isWeekend(date), source: isWeekend(date) ? 'weekend' : 'standard weekday' });
+    });
+
+    await screen.findByDisplayValue('Jan Kowalski');
+    const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
+    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+
+    fireEvent.change(dateInput, { target: { value: '2026-11-11' } });
+    await waitFor(() => {
+      expect(workTypeSelect.value).toBe('');
+    });
+  });
+
+  // 5. firmowy dzień wolny pn–pt => nie ustawia G
+  it('5. does not default to G on a company day off occurring on a weekday', async () => {
+    setupPanel((date) => {
+      if (date === '2026-08-14') {
+        return response({
+          date,
+          isWorkingDay: false,
+          source: 'company override',
+          reason: 'Dzień wolny za 15.08',
+        });
+      }
+      return response({ date, isWorkingDay: !isWeekend(date), source: isWeekend(date) ? 'weekend' : 'standard weekday' });
+    });
+
+    await screen.findByDisplayValue('Jan Kowalski');
+    const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
+    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+
+    fireEvent.change(dateInput, { target: { value: '2026-08-14' } });
+    await waitFor(() => {
+      expect(workTypeSelect.value).toBe('');
+    });
+  });
+
+  // 6. firmowy working-day override w sobotę => G, nie NS
+  it('6. defaults to G and not NS when Saturday has a company working-day override', async () => {
+    setupPanel((date) => {
+      if (date === '2026-11-14') {
+        return response({
+          date,
+          isWorkingDay: true,
+          source: 'company override',
+          reason: 'Sobota pracująca',
+        });
+      }
+      return response({ date, isWorkingDay: !isWeekend(date), source: isWeekend(date) ? 'weekend' : 'standard weekday' });
+    });
+
+    await screen.findByDisplayValue('Jan Kowalski');
+    const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
+    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+
+    fireEvent.change(dateInput, { target: { value: '2026-11-14' } });
+    await waitFor(() => {
+      expect(workTypeSelect.value).toBe('G');
+    });
+  });
+
+  // 7. zmiana daty: zwykły dzień -> firmowy wolny -> zwykły dzień => poprawne przełączenie wartości
+  it('7. correctly switches default value across standard weekday -> company day off -> standard weekday', async () => {
+    setupPanel((date) => {
+      if (date === '2026-08-14') {
+        return response({
+          date,
+          isWorkingDay: false,
+          source: 'company override',
+          reason: 'Dzień wolny za 15.08',
+        });
+      }
+      return response({ date, isWorkingDay: !isWeekend(date), source: isWeekend(date) ? 'weekend' : 'standard weekday' });
+    });
+
+    await screen.findByDisplayValue('Jan Kowalski');
+    const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
+    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+
+    // Thursday: standard weekday -> G
+    fireEvent.change(dateInput, { target: { value: '2026-08-13' } });
+    await waitFor(() => {
+      expect(workTypeSelect.value).toBe('G');
+    });
+
+    // Friday: company day off -> empty (not G)
+    fireEvent.change(dateInput, { target: { value: '2026-08-14' } });
+    await waitFor(() => {
+      expect(workTypeSelect.value).toBe('');
+    });
+
+    // Monday: standard weekday -> G
+    fireEvent.change(dateInput, { target: { value: '2026-08-17' } });
+    await waitFor(() => {
+      expect(workTypeSelect.value).toBe('G');
+    });
+  });
+
+  // 8. szybka zmiana dwóch dat => odpowiedź API dla starej daty nie może nadpisać nowszego wyboru
+  it('8. prevents race conditions: slow response for earlier date cannot overwrite newer selection', async () => {
+    const slowDateDeferred = deferred<JsonResponse>();
+
+    setupPanel((date) => {
+      if (date === '2026-08-14') {
+        return slowDateDeferred.promise;
+      }
+      if (date === '2026-09-14') {
+        return response({
+          date: '2026-09-14',
+          isWorkingDay: true,
+          source: 'standard weekday',
+        });
+      }
+      return response({ date, isWorkingDay: !isWeekend(date), source: isWeekend(date) ? 'weekend' : 'standard weekday' });
+    });
+
+    await screen.findByDisplayValue('Jan Kowalski');
+    const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
+    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+
+    // Fast switch: 2026-08-14 (slow) -> immediately 2026-09-14 (fast)
+    fireEvent.change(dateInput, { target: { value: '2026-08-14' } });
+    fireEvent.change(dateInput, { target: { value: '2026-09-14' } });
+
+    // 2026-09-14 resolves and sets 'G'
+    await waitFor(() => {
+      expect(workTypeSelect.value).toBe('G');
+    });
+
+    // Late resolution of 2026-08-14 with non-working day
+    slowDateDeferred.resolve(response({
+      date: '2026-08-14',
+      isWorkingDay: false,
+      source: 'company override',
+    }));
+
+    // Must NOT overwrite 2026-09-14's 'G' selection
+    await new Promise((r) => setTimeout(r, 50));
+    expect(workTypeSelect.value).toBe('G');
+  });
+
+  // 9. brak kodu NS => zachowanie zgodne z dotychczasową aplikacją, bez błędu
+  it('9. handles missing NS work time type code on weekend safely without errors', async () => {
+    const workTypesWithoutNS = [
+      { code: 'G', name: 'Godziny standardowe', requiresOrder: false, isAbsence: false },
+      { code: 'UW', name: 'Urlop wypoczynkowy', requiresOrder: false, isAbsence: true },
+    ];
+
+    setupPanel((date) => {
+      return response({ date, isWorkingDay: false, source: 'weekend' });
+    }, workTypesWithoutNS);
+
+    await screen.findByDisplayValue('Jan Kowalski');
+    const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
+    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+
+    fireEvent.change(dateInput, { target: { value: '2026-09-13' } });
+    await waitFor(() => {
+      expect(workTypeSelect.value).toBe('');
+    });
+  });
+
+  // 10. błąd endpointu company-calendar => formularz nie crashuje; zastosuj bezpieczny fallback i opisz decyzję
+  it('10. applies safe fallback on company-calendar API error without crashing', async () => {
+    setupPanel((date) => {
+      if (date === '2026-09-14') {
+        return response({ message: 'Internal server error' }, 500);
+      }
+      return response({ date, isWorkingDay: !isWeekend(date), source: isWeekend(date) ? 'weekend' : 'standard weekday' });
+    });
+
+    await screen.findByDisplayValue('Jan Kowalski');
+    const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
+    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+
+    fireEvent.change(dateInput, { target: { value: '2026-09-14' } });
+
+    // Fallback: standard Monday resolves to G safely
+    await waitFor(() => {
+      expect(workTypeSelect.value).toBe('G');
     });
   });
 });

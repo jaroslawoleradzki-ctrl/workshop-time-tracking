@@ -38,12 +38,49 @@ export function isWeekend(dateStr: string): boolean {
   return dayOfWeek === 0 || dayOfWeek === 6;
 }
 
-export function getDefaultWorkType(dateStr: string, workTypes: WorkTimeType[]): string {
+export interface CalendarDecision {
+  date: string;
+  isWorkingDay: boolean;
+  source: 'standard weekday' | 'weekend' | 'public holiday' | 'company override';
+  reason?: string | null;
+}
+
+export function getDefaultWorkType(
+  calendarOrDate: CalendarDecision | string | null | undefined,
+  workTypes: WorkTimeType[],
+  dateStrFallback?: string
+): string {
+  if (!calendarOrDate) {
+    const fallback = dateStrFallback || '';
+    if (fallback && isWeekend(fallback)) {
+      const nsType = workTypes.find(t => t.code === 'NS');
+      return nsType ? 'NS' : '';
+    }
+    const gType = workTypes.find(t => t.code === 'G');
+    return gType ? 'G' : '';
+  }
+
+  if (typeof calendarOrDate === 'string') {
+    if (isWeekend(calendarOrDate)) {
+      const nsType = workTypes.find(t => t.code === 'NS');
+      return nsType ? 'NS' : '';
+    }
+    const gType = workTypes.find(t => t.code === 'G');
+    return gType ? 'G' : '';
+  }
+
+  if (calendarOrDate.isWorkingDay) {
+    const gType = workTypes.find(t => t.code === 'G');
+    return gType ? 'G' : '';
+  }
+
+  const dateStr = calendarOrDate.date || dateStrFallback || '';
   if (isWeekend(dateStr)) {
     const nsType = workTypes.find(t => t.code === 'NS');
-    if (nsType) return 'NS';
+    return nsType ? 'NS' : '';
   }
-  return 'G';
+
+  return '';
 }
 
 interface Employee {
@@ -197,6 +234,11 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
   // Current reported entries list
   const [dayEntries, setDayEntries] = useState<ReportEntry[]>([]);
 
+  // Company Calendar Decision state & caching
+  const [calendarDecision, setCalendarDecision] = useState<CalendarDecision | null>(null);
+  const calendarCacheRef = useRef<Map<string, CalendarDecision>>(new Map());
+  const activeCalendarFetchDateRef = useRef<string>(currentDate);
+
   // Notifications & Alerts
   const [successNotification, setSuccessNotification] = useState('');
   const [warningData, setWarningData] = useState<WarningResponse | null>(null);
@@ -278,14 +320,49 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
     fetchDictionaries();
   }, [token]);
 
-  // 2. Initialize form when dictionaries are loaded (fixes race condition on first render)
+  // Fetch calendar decision for currentDate with race condition protection and safe fallback
   useEffect(() => {
-    if (dictionariesLoaded && currentEmployee) {
-      resetForm();
-    }
-  }, [dictionariesLoaded, currentEmployee, currentDate, workTypes]);
+    let isCurrent = true;
+    const dateToFetch = currentDate;
+    activeCalendarFetchDateRef.current = dateToFetch;
 
-  // 3. Load Day Entries when date or employee changes
+    if (calendarCacheRef.current.has(dateToFetch)) {
+      const cached = calendarCacheRef.current.get(dateToFetch)!;
+      setCalendarDecision(cached);
+      return;
+    }
+
+    const fetchCalendarDecision = async () => {
+      try {
+        const res = await fetch(`/api/company-calendar/day/${dateToFetch}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        const decision: CalendarDecision = await res.json();
+        if (!isCurrent || activeCalendarFetchDateRef.current !== dateToFetch) return;
+        calendarCacheRef.current.set(dateToFetch, decision);
+        setCalendarDecision(decision);
+      } catch {
+        if (!isCurrent || activeCalendarFetchDateRef.current !== dateToFetch) return;
+        const fallbackDecision: CalendarDecision = {
+          date: dateToFetch,
+          isWorkingDay: !isWeekend(dateToFetch),
+          source: isWeekend(dateToFetch) ? 'weekend' : 'standard weekday',
+          reason: null,
+        };
+        calendarCacheRef.current.set(dateToFetch, fallbackDecision);
+        setCalendarDecision(fallbackDecision);
+      }
+    };
+
+    fetchCalendarDecision();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [currentDate, token]);
+
+  // Load Day Entries when date or employee changes
   useEffect(() => {
     if (currentEmployee) {
       fetchDayEntries(currentEmployee.id, currentDate);
@@ -339,14 +416,22 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
     setSelectedOrder(null);
     setHoursInput('8.00');
     if (!preserveWorkType) {
-      setSelectedWorkType(getDefaultWorkType(currentDate, workTypes));
+      const decision = calendarCacheRef.current.get(currentDate) || calendarDecision;
+      setSelectedWorkType(getDefaultWorkType(decision, workTypes, currentDate));
     }
     setMissingCard(false);
     setValidationError('');
     setEditingReportId(null);
     setAutocompleteHighlightIdx(-1);
     setShowOrderAutocomplete(false);
-  }, [currentDate, workTypes]);
+  }, [currentDate, workTypes, calendarDecision]);
+
+  // 2. Initialize form when dictionaries are loaded or date/employee/calendar changes
+  useEffect(() => {
+    if (dictionariesLoaded && currentEmployee) {
+      resetForm();
+    }
+  }, [dictionariesLoaded, currentEmployeeIdx, currentDate, calendarDecision, workTypes, resetForm]);
 
   // Navigation handlers
   const handlePrevEmployee = () => {
@@ -905,6 +990,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                   setValidationError('');
                 }}
               >
+                <option value="">-- Wybierz rodzaj czasu pracy --</option>
                 {Array.isArray(workTypes) && workTypes.map(t => (
                   <option key={t.code} value={t.code}>
                     {t.code} - {t.name}
