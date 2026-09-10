@@ -3,11 +3,31 @@
 ## Stan bieżący
 
 - Projekt: Workshop Time Tracking
-- Aktualna wersja produkcyjna: `0.5.4`
-- Aktualna wersja development: `0.5.4`
+- Aktualna wersja produkcyjna: `0.5.5`
+- Aktualna wersja development: `0.5.5`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: v0.5.4 wydane; uszczelnienie słownika rodzajów czasu pracy (WorkTimeTypes hardening) po niezależnym przeglądzie: bezpieczna korekta WKU (requires_order=false, is_absence=true) z zachowaniem nazwy i statusu własności, wąska migracja i bezpieczny seed bez przejmowania typów własnych (OP, NN itp.), naprawa wyrównania kolumn tabeli słowników w UI, ujednolicenie semantyki diagnostyki rozliczenia, wykonywalne testy bazy danych PostgreSQL oraz testy integracji z mechanizmami v0.5.3
+- Stan prac: v0.5.5 wydane; naprawa regresji widoczności zakładek w Centrum Raportów (izolacja .report-tab od globalnego .nav-item, scoping reguł responsywnych do .sidebar .nav-item, brak zawijania i kompresji zakładek, przewijanie poziome na wąskich viewportach, zachowanie wszystkich 5 zakładek po włączeniu raportu zamknięcia, równe uprawnienia dla admina i leadera, testy regresyjne i walidacja)
+
+Zakres wersji `0.5.5`:
+
+- Izolacja przycisków zakładek raportów od globalnych stylów `.nav-item` poprzez dedykowaną klasę `.report-tab` (`flex: 0 0 auto`, `flex-shrink: 0`, `white-space: nowrap`).
+- Zawężenie reguł responsywnych w `@media (max-width: 900px)` oraz `@media (max-width: 600px)` wyłącznie do paska bocznego (`.sidebar .nav-item`), uniemożliwiając ich aplikowanie do zakładek w `ReportsView`.
+- Zapewnienie przewijania poziomego (`overflow-x: auto`) kontenera zakładek na wąskich ekranach przy zachowaniu stałych szerokości etykiet.
+- Zagwarantowanie stałej widoczności i dostępności wszystkich 5 zakładek (`Wg zleceń`, `Wg pracowników`, `Szczegółowy`, `Podsumowanie`, `Okresy nieobecności`) po uruchomieniu Raportu zamknięcia (`closure-control-summary`).
+- Utrzymanie dotychczasowego modelu uprawnień — role `admin` oraz `leader` mają pełny dostęp do Centrum Raportów i wszystkich zakładek.
+- Rozbudowa testów automatycznych frontendu o dedykowany zestaw testów regresyjnych zakładek raportów (`ReportsView.test.tsx`).
+
+## Weryfikacja wersji 0.5.5
+
+- backend: 192 testów zakończonych powodzeniem (15 plików testowych),
+- backend: build (`npm run build`) zakończony powodzeniem,
+- backend: walidacja schematu Prisma (`npx prisma validate`) oraz spójność runtime,
+- frontend: 97 testów zakończonych powodzeniem (10 plików testowych), w tym 5 dedykowanych testów regresyjnych zakładek raportów i reguł CSS,
+- frontend: build (`npm run build`) zakończony powodzeniem,
+- frontend: lint (`npm run lint`) zakończony powodzeniem z wynikiem 0 ostrzeżeń/błędów,
+- skrypt weryfikacyjny: `./scripts/verify-release.sh` — PASS,
+- git diff --check: brak błędów białych znaków.
 
 Zakres wersji `0.5.4` (rework po niezależnym przeglądzie):
 
