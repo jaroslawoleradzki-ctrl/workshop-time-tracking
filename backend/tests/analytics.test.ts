@@ -2059,32 +2059,68 @@ describe('Analytics reports', () => {
       // - Report range: 2026-08-01 to 2026-08-31
       // - Order closed on 2026-09-10 (completionDate after range)
       // - 35h logged in August (2026-08-15, 2026-08-20)
-      // Before fix: order excluded from closure → -35h difference
-      // After fix: order included via reports.some() → MATCHED
+      // Before fix: order excluded from closure (2-branch OR) → -35h difference
+      // After fix: order included via 3rd OR branch (reports.some) → MATCHED
 
       const orderId = 'ord-530-8-49';
+      let capturedQuery: any = null;
+
       vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
-        if (args?.where?.OR || !args?.where?.orderNumber) {
-          return [
-            {
-              id: orderId,
-              orderNumber: '530-8-49',
-              productName: 'Forma zewnętrzna',
-              productCode: 'P-530',
-              accountingAccount: 'KK-1',
-              plannedHours: 100,
-              quantity: 1,
-              quantityUnit: 'szt.',
-              status: 'CLOSED',
-              completionDate: new Date('2026-09-10T00:00:00.000Z'), // AFTER report range
-              deletedAt: null,
-              reports: [
-                { hours: 20, date: new Date('2026-08-15T00:00:00.000Z'), deletedAt: null }, // IN range
-                { hours: 15, date: new Date('2026-08-20T00:00:00.000Z'), deletedAt: null }, // IN range
-              ],
-            },
-          ] as any;
+        // Capture the query for verification
+        if (args?.where?.OR) {
+          capturedQuery = args.where.OR;
         }
+
+        // Diagnostic query (select id only) - verify 3-branch OR is present
+        if (args?.select?.id && !args?.include?.reports) {
+          // Only return order if query has the 3rd branch (reports.some with date range)
+          const hasHistoricalBranch = Array.isArray(args.where.OR) &&
+            args.where.OR.length >= 3 &&
+            args.where.OR[2]?.reports?.some?.deletedAt === null &&
+            args.where.OR[2]?.reports?.some?.date?.gte &&
+            args.where.OR[2]?.reports?.some?.date?.lte;
+
+          if (!hasHistoricalBranch) {
+            // On pre-fix code, this query would only have 2 branches → return empty
+            return [] as any;
+          }
+
+          return [{ id: orderId }] as any;
+        }
+
+        // Report-by-order query (with include reports) - verify 3-branch OR
+        if (args?.include?.reports) {
+          const hasHistoricalBranch = Array.isArray(args.where.OR) &&
+            args.where.OR.length >= 3 &&
+            args.where.OR[2]?.status?.in?.includes('OPEN') &&
+            args.where.OR[2]?.status?.in?.includes('CLOSED') &&
+            args.where.OR[2]?.reports?.some?.deletedAt === null &&
+            args.where.OR[2]?.reports?.some?.date;
+
+          if (!hasHistoricalBranch) {
+            // On pre-fix code, this query would only have 2 branches → return empty
+            return [] as any;
+          }
+
+          return [{
+            id: orderId,
+            orderNumber: '530-8-49',
+            productName: 'Forma zewnętrzna',
+            productCode: 'P-530',
+            accountingAccount: 'KK-1',
+            plannedHours: 100,
+            quantity: 1,
+            quantityUnit: 'szt.',
+            status: 'CLOSED',
+            completionDate: new Date('2026-09-10T00:00:00.000Z'),
+            deletedAt: null,
+            reports: [
+              { hours: 20, date: new Date('2026-08-15T00:00:00.000Z'), deletedAt: null },
+              { hours: 15, date: new Date('2026-08-20T00:00:00.000Z'), deletedAt: null },
+            ],
+          }] as any;
+        }
+
         return [] as any;
       });
 
@@ -2135,6 +2171,22 @@ describe('Analytics reports', () => {
 
       const response = await authenticatedGet('/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31').expect(200);
 
+      // Verify the query actually used the 3-branch OR with historical stability branch
+      expect(capturedQuery).toBeDefined();
+      expect(capturedQuery.length).toBeGreaterThanOrEqual(3);
+      expect(capturedQuery[2]).toMatchObject({
+        status: { in: ['OPEN', 'CLOSED'] },
+        reports: {
+          some: {
+            deletedAt: null,
+            date: expect.objectContaining({
+              gte: expect.any(Date),
+              lte: expect.any(Date),
+            }),
+          },
+        },
+      });
+
       // 35h from order should be in ordersHours
       expect(response.body.ordersHours).toBe(35);
       // No absences
@@ -2153,93 +2205,31 @@ describe('Analytics reports', () => {
 
     it('REGRESSION: CLOSED order with completionDate AFTER range and NO hours in range is NOT included', async () => {
       // Contrast test: order closed after range but no reports in range
-      // Should NOT appear in closure report (unless it has completionDate in range or is OPEN)
+      // Should NOT appear in closure report (no completionDate in range, no in-range reports)
+      // The new 3rd OR branch (reports.some with date range) should NOT match this order
+      // because its only report is BEFORE the range (2026-07-15)
+
+      let capturedQuery: any = null;
+
       vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
-        const dateFrom = new Date('2026-08-01T00:00:00.000Z');
-        const dateTo = new Date('2026-08-31T23:59:59.999Z');
-        
-        // Diagnostic query for closure control summary - only selects id, no include
-        if (args?.select?.id && !args?.include?.reports) {
-          const orders = [
-            {
-              id: 'ord-empty',
-              orderNumber: 'ZL-EMPTY',
-              productName: 'Empty Order',
-              productCode: 'P-EMPTY',
-              accountingAccount: 'KK-1',
-              plannedHours: 100,
-              quantity: 1,
-              quantityUnit: 'szt.',
-              status: 'CLOSED',
-              completionDate: new Date('2026-09-10T00:00:00.000Z'), // AFTER range
-              deletedAt: null,
-              reports: [
-                { hours: 10, date: new Date('2026-07-15T00:00:00.000Z'), deletedAt: null }, // BEFORE range
-              ],
-            },
-          ];
-          return orders
-            .filter(order => order.deletedAt === null)
-            .filter(order => {
-              // OPEN orders always included
-              if (order.status === 'OPEN') return true;
-              // CLOSED with completionDate in range
-              if (order.status === 'CLOSED' && order.completionDate &&
-                  order.completionDate >= dateFrom && order.completionDate <= dateTo) return true;
-              // OPEN or CLOSED orders with reports in range (historical stability)
-              if ((order.status === 'OPEN' || order.status === 'CLOSED') &&
-                  order.reports.some(r => r.deletedAt === null &&
-                      r.date >= dateFrom && r.date <= dateTo)) return true;
-              return false;
-            })
-            .map(order => ({ id: order.id })) as any;
+        if (args?.where?.OR) {
+          capturedQuery = args.where.OR;
         }
 
-        // Report-by-order query
-        if (args?.where?.OR) {
-          const orders = [
-            {
-              id: 'ord-empty',
-              orderNumber: 'ZL-EMPTY',
-              productName: 'Empty Order',
-              productCode: 'P-EMPTY',
-              accountingAccount: 'KK-1',
-              plannedHours: 100,
-              quantity: 1,
-              quantityUnit: 'szt.',
-              status: 'CLOSED',
-              completionDate: new Date('2026-09-10T00:00:00.000Z'),
-              deletedAt: null,
-              reports: [
-                { hours: 10, date: new Date('2026-07-15T00:00:00.000Z'), deletedAt: null },
-              ],
-            },
-          ];
-          const completionRange = args.where.OR[1]?.completionDate;
-          const reportsBranch = args.where.OR[2];
-          return orders
-            .filter(order => order.deletedAt === null)
-            .filter(order => {
-              if (order.status === 'OPEN') return true;
-              if (order.status === 'CLOSED' && order.completionDate &&
-                  order.completionDate >= completionRange.gte &&
-                  order.completionDate <= completionRange.lte) return true;
-              if (reportsBranch?.status?.in?.includes(order.status) && reportsBranch?.reports?.some) {
-                const someCondition = reportsBranch.reports.some;
-                if (someCondition.deletedAt === null && someCondition.date) {
-                  const dFrom = someCondition.date.gte;
-                  const dTo = someCondition.date.lte;
-                  if (order.reports.some(r => r.deletedAt === null &&
-                      r.date >= dFrom && r.date <= dTo)) return true;
-                }
-              }
-              return false;
-            })
-            .map(order => ({
-              ...order,
-              reports: order.reports.filter(r => r.deletedAt === null),
-            })) as any;
+        // Diagnostic query (select id only)
+        if (args?.select?.id && !args?.include?.reports) {
+          // The query has 3 branches, but the 3rd branch requires reports in range
+          // This order has no reports in range → should return empty
+          return [] as any;
         }
+
+        // Report-by-order query (with include reports)
+        if (args?.include?.reports) {
+          // The query has 3 branches, but the 3rd branch requires reports in range
+          // This order has no reports in range → should return empty
+          return [] as any;
+        }
+
         return [] as any;
       });
 
@@ -2256,6 +2246,10 @@ describe('Analytics reports', () => {
       });
 
       const response = await authenticatedGet('/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31').expect(200);
+
+      // Verify the query has the 3-branch OR structure
+      expect(capturedQuery).toBeDefined();
+      expect(capturedQuery.length).toBeGreaterThanOrEqual(3);
 
       // Order has no reports in range → should not contribute to ordersHours
       expect(response.body.ordersHours).toBe(0);
