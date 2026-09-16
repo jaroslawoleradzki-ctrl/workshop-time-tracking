@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as jwt from 'jsonwebtoken';
 import * as ExcelJS from 'exceljs';
 import request from 'supertest';
-import { Prisma } from '@prisma/client';
+import { Prisma, OrderStatus } from '@prisma/client';
 import {
   formatEmployeeName,
   getClosureControlSummary,
@@ -52,6 +52,11 @@ const closureOrders = [
   { id: 'suspended', orderNumber: 'ZL-010', status: 'SUSPENDED', completionDate: null, deletedAt: null, reports: [{ hours: 3, date: new Date('2026-08-20T00:00:00.000Z'), deletedAt: null }] },
   { id: 'boundary-from', orderNumber: 'ZL-011', status: 'CLOSED', completionDate: new Date('2026-08-01T00:00:00.000Z'), deletedAt: null, reports: [] },
   { id: 'boundary-to', orderNumber: 'ZL-012', status: 'CLOSED', completionDate: new Date('2026-08-31T00:00:00.000Z'), deletedAt: null, reports: [] },
+  // Regression test: CLOSED after range (2026-09-10) WITH hours in range (2026-08-15, 2026-08-20)
+  { id: 'closed-after-with-hours', orderNumber: 'ZL-013', status: 'CLOSED', completionDate: new Date('2026-09-10T00:00:00.000Z'), deletedAt: null, reports: [
+    { hours: 20, date: new Date('2026-08-15T00:00:00.000Z'), deletedAt: null },
+    { hours: 15, date: new Date('2026-08-20T00:00:00.000Z'), deletedAt: null },
+  ] },
 ].map(order => ({
   productName: `Produkt ${order.orderNumber}`,
   productCode: `P-${order.orderNumber}`,
@@ -65,14 +70,22 @@ const closureOrders = [
 const mockOrderReportQuery = () => vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
   // Diagnostic query for closure control summary - only selects id, no include
   if (args?.select?.id && !args?.include?.reports) {
+    const dateFrom = new Date('2026-08-01T00:00:00.000Z');
+    const dateTo = new Date('2026-08-31T23:59:59.999Z');
     return closureOrders
       .filter(order => order.deletedAt === null)
-      .filter(order => order.status === 'OPEN' || (
-        order.status === 'CLOSED' &&
-        order.completionDate &&
-        order.completionDate >= new Date('2026-08-01T00:00:00.000Z') &&
-        order.completionDate <= new Date('2026-08-31T23:59:59.999Z')
-      ))
+      .filter(order => {
+        // OPEN orders always included
+        if (order.status === 'OPEN') return true;
+        // CLOSED with completionDate in range
+        if (order.status === 'CLOSED' && order.completionDate &&
+            order.completionDate >= dateFrom && order.completionDate <= dateTo) return true;
+        // OPEN or CLOSED orders with reports in range (historical stability)
+        if ((order.status === 'OPEN' || order.status === 'CLOSED') &&
+            order.reports.some(r => r.deletedAt === null &&
+                r.date >= dateFrom && r.date <= dateTo)) return true;
+        return false;
+      })
       .map(order => ({ id: order.id })) as any;
   }
 
@@ -84,12 +97,24 @@ const mockOrderReportQuery = () => vi.spyOn(prisma.order, 'findMany').mockImplem
     .filter(order => order.deletedAt === null)
     .filter(order => {
       if (!closureBranches) return !args.where.status || order.status === args.where.status;
-      return order.status === 'OPEN' || (
-        order.status === 'CLOSED' &&
-        order.completionDate &&
-        order.completionDate >= completionRange.gte &&
-        order.completionDate <= completionRange.lte
-      );
+      // OPEN orders
+      if (order.status === 'OPEN') return true;
+      // CLOSED with completionDate in range
+      if (order.status === 'CLOSED' && order.completionDate &&
+          order.completionDate >= completionRange.gte &&
+          order.completionDate <= completionRange.lte) return true;
+      // OPEN or CLOSED orders with reports in range (historical stability) - check third OR branch
+      const reportsBranch = closureBranches?.[2];
+      if (reportsBranch?.status?.in?.includes(order.status) && reportsBranch?.reports?.some) {
+        const someCondition = reportsBranch.reports.some;
+        if (someCondition.deletedAt === null && someCondition.date) {
+          const dateFrom = someCondition.date.gte;
+          const dateTo = someCondition.date.lte;
+          if (order.reports.some(r => r.deletedAt === null &&
+              r.date >= dateFrom && r.date <= dateTo)) return true;
+        }
+      }
+      return false;
     })
     .map(order => ({
       ...order,
@@ -920,6 +945,54 @@ describe('Analytics reports', () => {
       .toMatchObject({ actualHours: 20, deviation: 50, percent: 50 });
   });
 
+  it('keeps cumulative progress for a later-closed order included by historical closure stability', async () => {
+    const range = 'dateFrom=2026-08-01&dateTo=2026-08-31&closureReport=true';
+    const orderQuery = vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+      const historicalBranch = args.where.OR?.[2];
+      const hasHistoricalClosurePredicate =
+        historicalBranch?.status?.in?.includes(OrderStatus.OPEN) &&
+        historicalBranch?.status?.in?.includes(OrderStatus.CLOSED) &&
+        historicalBranch?.reports?.some?.deletedAt === null &&
+        historicalBranch?.reports?.some?.date?.gte instanceof Date &&
+        historicalBranch?.reports?.some?.date?.lte instanceof Date;
+
+      if (!hasHistoricalClosurePredicate) return [] as any;
+
+      const reportEnd = args.include.reports.where.date.lte;
+      const reports = [
+        { hours: 30, date: new Date('2026-07-15T00:00:00.000Z') },
+        { hours: 20, date: new Date('2026-08-15T00:00:00.000Z') },
+        { hours: 10, date: new Date('2026-09-15T00:00:00.000Z') },
+        { hours: 8, date: new Date('2026-08-20T00:00:00.000Z'), deletedAt: new Date('2026-08-21T00:00:00.000Z') },
+      ].filter(report => !report.deletedAt && report.date <= reportEnd);
+
+      return [{
+        orderNumber: 'ZL-CUMULATIVE-CLOSED-AFTER',
+        productName: 'Historycznie stabilne',
+        productCode: null,
+        accountingAccount: null,
+        quantity: null,
+        quantityUnit: 'szt.',
+        plannedHours: 100,
+        orderDate: new Date('2026-07-01T00:00:00.000Z'),
+        status: OrderStatus.CLOSED,
+        completionDate: new Date('2026-09-10T00:00:00.000Z'),
+        reports,
+      }] as any;
+    });
+
+    const response = await authenticatedGet(`/api/analytics/report-by-order?${range}`).expect(200);
+
+    expect(orderQuery).toHaveBeenCalledTimes(1);
+    expect(response.body).toEqual([expect.objectContaining({
+      orderNumber: 'ZL-CUMULATIVE-CLOSED-AFTER',
+      actualHours: 20,
+      deviation: 50,
+      percent: 50,
+      status: OrderStatus.CLOSED,
+    })]);
+  });
+
   describe('closure report by order', () => {
     it.each([
       ['OPEN with hours in range is visible', 'ZL-001', true, 5],
@@ -928,6 +1001,7 @@ describe('Analytics reports', () => {
       ['CLOSED completed in range without hours is visible with zero', 'ZL-004', true, 0],
       ['CLOSED completed before range is hidden', 'ZL-005', false, undefined],
       ['CLOSED completed after range is hidden', 'ZL-006', false, undefined],
+      ['CLOSED completed after range WITH hours in range is visible', 'ZL-013', true, 35],
       ['CLOSED with hours only outside range is visible with zero', 'ZL-007', true, 0],
       ['deleted work-time entries do not increase the total', 'ZL-008', true, 0],
       ['deleted order is hidden', 'ZL-009', false, undefined],
@@ -962,24 +1036,60 @@ describe('Analytics reports', () => {
         if (args?.where?.workTimeType?.isAbsence) {
           return [];
         }
+        if (args?.include?.employee && args?.include?.order && args?.include?.workTimeType) {
+          // Diagnostic query - include reports for all orders in closure (including ZL-013)
+          return [
+            {
+              employeeId: EMPLOYEE_ID,
+              employee: { fullName: 'Jan Kowalski' },
+              hours: 5,
+              workTimeTypeCode: 'G',
+              workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+              orderId: 'open-hours',
+              order: { orderNumber: 'ZL-001' },
+              date: new Date('2026-08-10T00:00:00.000Z'),
+            },
+            {
+              employeeId: EMPLOYEE_ID,
+              employee: { fullName: 'Jan Kowalski' },
+              hours: 4,
+              workTimeTypeCode: 'G',
+              workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+              orderId: 'closed-hours',
+              order: { orderNumber: 'ZL-003' },
+              date: new Date('2026-08-12T00:00:00.000Z'),
+            },
+            // ZL-013 reports (closed-after-with-hours)
+            {
+              employeeId: EMPLOYEE_ID,
+              employee: { fullName: 'Jan Kowalski' },
+              hours: 20,
+              workTimeTypeCode: 'G',
+              workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+              orderId: 'closed-after-with-hours',
+              order: { orderNumber: 'ZL-013' },
+              date: new Date('2026-08-15T00:00:00.000Z'),
+            },
+            {
+              employeeId: EMPLOYEE_ID,
+              employee: { fullName: 'Jan Kowalski' },
+              hours: 15,
+              workTimeTypeCode: 'G',
+              workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+              orderId: 'closed-after-with-hours',
+              order: { orderNumber: 'ZL-013' },
+              date: new Date('2026-08-20T00:00:00.000Z'),
+            },
+          ] as any;
+        }
+        // Employee report rows - total hours for all orders
         return [
           {
             employeeId: EMPLOYEE_ID,
             employee: { fullName: 'Jan Kowalski' },
-            hours: 5,
+            hours: 44, // 5 + 4 + 20 + 15
             workTimeTypeCode: 'G',
-            workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
-            orderId: 'open-hours',
-            date: new Date('2026-08-10T00:00:00.000Z'),
-          },
-          {
-            employeeId: EMPLOYEE_ID,
-            employee: { fullName: 'Jan Kowalski' },
-            hours: 4,
-            workTimeTypeCode: 'G',
-            workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
-            orderId: 'closed-hours',
-            date: new Date('2026-08-12T00:00:00.000Z'),
+            workTimeType: { name: 'Standardowe' },
           },
         ] as any;
       });
@@ -2079,6 +2189,211 @@ describe('Analytics reports', () => {
       expect(typeof uwValues[6]).toBe('number');
       expect(uwRowExcel!.getCell(4).numFmt).toBe('#,##0.00');
       expect(uwRowExcel!.getCell(7).numFmt).toBe('+#,##0.00;-#,##0.00;0.00');
+    });
+
+    it('REGRESSION: CLOSED order with completionDate AFTER range but hours IN range is included in reconciliation (historical stability)', async () => {
+      // Client scenario: Order 530-8-49
+      // - Report range: 2026-08-01 to 2026-08-31
+      // - Order closed on 2026-09-10 (completionDate after range)
+      // - 35h logged in August (2026-08-15, 2026-08-20)
+      // Before fix: order excluded from closure (2-branch OR) → -35h difference
+      // After fix: order included via 3rd OR branch (reports.some) → MATCHED
+
+      const orderId = 'ord-530-8-49';
+      let capturedQuery: any = null;
+
+      vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+        // Capture the query for verification
+        if (args?.where?.OR) {
+          capturedQuery = args.where.OR;
+        }
+
+        // Diagnostic query (select id only) - verify 3-branch OR is present
+        if (args?.select?.id && !args?.include?.reports) {
+          // Only return order if query has the 3rd branch (reports.some with date range)
+          const hasHistoricalBranch = Array.isArray(args.where.OR) &&
+            args.where.OR.length >= 3 &&
+            args.where.OR[2]?.reports?.some?.deletedAt === null &&
+            args.where.OR[2]?.reports?.some?.date?.gte &&
+            args.where.OR[2]?.reports?.some?.date?.lte;
+
+          if (!hasHistoricalBranch) {
+            // On pre-fix code, this query would only have 2 branches → return empty
+            return [] as any;
+          }
+
+          return [{ id: orderId }] as any;
+        }
+
+        // Report-by-order query (with include reports) - verify 3-branch OR
+        if (args?.include?.reports) {
+          const hasHistoricalBranch = Array.isArray(args.where.OR) &&
+            args.where.OR.length >= 3 &&
+            args.where.OR[2]?.status?.in?.includes('OPEN') &&
+            args.where.OR[2]?.status?.in?.includes('CLOSED') &&
+            args.where.OR[2]?.reports?.some?.deletedAt === null &&
+            args.where.OR[2]?.reports?.some?.date;
+
+          if (!hasHistoricalBranch) {
+            // On pre-fix code, this query would only have 2 branches → return empty
+            return [] as any;
+          }
+
+          return [{
+            id: orderId,
+            orderNumber: '530-8-49',
+            productName: 'Forma zewnętrzna',
+            productCode: 'P-530',
+            accountingAccount: 'KK-1',
+            plannedHours: 100,
+            quantity: 1,
+            quantityUnit: 'szt.',
+            status: 'CLOSED',
+            completionDate: new Date('2026-09-10T00:00:00.000Z'),
+            deletedAt: null,
+            reports: [
+              { hours: 20, date: new Date('2026-08-15T00:00:00.000Z'), deletedAt: null },
+              { hours: 15, date: new Date('2026-08-20T00:00:00.000Z'), deletedAt: null },
+            ],
+          }] as any;
+        }
+
+        return [] as any;
+      });
+
+      vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
+        { code: 'G', name: 'Standardowe godziny pracy', isAbsence: false, requiresOrder: true },
+      ] as any);
+
+      vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
+        if (args?.where?.workTimeType?.isAbsence) {
+          return [] as any;
+        }
+        if (args?.include?.employee && args?.include?.order && args?.include?.workTimeType) {
+          // Diagnostic query
+          return [
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Test Employee', firstName: 'Test', lastName: 'Employee' },
+              hours: 20,
+              workTimeTypeCode: 'G',
+              workTimeType: { code: 'G', name: 'Standardowe godziny pracy', isAbsence: false, requiresOrder: true },
+              orderId,
+              order: { orderNumber: '530-8-49' },
+              date: new Date('2026-08-15T00:00:00.000Z'),
+            },
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Test Employee', firstName: 'Test', lastName: 'Employee' },
+              hours: 15,
+              workTimeTypeCode: 'G',
+              workTimeType: { code: 'G', name: 'Standardowe godziny pracy', isAbsence: false, requiresOrder: true },
+              orderId,
+              order: { orderNumber: '530-8-49' },
+              date: new Date('2026-08-20T00:00:00.000Z'),
+            },
+          ] as any;
+        }
+        // Employee report rows
+        return [
+          {
+            employeeId: 'emp-1',
+            employee: { fullName: 'Test Employee', firstName: 'Test', lastName: 'Employee' },
+            hours: 35,
+            workTimeTypeCode: 'G',
+            workTimeType: { name: 'Standardowe godziny pracy' },
+          },
+        ] as any;
+      });
+
+      const response = await authenticatedGet('/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31').expect(200);
+
+      // Verify the query actually used the 3-branch OR with historical stability branch
+      expect(capturedQuery).toBeDefined();
+      expect(capturedQuery.length).toBeGreaterThanOrEqual(3);
+      expect(capturedQuery[2]).toMatchObject({
+        status: { in: ['OPEN', 'CLOSED'] },
+        reports: {
+          some: {
+            deletedAt: null,
+            date: expect.objectContaining({
+              gte: expect.any(Date),
+              lte: expect.any(Date),
+            }),
+          },
+        },
+      });
+
+      // 35h from order should be in ordersHours
+      expect(response.body.ordersHours).toBe(35);
+      // No absences
+      expect(response.body.totalAbsenceHours).toBe(0);
+      // Total settled = 35
+      expect(response.body.totalSettledHours).toBe(35);
+      // Employee hours = 35
+      expect(response.body.totalEmployeeHours).toBe(35);
+      // Difference = 0 (MATCHED)
+      expect(response.body.difference).toBe(0);
+      expect(response.body.status).toBe('MATCHED');
+      expect(response.body.statusLabel).toBe('Zgodne');
+      // No diagnostics needed
+      expect(response.body.diagnostics).toBeUndefined();
+    });
+
+    it('REGRESSION: CLOSED order with completionDate AFTER range and NO hours in range is NOT included', async () => {
+      // Contrast test: order closed after range but no reports in range
+      // Should NOT appear in closure report (no completionDate in range, no in-range reports)
+      // The new 3rd OR branch (reports.some with date range) should NOT match this order
+      // because its only report is BEFORE the range (2026-07-15)
+
+      let capturedQuery: any = null;
+
+      vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+        if (args?.where?.OR) {
+          capturedQuery = args.where.OR;
+        }
+
+        // Diagnostic query (select id only)
+        if (args?.select?.id && !args?.include?.reports) {
+          // The query has 3 branches, but the 3rd branch requires reports in range
+          // This order has no reports in range → should return empty
+          return [] as any;
+        }
+
+        // Report-by-order query (with include reports)
+        if (args?.include?.reports) {
+          // The query has 3 branches, but the 3rd branch requires reports in range
+          // This order has no reports in range → should return empty
+          return [] as any;
+        }
+
+        return [] as any;
+      });
+
+      vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
+        { code: 'G', name: 'Standardowe godziny pracy', isAbsence: false, requiresOrder: true },
+      ] as any);
+
+      vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
+        if (args?.where?.workTimeType?.isAbsence) return [] as any;
+        if (args?.include?.employee && args?.include?.order && args?.include?.workTimeType) {
+          return [] as any;
+        }
+        return [] as any;
+      });
+
+      const response = await authenticatedGet('/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31').expect(200);
+
+      // Verify the query has the 3-branch OR structure
+      expect(capturedQuery).toBeDefined();
+      expect(capturedQuery.length).toBeGreaterThanOrEqual(3);
+
+      // Order has no reports in range → should not contribute to ordersHours
+      expect(response.body.ordersHours).toBe(0);
+      expect(response.body.totalSettledHours).toBe(0);
+      expect(response.body.totalEmployeeHours).toBe(0);
+      expect(response.body.difference).toBe(0);
+      expect(response.body.status).toBe('MATCHED');
     });
   });
 });
