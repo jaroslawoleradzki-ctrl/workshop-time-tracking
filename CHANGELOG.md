@@ -3,6 +3,15 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.5.6] - 2026-09-16
+
+### Fixed
+- Ustabilizowano historyczne raporty zamknięcia: zlecenia OPEN/CLOSED z nieusuniętymi wpisami czasu w raportowanym okresie pozostają uwzględnione po późniejszym zamknięciu zlecenia.
+
+### Added
+- Dodano regresyjne testy kontroli rozliczenia i raportu wg zleceń dla zamkniętego zlecenia z datą zakończenia po okresie raportu, w tym scenariusz 35 godzin oraz przypadek bez wpisów w okresie.
+- Wzmocniono testy tak, aby sprawdzały rzeczywistą strukturę zapytania Prisma i odrzucały powrót do starego, dwu-rozgałęzieniowego predykatu.
+
 ## [0.5.5] - 2026-09-10
 
 ### Fixed
