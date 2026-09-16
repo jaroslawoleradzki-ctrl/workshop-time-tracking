@@ -3,11 +3,26 @@
 ## Stan bieżący
 
 - Projekt: Workshop Time Tracking
-- Aktualna wersja produkcyjna: `0.5.5`
-- Aktualna wersja development: `0.5.5`
+- Aktualna wersja produkcyjna: `0.5.5` (do wydania `0.5.6`)
+- Aktualna wersja development: `0.5.6`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: v0.5.5 wydane; naprawa regresji widoczności zakładek w Centrum Raportów (izolacja .report-tab od globalnego .nav-item, scoping reguł responsywnych do .sidebar .nav-item, brak zawijania i kompresji zakładek, przewijanie poziome na wąskich viewportach, zachowanie wszystkich 5 zakładek po włączeniu raportu zamknięcia, równe uprawnienia dla admina i leadera, testy regresyjne i walidacja)
+- Stan prac: przygotowanie wydania v0.5.6; stabilizacja historycznego rozliczenia dla zamkniętych zleceń, testy regresyjne i pełna walidacja przed scaleniem do `main`.
+
+Zakres wersji `0.5.6`:
+
+- W raportach zamknięcia zachowano zlecenia OPEN/CLOSED posiadające nieusunięte wpisy czasu w raportowanym zakresie dat, niezależnie od późniejszej daty zakończenia.
+- Zabezpieczono spójność raportu wg zleceń, kontroli rozliczenia i eksportu XLSX poprzez wspólną logikę filtrowania wpisów w zakresie.
+- Dodano regresję scenariusza zlecenia `530-8-49` / 35 godzin oraz kontrprzypadek bez wpisów w okresie; testy weryfikują strukturę predykatu Prisma.
+
+## Weryfikacja wersji 0.5.6
+
+- backend: 195 testów zakończonych powodzeniem (15 plików testowych), w tym regresja historycznego rozliczenia,
+- backend: build (`npm run build`) zakończony powodzeniem,
+- frontend: 97 testów zakończonych powodzeniem (10 plików testowych),
+- frontend: lint (`npm run lint`) oraz build (`npm run build`) zakończone powodzeniem,
+- Prisma: walidacja schematu zakończona powodzeniem; zmiana nie wymaga migracji bazy danych,
+- Docker Compose: walidacja konfiguracji zakończona powodzeniem przy użyciu wymaganych zmiennych środowiskowych.
 
 Zakres wersji `0.5.5`:
 

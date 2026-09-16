@@ -502,6 +502,16 @@ export async function getOrderReportRows(
         ? [
             { status: OrderStatus.OPEN },
             { status: OrderStatus.CLOSED, completionDate: completionDateRange },
+            // Historical stability: include OPEN or CLOSED orders with reports in range regardless of current status/completionDate
+            {
+              status: { in: [OrderStatus.OPEN, OrderStatus.CLOSED] },
+              reports: {
+                some: {
+                  deletedAt: null,
+                  date: reportDateRange,
+                },
+              },
+            },
           ]
         : undefined,
     },
@@ -578,7 +588,10 @@ export async function getReconciliationDiagnostics(
     orderBy: [{ employee: { lastName: 'asc' } }, { date: 'asc' }, { createdAt: 'asc' }],
   });
 
-  // Get orders included in closure report (OPEN or CLOSED with completionDate in range)
+  // Get orders included in closure report:
+  // - OPEN orders (currently active)
+  // - CLOSED orders with completionDate in range (closed during the period)
+  // - OPEN or CLOSED orders with ANY work time reports in the date range (historical stability: hours logged in period must remain in reconciliation regardless of later status change)
   const ordersInClosure = await db.order.findMany({
     where: {
       deletedAt: null,
@@ -589,6 +602,18 @@ export async function getReconciliationDiagnostics(
           completionDate: {
             gte: new Date(`${dateFrom}T00:00:00.000Z`),
             lte: new Date(`${dateTo}T23:59:59.999Z`),
+          },
+        },
+        {
+          status: { in: [OrderStatus.OPEN, OrderStatus.CLOSED] },
+          reports: {
+            some: {
+              deletedAt: null,
+              date: {
+                gte: new Date(`${dateFrom}T00:00:00.000Z`),
+                lte: new Date(`${dateTo}T23:59:59.999Z`),
+              },
+            },
           },
         },
       ],
