@@ -79,6 +79,7 @@ Odpowiedź sukcesu (`201`) zawiera co najmniej `employeeId`, `sourceDate`, `targ
 
 ## Raport zamknięcia zleceń
 
+- Raport „Godziny wg zleceń” rozróżnia godziny okresowe od postępu zlecenia. `actualHours` („Godziny rzeczywiste”) jest sumą aktywnych wpisów w wybranym zakresie dat. `deviation` i `percent` są liczone z aktywnych wpisów od biznesowej daty zlecenia (`orderDate`) do `dateTo` raportu (bez wpisów przyszłych). Wzory: `deviation = plannedHours - cumulativeActualHours`; `percent = plannedHours > 0 ? cumulativeActualHours / plannedHours * 100 : 0`. API nie udostępnia osobnego pola cumulative; UI, XLSX i CSV korzystają z tych samych zwróconych wartości.
 - Przełącznik „Raport zamknięcia” działa wewnątrz istniejącego raportu „Godziny wg zleceń” i wymaga prawidłowego, inkluzywnego zakresu dat.
 - Wynik obejmuje zlecenia `OPEN` z dodatnią sumą aktywnych wpisów w okresie oraz zlecenia `CLOSED`, których `completionDate` mieści się w okresie — również wtedy, gdy suma godzin w okresie wynosi zero.
 - Godziny sprzed lub po zakresie nie są uwzględniane. Usunięte wpisy nie zwiększają sumy, a usunięte zlecenia, zlecenia `SUSPENDED` i zlecenia zamknięte poza zakresem są wykluczone.
