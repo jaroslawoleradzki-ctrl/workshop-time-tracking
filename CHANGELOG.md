@@ -3,6 +3,13 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+## [0.5.7] - 2026-09-17
+
+### Changed
+- Raport „Godziny wg zleceń”: „Godziny rzeczywiste” pozostają sumą wybranego okresu, natomiast „Odchylenie” i „Procent realizacji” są liczone narastająco od `orderDate` zlecenia do końca raportowanego okresu. XLSX i CSV zachowują tę samą semantykę co UI.
+
 ## [0.5.6] - 2026-09-16
 
 ### Fixed

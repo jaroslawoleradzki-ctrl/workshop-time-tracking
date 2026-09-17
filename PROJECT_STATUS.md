@@ -3,11 +3,29 @@
 ## Stan bieżący
 
 - Projekt: Workshop Time Tracking
-- Aktualna wersja produkcyjna: `0.5.5` (do wydania `0.5.6`)
-- Aktualna wersja development: `0.5.6`
+- Aktualna wersja produkcyjna: `0.5.7`
+- Aktualna wersja development: `0.5.7`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: przygotowanie wydania v0.5.6; stabilizacja historycznego rozliczenia dla zamkniętych zleceń, testy regresyjne i pełna walidacja przed scaleniem do `main`.
+- Stan prac: v0.5.7 wydane i zweryfikowane; raporty wg zleceń liczą postęp narastająco do końca wybranego okresu, z zachowaniem godzin rzeczywistych dla tego okresu oraz kompatybilności historycznego rozliczenia v0.5.6.
+
+Zakres wersji `0.5.7`:
+
+- W raportach wg zleceń „Godziny rzeczywiste” pozostają ograniczone do wybranego okresu.
+- „Odchylenie” i „Procent realizacji” uwzględniają aktywne godziny narastająco od `orderDate` do `dateTo`.
+- Godziny z przyszłych okresów oraz soft-deleted reports są wykluczone.
+- Zachowano historyczne rozliczenie v0.5.6 dla zleceń zamkniętych po raportowanym okresie.
+
+## Weryfikacja wersji 0.5.7
+
+- backend: 197 testów zakończonych powodzeniem (15 plików testowych),
+- backend: build (`npm run build`) zakończony powodzeniem,
+- frontend: 97 testów zakończonych powodzeniem (10 plików testowych),
+- frontend: lint (`npm run lint`) oraz build (`npm run build`) zakończone powodzeniem,
+- Prisma: walidacja schematu zakończona powodzeniem; zmiana nie wymaga migracji bazy danych,
+- Docker Compose: walidacja konfiguracji zakończona powodzeniem przy użyciu wartości zastępczych,
+- `./scripts/verify-release.sh`: walidacja wydania zakończona powodzeniem,
+- test ręczny i akceptacja użytkownika: zakończone powodzeniem.
 
 Zakres wersji `0.5.6`:
 
