@@ -298,4 +298,76 @@ describe('company calendar', () => {
     expect(result.weekends).toBe(3);
     expect(result.availableDates).toEqual(['2026-08-13', '2026-08-17']);
   });
+
+  it('provides single day decision via GET /api/company-calendar/day/:date endpoint', async () => {
+    // 401 without auth
+    await request(app).get('/api/company-calendar/day/2026-09-14').expect(401);
+
+    vi.spyOn(prisma.user, 'findUnique').mockResolvedValue({
+      id: '10000000-0000-4000-8000-000000000002', username: 'leader', passwordHash: '', fullName: 'Leader', role: 'leader', isActive: true,
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    const token = jwt.sign({ id: '10000000-0000-4000-8000-000000000002', username: 'leader', role: 'leader', fullName: 'Leader' }, TEST_JWT_SECRET);
+
+    // 400 for invalid date
+    await request(app)
+      .get('/api/company-calendar/day/invalid-date')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(400);
+
+    // 200 for standard weekday
+    vi.spyOn(prisma.companyCalendarDay, 'findUnique').mockResolvedValue(null);
+    const weekdayRes = await request(app)
+      .get('/api/company-calendar/day/2026-09-14')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(weekdayRes.body).toEqual({
+      date: '2026-09-14',
+      isWorkingDay: true,
+      source: 'standard weekday',
+    });
+
+    // 200 for standard weekend
+    const weekendRes = await request(app)
+      .get('/api/company-calendar/day/2026-09-13')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(weekendRes.body).toEqual({
+      date: '2026-09-13',
+      isWorkingDay: false,
+      source: 'weekend',
+    });
+
+    // 200 for public holiday
+    const holidayRes = await request(app)
+      .get('/api/company-calendar/day/2026-11-11')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(holidayRes.body).toEqual({
+      date: '2026-11-11',
+      isWorkingDay: false,
+      source: 'public holiday',
+      reason: 'Narodowe Święto Niepodległości',
+    });
+
+    // 200 for company override
+    vi.spyOn(prisma.companyCalendarDay, 'findUnique').mockResolvedValue({
+      id: 'override-1',
+      date: new Date('2026-11-14T00:00:00.000Z'),
+      isWorkingDay: true,
+      reason: 'Sobota pracująca',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const overrideRes = await request(app)
+      .get('/api/company-calendar/day/2026-11-14')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(overrideRes.body).toEqual({
+      date: '2026-11-14',
+      isWorkingDay: true,
+      source: 'company override',
+      reason: 'Sobota pracująca',
+    });
+  });
 });
