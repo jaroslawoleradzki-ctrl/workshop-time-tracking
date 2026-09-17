@@ -230,6 +230,8 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
 
   // Edit Mode state
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
+  const formModeRef = useRef<'pristine' | 'modified' | 'editing'>('pristine');
+  const formContextRef = useRef<string | null>(null);
 
   // Current reported entries list
   const [dayEntries, setDayEntries] = useState<ReportEntry[]>([]);
@@ -261,6 +263,12 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
   currentSelectionRef.current = {
     employeeId: currentEmployee?.id || null,
     date: currentDate,
+  };
+
+  const markFormModified = () => {
+    if (formModeRef.current === 'pristine') {
+      formModeRef.current = 'modified';
+    }
   };
 
   // 1. Initial Load: Dictionaries
@@ -411,27 +419,50 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
   };
 
   // Reset Form
-  const resetForm = useCallback((preserveWorkType = false) => {
+  const resetForm = useCallback(() => {
+    formModeRef.current = 'pristine';
     setSearchOrderQuery('');
     setSelectedOrder(null);
     setHoursInput('8.00');
-    if (!preserveWorkType) {
-      const decision = calendarCacheRef.current.get(currentDate) || calendarDecision;
-      setSelectedWorkType(getDefaultWorkType(decision, workTypes, currentDate));
-    }
+    const cachedDecision = calendarCacheRef.current.get(currentDate);
+    setSelectedWorkType(
+      cachedDecision?.date === currentDate
+        ? getDefaultWorkType(cachedDecision, workTypes, currentDate)
+        : '',
+    );
     setMissingCard(false);
     setValidationError('');
     setEditingReportId(null);
     setAutocompleteHighlightIdx(-1);
     setShowOrderAutocomplete(false);
-  }, [currentDate, workTypes, calendarDecision]);
+  }, [currentDate, workTypes]);
 
-  // 2. Initialize form when dictionaries are loaded or date/employee/calendar changes
+  // Reset only when the new-entry context changes. A calendar response must not
+  // reset user input or an edit form.
   useEffect(() => {
-    if (dictionariesLoaded && currentEmployee) {
-      resetForm();
+    if (!dictionariesLoaded || !currentEmployee) return;
+
+    const context = `${currentEmployee.id}:${currentDate}`;
+    if (formContextRef.current === context) return;
+
+    formContextRef.current = context;
+    resetForm();
+  }, [dictionariesLoaded, currentEmployee, currentDate, resetForm]);
+
+  // Apply a calendar-aware default only to a pristine new form and only when
+  // the decision belongs to the currently selected date.
+  useEffect(() => {
+    if (
+      !dictionariesLoaded ||
+      !currentEmployee ||
+      formModeRef.current !== 'pristine' ||
+      calendarDecision?.date !== currentDate
+    ) {
+      return;
     }
-  }, [dictionariesLoaded, currentEmployeeIdx, currentDate, calendarDecision, workTypes, resetForm]);
+
+    setSelectedWorkType(getDefaultWorkType(calendarDecision, workTypes, currentDate));
+  }, [dictionariesLoaded, currentEmployee, currentDate, calendarDecision, workTypes]);
 
   // Navigation handlers
   const handlePrevEmployee = () => {
@@ -492,6 +523,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
 
   // Order Autocomplete click selection
   const handleSelectOrder = (order: Order) => {
+    markFormModified();
     setSelectedOrder(order);
     setSearchOrderQuery(order.orderNumber);
     setShowOrderAutocomplete(false);
@@ -663,6 +695,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
 
   // Edit current report handler
   const handleEditEntry = (entry: ReportEntry) => {
+    formModeRef.current = 'editing';
     setEditingReportId(entry.id);
     setSelectedWorkType(entry.workTimeTypeCode);
     setHoursInput(entry.hours.toString());
@@ -986,6 +1019,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                 className="form-control"
                 value={selectedWorkType}
                 onChange={e => {
+                  markFormModified();
                   setSelectedWorkType(e.target.value);
                   setValidationError('');
                 }}
@@ -1011,6 +1045,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                     placeholder="Wpisz numer zlecenia lub produktu..."
                     value={searchOrderQuery}
                     onChange={e => {
+                      markFormModified();
                       setSearchOrderQuery(e.target.value);
                       setSelectedOrder(null); // Clear selected order if text changed
                       setShowOrderAutocomplete(true);
@@ -1067,7 +1102,10 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                   ref={hoursInputRef}
                   className="form-control"
                   value={hoursInput}
-                  onChange={e => setHoursInput(e.target.value)}
+                  onChange={e => {
+                    markFormModified();
+                    setHoursInput(e.target.value);
+                  }}
                   placeholder="np. 8.00"
                   onKeyDown={e => {
                     if (e.key === 'Enter') {
@@ -1086,7 +1124,10 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                 id="missingCard"
                 style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                 checked={missingCard}
-                onChange={e => setMissingCard(e.target.checked)}
+                onChange={e => {
+                  markFormModified();
+                  setMissingCard(e.target.checked);
+                }}
               />
               <label htmlFor="missingCard" className="form-label" style={{ margin: 0, cursor: 'pointer' }}>
                 Brak karty

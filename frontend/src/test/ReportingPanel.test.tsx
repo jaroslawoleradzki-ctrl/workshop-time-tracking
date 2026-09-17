@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ReportingPanel from '../components/ReportingPanel';
@@ -978,13 +978,20 @@ describe('ReportingPanel — calendar-aware default work type (v0.5.8)', () => {
     vi.unstubAllGlobals();
   });
 
-  const setupPanel = (calendarHandler?: (date: string) => Promise<JsonResponse> | JsonResponse, customWorkTypes = baseWorkTypes) => {
+  const setupPanel = (
+    calendarHandler?: (date: string) => Promise<JsonResponse> | JsonResponse,
+    customWorkTypes = baseWorkTypes,
+    reportsForDate: (date: string) => unknown[] = () => [],
+  ) => {
     fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url === '/api/employees?activeOnly=true') return response([baseEmployee]);
       if (url === '/api/orders/active') return response(baseOrders);
       if (url === '/api/work-time-types') return response(customWorkTypes);
-      if (url.startsWith('/api/reports/by-employee-date')) return response([]);
+      if (url.startsWith('/api/reports/by-employee-date')) {
+        const date = new URLSearchParams(url.split('?')[1]).get('date') || '';
+        return response(reportsForDate(date));
+      }
       if (url.startsWith('/api/company-calendar/day/')) {
         const date = url.slice('/api/company-calendar/day/'.length);
         if (calendarHandler) return calendarHandler(date);
@@ -1215,6 +1222,131 @@ describe('ReportingPanel — calendar-aware default work type (v0.5.8)', () => {
     // Must NOT overwrite 2026-09-14's 'G' selection
     await new Promise((r) => setTimeout(r, 50));
     expect(workTypeSelect.value).toBe('G');
+  });
+
+  it('preserves a manual selection when the current-date calendar response arrives late', async () => {
+    const currentDateDeferred = deferred<JsonResponse>();
+
+    setupPanel((date) => {
+      if (date === '2026-09-15') return currentDateDeferred.promise;
+      return response({ date, isWorkingDay: !isWeekend(date), source: isWeekend(date) ? 'weekend' : 'standard weekday' });
+    });
+
+    await screen.findByDisplayValue('Jan Kowalski');
+    const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
+    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+
+    fireEvent.change(dateInput, { target: { value: '2026-09-15' } });
+    await waitFor(() => expect(workTypeSelect.value).toBe(''));
+
+    fireEvent.change(workTypeSelect, { target: { value: 'UW' } });
+    expect(workTypeSelect.value).toBe('UW');
+
+    await act(async () => {
+      currentDateDeferred.resolve(response({ date: '2026-09-15', isWorkingDay: true, source: 'standard weekday' }));
+    });
+
+    expect(workTypeSelect.value).toBe('UW');
+  });
+
+  it('preserves an edit form when the current-date calendar response arrives late', async () => {
+    const currentDateDeferred = deferred<JsonResponse>();
+    const existingEntry = {
+      id: 'report-ns-1',
+      date: '2026-09-15',
+      employeeId: EMPLOYEE_ID,
+      orderId: 'order-1',
+      hours: 6.5,
+      workTimeTypeCode: 'NS',
+      missingCard: true,
+      order: { orderNumber: 'ZL-001', productCode: 'P1', productName: 'Produkt 1', accountingAccount: '123' },
+      workTimeType: { code: 'NS', name: 'Nadgodziny sobota/niedziela', requiresOrder: true },
+    };
+
+    setupPanel(
+      (date) => date === '2026-09-15'
+        ? currentDateDeferred.promise
+        : response({ date, isWorkingDay: !isWeekend(date), source: isWeekend(date) ? 'weekend' : 'standard weekday' }),
+      baseWorkTypes,
+      (date) => date === '2026-09-15' ? [existingEntry] : [],
+    );
+
+    await screen.findByDisplayValue('Jan Kowalski');
+    const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
+    fireEvent.change(dateInput, { target: { value: '2026-09-15' } });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edytuj' }));
+
+    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    const hoursInput = screen.getByPlaceholderText('np. 8.00') as HTMLInputElement;
+    await waitFor(() => {
+      expect(screen.getByText('Edytuj wpis czasu pracy')).toBeInTheDocument();
+      expect(workTypeSelect.value).toBe('NS');
+      expect(hoursInput.value).toBe('6.5');
+      expect(screen.getByDisplayValue('ZL-001')).toBeInTheDocument();
+      expect(screen.getByRole('checkbox')).toBeChecked();
+    });
+
+    await act(async () => {
+      currentDateDeferred.resolve(response({ date: '2026-09-15', isWorkingDay: true, source: 'standard weekday' }));
+    });
+
+    expect(screen.getByText('Edytuj wpis czasu pracy')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Zapisz zmiany' })).toBeInTheDocument();
+    expect(workTypeSelect.value).toBe('NS');
+    expect(hoursInput.value).toBe('6.5');
+    expect(screen.getByDisplayValue('ZL-001')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox')).toBeChecked();
+  });
+
+  it('does not use a cached decision from the previous date while a new date is unresolved', async () => {
+    const nextDateDeferred = deferred<JsonResponse>();
+
+    setupPanel((date) => {
+      if (date === '2026-09-13') {
+        return response({ date, isWorkingDay: false, source: 'weekend' });
+      }
+      if (date === '2026-09-15') return nextDateDeferred.promise;
+      return response({ date, isWorkingDay: !isWeekend(date), source: isWeekend(date) ? 'weekend' : 'standard weekday' });
+    });
+
+    await screen.findByDisplayValue('Jan Kowalski');
+    const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
+    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+
+    fireEvent.change(dateInput, { target: { value: '2026-09-13' } });
+    await waitFor(() => expect(workTypeSelect.value).toBe('NS'));
+
+    fireEvent.change(dateInput, { target: { value: '2026-09-15' } });
+    await waitFor(() => expect(workTypeSelect.value).toBe(''));
+
+    await act(async () => {
+      nextDateDeferred.resolve(response({ date: '2026-09-15', isWorkingDay: true, source: 'standard weekday' }));
+    });
+
+    expect(workTypeSelect.value).toBe('G');
+  });
+
+  it('applies an asynchronous default to a pristine new form', async () => {
+    const currentDateDeferred = deferred<JsonResponse>();
+
+    setupPanel((date) => {
+      if (date === '2026-09-13') return currentDateDeferred.promise;
+      return response({ date, isWorkingDay: !isWeekend(date), source: isWeekend(date) ? 'weekend' : 'standard weekday' });
+    });
+
+    await screen.findByDisplayValue('Jan Kowalski');
+    const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
+    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+
+    fireEvent.change(dateInput, { target: { value: '2026-09-13' } });
+    await waitFor(() => expect(workTypeSelect.value).toBe(''));
+
+    await act(async () => {
+      currentDateDeferred.resolve(response({ date: '2026-09-13', isWorkingDay: false, source: 'weekend' }));
+    });
+
+    expect(workTypeSelect.value).toBe('NS');
   });
 
   // 9. brak kodu NS => zachowanie zgodne z dotychczasową aplikacją, bez błędu
