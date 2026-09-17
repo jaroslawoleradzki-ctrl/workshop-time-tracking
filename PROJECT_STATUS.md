@@ -4,10 +4,18 @@
 
 - Projekt: Workshop Time Tracking
 - Aktualna wersja produkcyjna: `0.5.7`
-- Aktualna wersja development: `0.5.7`
+- Aktualna wersja development: `0.5.8`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: v0.5.7 wydane i zweryfikowane; raporty wg zleceń liczą postęp narastająco do końca wybranego okresu, z zachowaniem godzin rzeczywistych dla tego okresu oraz kompatybilności historycznego rozliczenia v0.5.6.
+- Stan prac: v0.5.7 wydane i zweryfikowane; v0.5.8 zintegrowane z `development`, niezależnie zrewidowane i gotowe do akceptacji ręcznej.
+
+Zakres wersji `0.5.8`:
+
+- Domyślny rodzaj czasu pracy uwzględnia decyzję Kalendarza zakładowego: `G` dla zwykłego dnia roboczego i firmowego weekendu roboczego, `NS` dla zwykłej soboty/niedzieli, jeśli kod istnieje, oraz pusty wybór dla dni wolnych i brakujących kodów.
+- Asynchroniczne decyzje kalendarza nie nadpisują ręcznych zmian, danych formularza ani wartości edytowanego wpisu; decyzja dotyczy wyłącznie aktualnie wybranej daty.
+- Zachowano kompatybilność historycznego rozliczenia v0.5.6 i narastającego postępu zleceń v0.5.7.
+
+Weryfikacja v0.5.8: automatyczna zakończona powodzeniem; akceptacja ręczna oczekuje na wykonanie.
 
 Zakres wersji `0.5.7`:
 

@@ -5,6 +5,12 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- Domyślny rodzaj czasu pracy uwzględnia Kalendarz zakładowy: zwykłe dni robocze podpowiadają `G`, zwykłe weekendy `NS` (jeżeli kod istnieje), dni wolne pozostawiają typ pusty, a firmowe weekendy robocze podpowiadają `G`.
+
+### Fixed
+- Domyślny rodzaj czasu pracy nie nadpisuje ręcznego wyboru ani danych edytowanego wpisu po asynchronicznym pobraniu decyzji kalendarza.
+
 ## [0.5.7] - 2026-09-17
 
 ### Changed
