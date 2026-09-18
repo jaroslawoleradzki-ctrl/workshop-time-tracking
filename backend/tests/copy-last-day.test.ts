@@ -378,14 +378,18 @@ class FakePrismaClient {
     deletedAt?: Date | null;
     orderId?: string | null;
     workTimeTypeCode?: string;
+    workShift?: 'FIRST' | 'SECOND' | null;
   }) {
+    const code = params.workTimeTypeCode ?? 'G';
+    const isAbsence = ['UW', 'UOK', 'UŻ', 'L4', 'CUSTOM_ABS'].includes(code);
     this.reports.push({
       id: randomUUID(),
       date: new Date(`${params.date}T00:00:00.000Z`),
       employeeId: params.employeeId,
       orderId: params.orderId || null,
       hours: params.hours ?? 8,
-      workTimeTypeCode: params.workTimeTypeCode ?? 'G',
+      workTimeTypeCode: code,
+      workShift: params.workShift !== undefined ? params.workShift : (isAbsence ? null : 'FIRST'),
       createdByUserId: ADMIN_ID,
       createdAt: new Date(),
       deletedAt: params.deletedAt ?? null,
@@ -993,6 +997,7 @@ describe('POST /api/reports/copy-last-day', () => {
           orderId,
           hours: 8,
           workTimeTypeCode: 'G',
+          workShift: 'FIRST',
           createdByUserId: ADMIN_ID,
           createdAt: new Date(),
           deletedAt: null,
@@ -1004,6 +1009,7 @@ describe('POST /api/reports/copy-last-day', () => {
           orderId,
           hours: 2,
           workTimeTypeCode: 'NDR',
+          workShift: 'FIRST',
           createdByUserId: ADMIN_ID,
           createdAt: new Date(),
           deletedAt: null,
@@ -1118,6 +1124,104 @@ describe('POST /api/reports/copy-last-day', () => {
       );
       expect(copied?.workTimeTypeCode).toBe('UW');
       expect(copied?.workShift).toBeNull();
+    });
+
+    it('should reject copy-last-day when source day contains a historical worked entry with workShift = null', async () => {
+      const Thursday = new Date('2026-07-23T00:00:00.000Z');
+      const orderId = fakePrisma.seedOrder();
+      const historicalId = randomUUID();
+      fakePrisma.reports.push({
+        id: historicalId,
+        date: Thursday,
+        employeeId: EMPLOYEE_A_ID,
+        orderId,
+        hours: 8,
+        workTimeTypeCode: 'G',
+        workShift: null,
+        createdByUserId: ADMIN_ID,
+        createdAt: new Date('2026-07-23T08:00:00.000Z'),
+        deletedAt: null,
+      });
+
+      const res = await request(app)
+        .post('/api/reports/copy-last-day')
+        .set('Authorization', `Bearer ${tokenFor(LEADER_ID)}`)
+        .send({
+          employeeId: EMPLOYEE_A_ID,
+          date: '2026-07-29',
+        })
+        .expect(400);
+
+      expect(res.body.code).toBe('WORK_SHIFT_REQUIRED');
+      expect(res.body.message).toContain('określonej zmiany');
+
+      // ZERO destination rows created
+      const destinationReports = fakePrisma.reports.filter(
+        (r) => r.employeeId === EMPLOYEE_A_ID && sameDate(r.date, new Date('2026-07-29T00:00:00.000Z')),
+      );
+      expect(destinationReports).toHaveLength(0);
+
+      // Source data remains intact
+      const sourceReport = fakePrisma.reports.find((r) => r.id === historicalId);
+      expect(sourceReport).toBeDefined();
+      expect(sourceReport?.workShift).toBeNull();
+    });
+
+    it('should atomically reject mixed-source copy (valid FIRST/SECOND + historical NULL) with ZERO destination rows', async () => {
+      const Thursday = new Date('2026-07-23T00:00:00.000Z');
+      const orderId = fakePrisma.seedOrder();
+      const validEntryId = randomUUID();
+      const historicalNullId = randomUUID();
+
+      fakePrisma.reports.push(
+        {
+          id: validEntryId,
+          date: Thursday,
+          employeeId: EMPLOYEE_A_ID,
+          orderId,
+          hours: 4,
+          workTimeTypeCode: 'G',
+          workShift: 'FIRST',
+          createdByUserId: ADMIN_ID,
+          createdAt: new Date('2026-07-23T08:00:00.000Z'),
+          deletedAt: null,
+        },
+        {
+          id: historicalNullId,
+          date: Thursday,
+          employeeId: EMPLOYEE_A_ID,
+          orderId,
+          hours: 4,
+          workTimeTypeCode: 'NDR',
+          workShift: null, // Historical worked entry without shift
+          createdByUserId: ADMIN_ID,
+          createdAt: new Date('2026-07-23T12:00:00.000Z'),
+          deletedAt: null,
+        },
+      );
+
+      const res = await request(app)
+        .post('/api/reports/copy-last-day')
+        .set('Authorization', `Bearer ${tokenFor(LEADER_ID)}`)
+        .send({
+          employeeId: EMPLOYEE_A_ID,
+          date: '2026-07-29',
+        })
+        .expect(400);
+
+      expect(res.body.code).toBe('WORK_SHIFT_REQUIRED');
+
+      // Entire copy operation rejected -> ZERO destination rows created
+      const destinationReports = fakePrisma.reports.filter(
+        (r) => r.employeeId === EMPLOYEE_A_ID && sameDate(r.date, new Date('2026-07-29T00:00:00.000Z')),
+      );
+      expect(destinationReports).toHaveLength(0);
+
+      // Both source reports remain intact
+      const validSource = fakePrisma.reports.find((r) => r.id === validEntryId);
+      const nullSource = fakePrisma.reports.find((r) => r.id === historicalNullId);
+      expect(validSource?.workShift).toBe('FIRST');
+      expect(nullSource?.workShift).toBeNull();
     });
   });
 });

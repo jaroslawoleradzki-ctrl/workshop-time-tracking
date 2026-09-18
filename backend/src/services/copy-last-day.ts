@@ -193,6 +193,24 @@ export async function copyLastDayForEmployee({
       );
       const typesByCode = new Map(sourceTypes.filter(Boolean).map((type) => [type!.code, type!]));
 
+      const invalidShiftReport = sourceReports.find((report) => {
+        const type = typesByCode.get(report.workTimeTypeCode);
+        const isAbsence = type?.isAbsence ?? false;
+        if (!isAbsence) {
+          return !report.workShift || !['FIRST', 'SECOND'].includes(report.workShift);
+        }
+        return false;
+      });
+
+      if (invalidShiftReport) {
+        throw new CopyLastDayError(
+          400,
+          'WORK_SHIFT_REQUIRED',
+          'Dzień źródłowy zawiera wpisy czasu pracy bez określonej zmiany. Uzupełnij zmianę w źródłowym wpisie przed kopiowaniem.',
+          { sourceDate, sourceCount: sourceReports.length },
+        );
+      }
+
       if (!calendarDay.isWorkingDay) {
         const invalidReport = sourceReports.find((report) => {
           const type = typesByCode.get(report.workTimeTypeCode);
@@ -219,7 +237,7 @@ export async function copyLastDayForEmployee({
             orderId: report.orderId,
             hours: report.hours,
             workTimeTypeCode: report.workTimeTypeCode,
-            workShift: isAbsence ? null : (report.workShift ?? null),
+            workShift: isAbsence ? null : report.workShift,
             createdByUserId: userId,
           };
         }),
