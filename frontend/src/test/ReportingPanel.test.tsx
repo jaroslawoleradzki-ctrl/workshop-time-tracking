@@ -282,6 +282,7 @@ describe('ReportingPanel — Brak karty (missingCard) form interaction', () => {
             orderId: null,
             hours: 8,
             workTimeTypeCode: 'G',
+            workShift: 'FIRST',
             missingCard: true,
             workTimeType: { code: 'G', name: 'Godziny standardowe', requiresOrder: false },
           }
@@ -306,6 +307,7 @@ describe('ReportingPanel — Brak karty (missingCard) form interaction', () => {
             orderId: null,
             hours: 8,
             workTimeTypeCode: 'G',
+            workShift: savedRequestBody.workShift,
             missingCard: savedRequestBody.missingCard,
           },
           warnings: {},
@@ -336,6 +338,10 @@ describe('ReportingPanel — Brak karty (missingCard) form interaction', () => {
     const checkbox = screen.getByLabelText('Brak karty') as HTMLInputElement;
     expect(checkbox.checked).toBe(false);
 
+    // Wybierz zmianę
+    const shiftSelect = screen.getByLabelText('Zmiana') as HTMLSelectElement;
+    fireEvent.change(shiftSelect, { target: { value: 'FIRST' } });
+
     // Zaznacz checkbox
     fireEvent.click(checkbox);
     expect(checkbox.checked).toBe(true);
@@ -347,6 +353,7 @@ describe('ReportingPanel — Brak karty (missingCard) form interaction', () => {
     await waitFor(() => {
       expect(savedRequestBody).not.toBeNull();
       expect(savedRequestBody.missingCard).toBe(true);
+      expect(savedRequestBody.workShift).toBe('FIRST');
     });
   });
 
@@ -378,6 +385,7 @@ describe('ReportingPanel — Brak karty (missingCard) form interaction', () => {
     await waitFor(() => {
       expect(savedRequestBody).not.toBeNull();
       expect(savedRequestBody.missingCard).toBe(false);
+      expect(savedRequestBody.workShift).toBe('FIRST');
     });
   });
 });
@@ -636,7 +644,7 @@ describe('ReportingPanel — default work type and NS/G save & load interaction'
     workTypesDeferred.resolve(response(baseWorkTypes));
 
     // Verify default work type on Monday is 'G'
-    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    const workTypeSelect = screen.getByLabelText('Rodzaj czasu pracy') as HTMLSelectElement;
     await waitFor(() => {
       expect(workTypeSelect.value).toBe('G');
     });
@@ -663,6 +671,7 @@ describe('ReportingPanel — default work type and NS/G save & load interaction'
         orderId: null,
         hours: 8,
         workTimeTypeCode: 'G',
+        workShift: 'FIRST',
         missingCard: false,
         workTimeType: { code: 'G', name: 'Godziny standardowe', requiresOrder: false },
       },
@@ -673,6 +682,7 @@ describe('ReportingPanel — default work type and NS/G save & load interaction'
         orderId: 'order-1',
         hours: 8,
         workTimeTypeCode: 'NS',
+        workShift: 'SECOND',
         missingCard: false,
         order: { orderNumber: 'ZL-001', productCode: 'P1', productName: 'Produkt 1', accountingAccount: '123' },
         workTimeType: { code: 'NS', name: 'Nadgodziny sobota/niedziela', requiresOrder: true },
@@ -699,7 +709,7 @@ describe('ReportingPanel — default work type and NS/G save & load interaction'
     );
 
     await screen.findByDisplayValue('Jan Kowalski');
-    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    const workTypeSelect = screen.getByLabelText('Rodzaj czasu pracy') as HTMLSelectElement;
 
     // Find edit buttons in table
     const editButtons = await screen.findAllByRole('button', { name: 'Edytuj' });
@@ -752,6 +762,7 @@ describe('ReportingPanel — default work type and NS/G save & load interaction'
           orderId: capturedRequestBody.orderId,
           hours: capturedRequestBody.hours,
           workTimeTypeCode: capturedRequestBody.workTimeTypeCode,
+          workShift: capturedRequestBody.workShift,
           missingCard: capturedRequestBody.missingCard,
           order: {
             orderNumber: 'ZL-001',
@@ -787,7 +798,7 @@ describe('ReportingPanel — default work type and NS/G save & load interaction'
     fireEvent.change(dateInput, { target: { value: '2026-09-06' } });
 
     // Verify workTypeSelect defaulted to NS
-    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    const workTypeSelect = screen.getByLabelText('Rodzaj czasu pracy') as HTMLSelectElement;
     await waitFor(() => {
       expect(workTypeSelect.value).toBe('NS');
     });
@@ -800,9 +811,12 @@ describe('ReportingPanel — default work type and NS/G save & load interaction'
     const orderOption = await screen.findByText('Zlecenie: ZL-001');
     fireEvent.click(orderOption);
 
-    // 3. Enter hours
+    // 3. Enter hours and shift
     const hoursInput = screen.getByPlaceholderText('np. 8.00');
     fireEvent.change(hoursInput, { target: { value: '8.00' } });
+
+    const shiftSelect = screen.getByLabelText('Zmiana') as HTMLSelectElement;
+    fireEvent.change(shiftSelect, { target: { value: 'FIRST' } });
 
     // 4. Click save
     const saveButton = screen.getByRole('button', { name: /Zapisz wpis/ });
@@ -817,6 +831,7 @@ describe('ReportingPanel — default work type and NS/G save & load interaction'
         orderId: 'order-1',
         hours: 8,
         workTimeTypeCode: 'NS',
+        workShift: 'FIRST',
         missingCard: false,
       });
     });
@@ -876,7 +891,7 @@ describe('ReportingPanel — default work type and NS/G save & load interaction'
     fireEvent.change(dateInput, { target: { value: '2026-09-06' } });
 
     // Wait for workTypeSelect to become NS
-    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    const workTypeSelect = screen.getByLabelText('Rodzaj czasu pracy') as HTMLSelectElement;
     await waitFor(() => {
       expect(workTypeSelect.value).toBe('NS');
     });
@@ -888,9 +903,12 @@ describe('ReportingPanel — default work type and NS/G save & load interaction'
     const orderOption = await screen.findByText('Zlecenie: ZL-001');
     fireEvent.click(orderOption);
 
-    // Enter hours
+    // Enter hours and shift
     const hoursInput = screen.getByPlaceholderText('np. 8.00');
     fireEvent.change(hoursInput, { target: { value: '8.00' } });
+
+    const shiftSelect = screen.getByLabelText('Zmiana') as HTMLSelectElement;
+    fireEvent.change(shiftSelect, { target: { value: 'FIRST' } });
 
     // Save
     const saveButton = screen.getByRole('button', { name: /Zapisz wpis/ });
@@ -933,9 +951,13 @@ describe('ReportingPanel — default work type and NS/G save & load interaction'
     await screen.findByDisplayValue('Jan Kowalski');
 
     // Manually change to NS
-    const workTypeSelect = screen.getByRole('combobox');
+    const workTypeSelect = screen.getByLabelText('Rodzaj czasu pracy');
     fireEvent.change(workTypeSelect, { target: { value: 'NS' } });
     expect(workTypeSelect).toHaveValue('NS');
+
+    // Select shift
+    const shiftSelect = screen.getByLabelText('Zmiana') as HTMLSelectElement;
+    fireEvent.change(shiftSelect, { target: { value: 'FIRST' } });
 
     // Enter hours but no order
     const hoursInput = screen.getByPlaceholderText('np. 8.00');
@@ -1028,7 +1050,7 @@ describe('ReportingPanel — calendar-aware default work type (v0.5.8)', () => {
     const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
     fireEvent.change(dateInput, { target: { value: '2026-09-14' } });
 
-    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    const workTypeSelect = screen.getByLabelText('Rodzaj czasu pracy') as HTMLSelectElement;
     await waitFor(() => {
       expect(workTypeSelect.value).toBe('G');
     });
@@ -1047,7 +1069,7 @@ describe('ReportingPanel — calendar-aware default work type (v0.5.8)', () => {
     const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
     fireEvent.change(dateInput, { target: { value: '2026-09-13' } });
 
-    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    const workTypeSelect = screen.getByLabelText('Rodzaj czasu pracy') as HTMLSelectElement;
     await waitFor(() => {
       expect(workTypeSelect.value).toBe('NS');
     });
@@ -1059,7 +1081,7 @@ describe('ReportingPanel — calendar-aware default work type (v0.5.8)', () => {
 
     await screen.findByDisplayValue('Jan Kowalski');
     const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
-    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    const workTypeSelect = screen.getByLabelText('Rodzaj czasu pracy') as HTMLSelectElement;
 
     fireEvent.change(dateInput, { target: { value: '2026-09-13' } });
     await waitFor(() => {
@@ -1088,7 +1110,7 @@ describe('ReportingPanel — calendar-aware default work type (v0.5.8)', () => {
 
     await screen.findByDisplayValue('Jan Kowalski');
     const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
-    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    const workTypeSelect = screen.getByLabelText('Rodzaj czasu pracy') as HTMLSelectElement;
 
     fireEvent.change(dateInput, { target: { value: '2026-11-11' } });
     await waitFor(() => {
@@ -1112,7 +1134,7 @@ describe('ReportingPanel — calendar-aware default work type (v0.5.8)', () => {
 
     await screen.findByDisplayValue('Jan Kowalski');
     const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
-    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    const workTypeSelect = screen.getByLabelText('Rodzaj czasu pracy') as HTMLSelectElement;
 
     fireEvent.change(dateInput, { target: { value: '2026-08-14' } });
     await waitFor(() => {
@@ -1136,7 +1158,7 @@ describe('ReportingPanel — calendar-aware default work type (v0.5.8)', () => {
 
     await screen.findByDisplayValue('Jan Kowalski');
     const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
-    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    const workTypeSelect = screen.getByLabelText('Rodzaj czasu pracy') as HTMLSelectElement;
 
     fireEvent.change(dateInput, { target: { value: '2026-11-14' } });
     await waitFor(() => {
@@ -1160,7 +1182,7 @@ describe('ReportingPanel — calendar-aware default work type (v0.5.8)', () => {
 
     await screen.findByDisplayValue('Jan Kowalski');
     const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
-    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    const workTypeSelect = screen.getByLabelText('Rodzaj czasu pracy') as HTMLSelectElement;
 
     // Thursday: standard weekday -> G
     fireEvent.change(dateInput, { target: { value: '2026-08-13' } });
@@ -1201,7 +1223,7 @@ describe('ReportingPanel — calendar-aware default work type (v0.5.8)', () => {
 
     await screen.findByDisplayValue('Jan Kowalski');
     const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
-    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    const workTypeSelect = screen.getByLabelText('Rodzaj czasu pracy') as HTMLSelectElement;
 
     // Fast switch: 2026-08-14 (slow) -> immediately 2026-09-14 (fast)
     fireEvent.change(dateInput, { target: { value: '2026-08-14' } });
@@ -1234,7 +1256,7 @@ describe('ReportingPanel — calendar-aware default work type (v0.5.8)', () => {
 
     await screen.findByDisplayValue('Jan Kowalski');
     const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
-    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    const workTypeSelect = screen.getByLabelText('Rodzaj czasu pracy') as HTMLSelectElement;
 
     fireEvent.change(dateInput, { target: { value: '2026-09-15' } });
     await waitFor(() => expect(workTypeSelect.value).toBe(''));
@@ -1258,6 +1280,7 @@ describe('ReportingPanel — calendar-aware default work type (v0.5.8)', () => {
       orderId: 'order-1',
       hours: 6.5,
       workTimeTypeCode: 'NS',
+      workShift: 'SECOND',
       missingCard: true,
       order: { orderNumber: 'ZL-001', productCode: 'P1', productName: 'Produkt 1', accountingAccount: '123' },
       workTimeType: { code: 'NS', name: 'Nadgodziny sobota/niedziela', requiresOrder: true },
@@ -1277,7 +1300,7 @@ describe('ReportingPanel — calendar-aware default work type (v0.5.8)', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Edytuj' }));
 
-    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    const workTypeSelect = screen.getByLabelText('Rodzaj czasu pracy') as HTMLSelectElement;
     const hoursInput = screen.getByPlaceholderText('np. 8.00') as HTMLInputElement;
     await waitFor(() => {
       expect(screen.getByText('Edytuj wpis czasu pracy')).toBeInTheDocument();
@@ -1312,7 +1335,7 @@ describe('ReportingPanel — calendar-aware default work type (v0.5.8)', () => {
 
     await screen.findByDisplayValue('Jan Kowalski');
     const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
-    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    const workTypeSelect = screen.getByLabelText('Rodzaj czasu pracy') as HTMLSelectElement;
 
     fireEvent.change(dateInput, { target: { value: '2026-09-13' } });
     await waitFor(() => expect(workTypeSelect.value).toBe('NS'));
@@ -1337,7 +1360,7 @@ describe('ReportingPanel — calendar-aware default work type (v0.5.8)', () => {
 
     await screen.findByDisplayValue('Jan Kowalski');
     const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
-    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    const workTypeSelect = screen.getByLabelText('Rodzaj czasu pracy') as HTMLSelectElement;
 
     fireEvent.change(dateInput, { target: { value: '2026-09-13' } });
     await waitFor(() => expect(workTypeSelect.value).toBe(''));
@@ -1362,7 +1385,7 @@ describe('ReportingPanel — calendar-aware default work type (v0.5.8)', () => {
 
     await screen.findByDisplayValue('Jan Kowalski');
     const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
-    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    const workTypeSelect = screen.getByLabelText('Rodzaj czasu pracy') as HTMLSelectElement;
 
     fireEvent.change(dateInput, { target: { value: '2026-09-13' } });
     await waitFor(() => {
@@ -1381,13 +1404,249 @@ describe('ReportingPanel — calendar-aware default work type (v0.5.8)', () => {
 
     await screen.findByDisplayValue('Jan Kowalski');
     const dateInput = screen.getByLabelText(/Data raportu:/) as HTMLInputElement;
-    const workTypeSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    const workTypeSelect = screen.getByLabelText('Rodzaj czasu pracy') as HTMLSelectElement;
 
     fireEvent.change(dateInput, { target: { value: '2026-09-14' } });
 
     // Fallback: standard Monday resolves to G safely
     await waitFor(() => {
       expect(workTypeSelect.value).toBe('G');
+    });
+  });
+});
+
+describe('ReportingPanel — Work Shift Tracking UI (v0.5.9)', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+  let capturedRequestBody: any = null;
+
+  const baseWorkTypes = [
+    { code: 'G', name: 'Godziny standardowe', requiresOrder: false, isAbsence: false },
+    { code: 'UW', name: 'Urlop wypoczynkowy', requiresOrder: false, isAbsence: true },
+    { code: 'L4', name: 'Zwolnienie lekarskie', requiresOrder: false, isAbsence: true },
+  ];
+
+  const baseEmployee = {
+    id: EMPLOYEE_ID,
+    fullName: 'Jan Kowalski',
+    firstName: 'Jan',
+    lastName: 'Kowalski',
+    isActive: true,
+  };
+
+  const initialReports = [
+    {
+      id: 'rep-first-1',
+      date: '2026-09-14',
+      employeeId: EMPLOYEE_ID,
+      orderId: null,
+      hours: 8,
+      workTimeTypeCode: 'G',
+      workShift: 'FIRST',
+      missingCard: false,
+      workTimeType: { code: 'G', name: 'Godziny standardowe', requiresOrder: false, isAbsence: false },
+    },
+    {
+      id: 'rep-second-2',
+      date: '2026-09-14',
+      employeeId: EMPLOYEE_ID,
+      orderId: null,
+      hours: 4,
+      workTimeTypeCode: 'G',
+      workShift: 'SECOND',
+      missingCard: false,
+      workTimeType: { code: 'G', name: 'Godziny standardowe', requiresOrder: false, isAbsence: false },
+    },
+    {
+      id: 'rep-hist-3',
+      date: '2026-09-14',
+      employeeId: EMPLOYEE_ID,
+      orderId: null,
+      hours: 8,
+      workTimeTypeCode: 'G',
+      workShift: null, // Historical entry without shift
+      missingCard: false,
+      workTimeType: { code: 'G', name: 'Godziny standardowe', requiresOrder: false, isAbsence: false },
+    },
+  ];
+
+  beforeEach(() => {
+    capturedRequestBody = null;
+    fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url === '/api/employees?activeOnly=true') return response([baseEmployee]);
+      if (url === '/api/orders/active') return response([]);
+      if (url === '/api/work-time-types') return response(baseWorkTypes);
+      if (url.startsWith('/api/reports/by-employee-date')) {
+        return response(initialReports);
+      }
+      if (url.startsWith('/api/company-calendar/day/')) {
+        const date = url.slice('/api/company-calendar/day/'.length);
+        return response({ date, isWorkingDay: true, source: 'standard weekday', reason: null });
+      }
+      if (url === '/api/reports/check-warnings') {
+        return response({ warnStandard: false, warnTotal12: false, warnTotal24: false, totalStandard: 0, totalHours: 0 });
+      }
+      if (url === '/api/reports' || url.startsWith('/api/reports/')) {
+        capturedRequestBody = JSON.parse(init?.body as string);
+        return response({
+          report: {
+            id: 'saved-rep-1',
+            date: capturedRequestBody.date || '2026-09-14',
+            employeeId: capturedRequestBody.employeeId || EMPLOYEE_ID,
+            orderId: capturedRequestBody.orderId || null,
+            hours: capturedRequestBody.hours,
+            workTimeTypeCode: capturedRequestBody.workTimeTypeCode,
+            workShift: capturedRequestBody.workShift,
+            missingCard: capturedRequestBody.missingCard || false,
+          },
+          warnings: {},
+        }, 200);
+      }
+
+      throw new Error(`Unhandled: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('renders shift select with I and II options for worked time, and renders shift badges in table', async () => {
+    render(
+      <ReportingPanel
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    await screen.findByDisplayValue('Jan Kowalski');
+
+    const shiftSelect = screen.getByLabelText('Zmiana') as HTMLSelectElement;
+    expect(shiftSelect).toBeEnabled();
+    expect(screen.getByRole('option', { name: '-- Wybierz zmianę --' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'I' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'II' })).toBeInTheDocument();
+
+    // Verify shift labels in daily reports table
+    expect(screen.getByText('I zmiana')).toBeInTheDocument();
+    expect(screen.getByText('II zmiana')).toBeInTheDocument();
+    expect(screen.getByText('Brak danych o zmianie')).toBeInTheDocument();
+  });
+
+  it('disables shift select and displays "Nie dotyczy (nieobecność)" when an absence type is selected', async () => {
+    render(
+      <ReportingPanel
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    await screen.findByDisplayValue('Jan Kowalski');
+
+    const workTypeSelect = screen.getByLabelText('Rodzaj czasu pracy') as HTMLSelectElement;
+    const shiftSelect = screen.getByLabelText('Zmiana') as HTMLSelectElement;
+
+    // Initially worked time 'G' is selected -> shift select enabled
+    expect(shiftSelect).toBeEnabled();
+
+    // Select absence 'UW'
+    fireEvent.change(workTypeSelect, { target: { value: 'UW' } });
+
+    // Shift select should become disabled with "Nie dotyczy (nieobecność)"
+    expect(shiftSelect).toBeDisabled();
+    expect(shiftSelect.value).toBe('');
+    expect(screen.getByRole('option', { name: 'Nie dotyczy (nieobecność)' })).toBeInTheDocument();
+
+    // Switch back to 'G' -> shift select re-enabled
+    fireEvent.change(workTypeSelect, { target: { value: 'G' } });
+    expect(shiftSelect).toBeEnabled();
+    expect(shiftSelect.value).toBe('');
+  });
+
+  it('displays client-side validation error if shift is not selected for worked time', async () => {
+    render(
+      <ReportingPanel
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    await screen.findByDisplayValue('Jan Kowalski');
+
+    const hoursInput = screen.getByPlaceholderText('np. 8.00');
+    fireEvent.change(hoursInput, { target: { value: '8.00' } });
+
+    // Submit without selecting shift
+    const saveButton = screen.getByRole('button', { name: /Zapisz wpis/ });
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('Wybór zmiany (I lub II zmiana) jest wymagany dla czasu pracy.')).toBeInTheDocument();
+    });
+    expect(capturedRequestBody).toBeNull();
+  });
+
+  it('allows saving worked time when shift is chosen, sending workShift in POST payload', async () => {
+    render(
+      <ReportingPanel
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    await screen.findByDisplayValue('Jan Kowalski');
+
+    const hoursInput = screen.getByPlaceholderText('np. 8.00');
+    fireEvent.change(hoursInput, { target: { value: '8.00' } });
+
+    const shiftSelect = screen.getByLabelText('Zmiana') as HTMLSelectElement;
+    fireEvent.change(shiftSelect, { target: { value: 'SECOND' } });
+
+    const saveButton = screen.getByRole('button', { name: /Zapisz wpis/ });
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(capturedRequestBody).not.toBeNull();
+      expect(capturedRequestBody.workShift).toBe('SECOND');
+      expect(capturedRequestBody.hours).toBe(8);
+    });
+  });
+
+  it('editing historical record without shift requires explicit shift selection before saving', async () => {
+    render(
+      <ReportingPanel
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    await screen.findByDisplayValue('Jan Kowalski');
+
+    // Click Edit on the 3rd entry (historical without shift)
+    const editButtons = await screen.findAllByRole('button', { name: 'Edytuj' });
+    fireEvent.click(editButtons[2]);
+
+    const shiftSelect = screen.getByLabelText('Zmiana') as HTMLSelectElement;
+    expect(shiftSelect.value).toBe('');
+
+    // Attempt to save without choosing shift
+    const saveButton = screen.getByRole('button', { name: /Zapisz zmiany/ });
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('Wybór zmiany (I lub II zmiana) jest wymagany dla czasu pracy.')).toBeInTheDocument();
+    });
+
+    // Now select 'FIRST' and save
+    fireEvent.change(shiftSelect, { target: { value: 'FIRST' } });
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(capturedRequestBody).not.toBeNull();
+      expect(capturedRequestBody.workShift).toBe('FIRST');
     });
   });
 });

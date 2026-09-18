@@ -54,7 +54,7 @@ Od wersji `0.3.7` wszystkie pliki raportowe dla użytkownika (Zlecenia, Miesięc
 | Eksport | Filtry | Kolumny arkusza |
 |---|---|---|
 | Według zleceń | `dateFrom`, `dateTo`, `status`, `orderNumber`, `onlyWithHours`, `closureReport` | Numer zlecenia; Numer produktu; Nazwa produktu; Konto księgowe; Ilość; Godziny planowane (estymata); Godziny rzeczywiste; Odchylenie (plan - rzecz.); Procent realizacji (%); Status zlecenia; Rzeczywista data zakończenia |
-| Według pracowników | `dateFrom`, `dateTo`, `employeeId` | Pracownik; Suma godzin z nadgodzinami; Suma godzin bez nadgodzin; dynamiczne kolumny rodzajów czasu |
+| Według pracowników | `dateFrom`, `dateTo`, `employeeId` | Pracownik; Suma godzin z nadgodzinami; Suma godzin bez nadgodzin; I zmiana; II zmiana; [Brak danych o zmianie — warunkowo]; dynamiczne kolumny rodzajów czasu |
 | Według kont | `dateFrom`, `dateTo`, `accountingAccount` | Data; Konto księgowe; Pracownik; Zlecenie; Produkt; Liczba godzin; Rodzaj czasu pracy |
 | Szczegółowy | `dateFrom`, `dateTo`, `employeeId`, `orderId` | Data; Pracownik; Numer zlecenia; Numer produktu; Nazwa produktu; Konto księgowe; Liczba godzin; Typ czasu pracy; Wprowadził użytkownik; Data wpisu w bazie |
 | Okresy nieobecności | `dateFrom`, `dateTo`, `employeeId`, `workTimeTypeCode` | Imię i nazwisko; Rodzaj nieobecności; Od; Do; Liczba dni nieobecności |

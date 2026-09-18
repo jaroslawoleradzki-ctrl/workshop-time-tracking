@@ -43,6 +43,10 @@ type EmployeeReportRow = {
   employeeId: string;
   employeeName: string;
   suma: number;
+  sumaBezNadgodzin: number;
+  shiftFirst: number;
+  shiftSecond: number;
+  shiftUnspecified: number;
   [workTimeTypeCode: string]: string | number;
 };
 
@@ -100,6 +104,9 @@ type InternalPivotRow = {
   sortKey: string;
   suma: number;
   sumaBezNadgodzin: number;
+  shiftFirst: number;
+  shiftSecond: number;
+  shiftUnspecified: number;
   counts: Record<string, number>;
 };
 
@@ -294,12 +301,16 @@ export async function getEmployeeReportRows(
         sortKey,
         suma: 0,
         sumaBezNadgodzin: 0,
+        shiftFirst: 0,
+        shiftSecond: 0,
+        shiftUnspecified: 0,
         counts: {},
       };
     }
 
     const hours = Number(report.hours);
     const code = report.workTimeTypeCode;
+    const isAbsence = report.workTimeType?.isAbsence ?? false;
     const isOvertime =
       OVERTIME_CODES.includes(code) ||
       code.startsWith('ND') ||
@@ -310,6 +321,15 @@ export async function getEmployeeReportRows(
     pivot[employeeId].suma += hours;
     if (!isOvertime) {
       pivot[employeeId].sumaBezNadgodzin += hours;
+    }
+    if (!isAbsence) {
+      if (report.workShift === 'FIRST') {
+        pivot[employeeId].shiftFirst += hours;
+      } else if (report.workShift === 'SECOND') {
+        pivot[employeeId].shiftSecond += hours;
+      } else {
+        pivot[employeeId].shiftUnspecified += hours;
+      }
     }
   });
 
@@ -1009,6 +1029,7 @@ router.get('/report-detailed', async (req: AuthRequest, res: Response) => {
       accountingAccount: r.order?.accountingAccount || 'brak',
       hours: Number(r.hours),
       workTimeTypeCode: r.workTimeTypeCode,
+      workShift: r.workShift,
       creatorName: r.createdByUser.fullName,
       createdAt: r.createdAt.toISOString(),
       missingCard: r.missingCard,
@@ -1141,10 +1162,16 @@ router.get('/export/by-employee', async (req: AuthRequest, res: Response) => {
       getEmployeeReportTypes(),
     ]);
 
+    const hasUnspecified = rows.some((r) => (r.shiftUnspecified || 0) > 0);
+    const shiftHeaders = hasUnspecified
+      ? ['I zmiana', 'II zmiana', 'Brak danych o zmianie']
+      : ['I zmiana', 'II zmiana'];
+
     const headers = [
       'Pracownik',
       'Suma godzin z nadgodzinami',
       'Suma godzin bez nadgodzin',
+      ...shiftHeaders,
       ...workTimeTypes.map((type) => `${type.code} (${type.name})`),
     ];
 
@@ -1152,10 +1179,13 @@ router.get('/export/by-employee', async (req: AuthRequest, res: Response) => {
       row.employeeName,
       row.suma,
       row.sumaBezNadgodzin,
+      row.shiftFirst,
+      row.shiftSecond,
+      ...(hasUnspecified ? [row.shiftUnspecified] : []),
       ...workTimeTypes.map((type) => Number(row[type.code]) || 0),
     ]);
     const numberColumns = Array.from(
-      { length: workTimeTypes.length + 2 },
+      { length: headers.length - 1 },
       (_, index) => index + 2,
     );
 

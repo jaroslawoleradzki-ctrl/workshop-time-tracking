@@ -157,6 +157,7 @@ export async function copyLastDayForEmployee({
           orderId: true,
           hours: true,
           workTimeTypeCode: true,
+          workShift: true,
         },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         take: MAX_COPY_SOURCE_REPORTS + 1,
@@ -181,17 +182,18 @@ export async function copyLastDayForEmployee({
         );
       }
 
+      const sourceTypeCodes = [...new Set(sourceReports.map((report) => report.workTimeTypeCode))];
+      const sourceTypes = await Promise.all(
+        sourceTypeCodes.map((code) =>
+          tx.workTimeType.findUnique({
+            where: { code },
+            select: { code: true, isAbsence: true, requiresOrder: true },
+          }),
+        ),
+      );
+      const typesByCode = new Map(sourceTypes.filter(Boolean).map((type) => [type!.code, type!]));
+
       if (!calendarDay.isWorkingDay) {
-        const sourceTypeCodes = [...new Set(sourceReports.map((report) => report.workTimeTypeCode))];
-        const sourceTypes = await Promise.all(
-          sourceTypeCodes.map((code) =>
-            tx.workTimeType.findUnique({
-              where: { code },
-              select: { code: true, isAbsence: true, requiresOrder: true },
-            }),
-          ),
-        );
-        const typesByCode = new Map(sourceTypes.filter(Boolean).map((type) => [type!.code, type!]));
         const invalidReport = sourceReports.find((report) => {
           const type = typesByCode.get(report.workTimeTypeCode);
           return !type || !isWorkTimeReportAllowedOnCalendarDay(calendarDay, type, report.orderId);
@@ -208,14 +210,19 @@ export async function copyLastDayForEmployee({
       }
 
       const created = await tx.workTimeReport.createMany({
-        data: sourceReports.map((report) => ({
-          date: targetDateValue,
-          employeeId: report.employeeId,
-          orderId: report.orderId,
-          hours: report.hours,
-          workTimeTypeCode: report.workTimeTypeCode,
-          createdByUserId: userId,
-        })),
+        data: sourceReports.map((report) => {
+          const type = typesByCode.get(report.workTimeTypeCode);
+          const isAbsence = type?.isAbsence ?? false;
+          return {
+            date: targetDateValue,
+            employeeId: report.employeeId,
+            orderId: report.orderId,
+            hours: report.hours,
+            workTimeTypeCode: report.workTimeTypeCode,
+            workShift: isAbsence ? null : (report.workShift ?? null),
+            createdByUserId: userId,
+          };
+        }),
       });
 
       // One atomic audit event describes the whole copy operation. Audit

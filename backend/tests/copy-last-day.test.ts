@@ -43,6 +43,7 @@ interface FakeReport {
   orderId: string | null;
   hours: number;
   workTimeTypeCode: string;
+  workShift?: 'FIRST' | 'SECOND' | null;
   createdByUserId: string;
   createdAt: Date;
   deletedAt: Date | null;
@@ -172,6 +173,7 @@ class FakeTransaction {
           orderId: report.orderId,
           hours: report.hours,
           workTimeTypeCode: report.workTimeTypeCode,
+          workShift: report.workShift ?? null,
           missingCard: report.missingCard ?? false,
         }));
       return typeof take === 'number' ? reports.slice(0, take) : reports;
@@ -260,9 +262,12 @@ class FakePrismaClient {
 
   workTimeType = {
     findUnique: async ({ where }: any) =>
-      this.workTimeTypes.get(where.code) || (where.code === 'G'
-        ? { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false }
-        : null),
+      this.workTimeTypes.get(where.code) || {
+        code: where.code,
+        name: where.code,
+        isAbsence: ['UW', 'UOK', 'UŻ', 'L4'].includes(where.code),
+        requiresOrder: ['NS', 'NDR'].includes(where.code),
+      },
   };
 
   order = {
@@ -475,6 +480,7 @@ function createReportRequest(employeeId = EMPLOYEE_A_ID, date = '2026-07-16') {
       date,
       hours: 8,
       workTimeTypeCode: 'G',
+      workShift: 'FIRST',
     });
 }
 
@@ -704,6 +710,7 @@ describe('POST /api/reports/copy-last-day', () => {
           date: '2026-07-16',
           hours: 6,
           workTimeTypeCode: 'G',
+          workShift: 'FIRST',
           missingCard: true,
         })
         .expect(201);
@@ -720,6 +727,7 @@ describe('POST /api/reports/copy-last-day', () => {
           date: '2026-07-16',
           hours: 6,
           workTimeTypeCode: 'G',
+          workShift: 'FIRST',
         })
         .expect(201);
 
@@ -735,6 +743,7 @@ describe('POST /api/reports/copy-last-day', () => {
         orderId: null,
         hours: 8,
         workTimeTypeCode: 'G',
+        workShift: 'FIRST',
         createdByUserId: ADMIN_ID,
         createdAt: new Date(),
         deletedAt: null,
@@ -749,6 +758,7 @@ describe('POST /api/reports/copy-last-day', () => {
           date: '2026-07-16',
           hours: 8,
           workTimeTypeCode: 'G',
+          workShift: 'FIRST',
           missingCard: true,
         })
         .expect(200);
@@ -765,6 +775,7 @@ describe('POST /api/reports/copy-last-day', () => {
         orderId: null,
         hours: 8,
         workTimeTypeCode: 'G',
+        workShift: 'FIRST',
         createdByUserId: ADMIN_ID,
         createdAt: new Date(),
         deletedAt: null,
@@ -779,6 +790,7 @@ describe('POST /api/reports/copy-last-day', () => {
           date: '2026-07-16',
           hours: 8,
           workTimeTypeCode: 'G',
+          workShift: 'FIRST',
           missingCard: false,
         })
         .expect(200);
@@ -1026,15 +1038,66 @@ describe('POST /api/reports/copy-last-day', () => {
       );
     });
 
-    it('should copy non-absence work time types that do not require an order (e.g. SZK)', async () => {
+    it('should preserve workShift for worked entries (FIRST and SECOND)', async () => {
+      const Thursday = new Date('2026-07-23T00:00:00.000Z');
+      const orderId = randomUUID();
+      fakePrisma.orders.push({ id: orderId, deletedAt: null });
+
+      fakePrisma.reports.push(
+        {
+          id: randomUUID(),
+          date: Thursday,
+          employeeId: EMPLOYEE_A_ID,
+          orderId,
+          hours: 8,
+          workTimeTypeCode: 'G',
+          workShift: 'FIRST',
+          createdByUserId: ADMIN_ID,
+          createdAt: new Date('2026-07-23T08:00:00.000Z'),
+          deletedAt: null,
+        },
+        {
+          id: randomUUID(),
+          date: Thursday,
+          employeeId: EMPLOYEE_A_ID,
+          orderId,
+          hours: 4,
+          workTimeTypeCode: 'NDR',
+          workShift: 'SECOND',
+          createdByUserId: ADMIN_ID,
+          createdAt: new Date('2026-07-23T16:00:00.000Z'),
+          deletedAt: null,
+        },
+      );
+
+      const res = await request(app)
+        .post('/api/reports/copy-last-day')
+        .set('Authorization', `Bearer ${tokenFor(LEADER_ID)}`)
+        .send({
+          employeeId: EMPLOYEE_A_ID,
+          date: '2026-07-29',
+        })
+        .expect(201);
+
+      expect(res.body.createdCount).toBe(2);
+      const copiedReports = fakePrisma.reports.filter(
+        (r) => r.employeeId === EMPLOYEE_A_ID && sameDate(r.date, new Date('2026-07-29T00:00:00.000Z')),
+      );
+      expect(copiedReports).toHaveLength(2);
+      expect(copiedReports.find((r) => r.workTimeTypeCode === 'G')?.workShift).toBe('FIRST');
+      expect(copiedReports.find((r) => r.workTimeTypeCode === 'NDR')?.workShift).toBe('SECOND');
+    });
+
+    it('should never assign a workShift to a copied absence entry', async () => {
       const Thursday = new Date('2026-07-23T00:00:00.000Z');
       fakePrisma.reports.push({
         id: randomUUID(),
         date: Thursday,
-        employeeId: EMPLOYEE_B_ID,
+        employeeId: EMPLOYEE_A_ID,
         orderId: null,
         hours: 8,
-        workTimeTypeCode: 'SZK',
+        workTimeTypeCode: 'UW',
+        workShift: null,
         createdByUserId: ADMIN_ID,
         createdAt: new Date(),
         deletedAt: null,
@@ -1044,16 +1107,17 @@ describe('POST /api/reports/copy-last-day', () => {
         .post('/api/reports/copy-last-day')
         .set('Authorization', `Bearer ${tokenFor(LEADER_ID)}`)
         .send({
-          employeeId: EMPLOYEE_B_ID,
+          employeeId: EMPLOYEE_A_ID,
           date: '2026-07-29',
         })
         .expect(201);
 
       expect(res.body.createdCount).toBe(1);
       const copied = fakePrisma.reports.find(
-        (r) => r.employeeId === EMPLOYEE_B_ID && sameDate(r.date, new Date('2026-07-29T00:00:00.000Z')),
+        (r) => r.employeeId === EMPLOYEE_A_ID && sameDate(r.date, new Date('2026-07-29T00:00:00.000Z')),
       );
-      expect(copied?.workTimeTypeCode).toBe('SZK');
+      expect(copied?.workTimeTypeCode).toBe('UW');
+      expect(copied?.workShift).toBeNull();
     });
   });
 });
