@@ -33,7 +33,7 @@ Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.5.2.
 - Wpis wymaga daty, pracownika, liczby godzin większej od zera i istniejącego kodu rodzaju czasu pracy.
 - **Zmiany robocze (`workShift`)**:
   - Dla czasu przepracowanego (`isAbsence=false`) wybór zmiany (`FIRST` – I zmiana, `SECOND` – II zmiana) jest **bezwzględnie wymagany**. Próba zapisu bez wybranej zmiany kończy się błędem walidacji (kod `WORK_SHIFT_REQUIRED`, HTTP 400).
-  - Dla nieobecności (`isAbsence=true`) pole zmiany jest zablokowane i nieaktywne w interfejsie (`Nie dotyczy (nieobecność)`), a API oraz baza danych zawsze wymuszają wartość `workShift=null`. Próba przesłania wartości zmiany dla nieobecności jest odrzucana (kod `WORK_SHIFT_FORBIDDEN_FOR_ABSENCE`, HTTP 400).
+  - Dla nieobecności (`isAbsence=true`) pole zmiany jest zablokowane i nieaktywne w interfejsie (`Nie dotyczy (nieobecność)`), a API oraz baza danych zawsze wymuszają wartość `workShift=null`. Próba przesłania wartości zmiany dla nieobecności jest odrzucana (kod `SHIFT_NOT_ALLOWED_FOR_ABSENCE`, HTTP 400).
   - Wpisy historyczne utworzone przed wersją 0.5.9 posiadają wartość `workShift=null` i pozostają w pełni ważne. Podczas edycji wpisu historycznego bez przypisanej zmiany wymagane jest jej jawne uzupełnienie przed zapisem.
   - Godziny nieobecności nigdy nie wliczają się do sum godzin na zmianach w raportach i zestawieniach analitycznych.
 - Wpis raportu czasu może zostać oznaczony jako „Brak karty” (`missingCard`) w sytuacji, gdy pracownik nie posiadał lub nie użył karty podczas rejestracji czasu pracy. Wartość ta jest przechowywana w bazie danych jako pole logiczne (domyślnie `false`).
