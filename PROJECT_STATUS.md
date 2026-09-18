@@ -7,7 +7,7 @@
 - Aktualna wersja development: `0.5.9`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: v0.5.7 wydane i zweryfikowane; v0.5.8 zintegrowane z `development`; v0.5.9 zaimplementowane na gałęzi `feature/v0.5.9-work-shift-tracking`, z pełną weryfikacją automatyczną.
+- Stan prac: v0.5.8 wydane i zweryfikowane; v0.5.9 zintegrowane z `development`, z pełną weryfikacją automatyczną.
 
 Zakres wersji `0.5.9`:
 
@@ -19,7 +19,7 @@ Zakres wersji `0.5.9`:
 
 ## Weryfikacja wersji 0.5.9
 
-- backend: 209 testów zakończonych powodzeniem (15 plików testowych),
+- backend: 211 testów zakończonych powodzeniem (15 plików testowych),
 - backend: build (`npm run build`) zakończony powodzeniem,
 - frontend: 121 testów zakończonych powodzeniem (10 plików testowych),
 - frontend: lint (`npm run lint`) oraz build (`npm run build`) zakończone powodzeniem,
