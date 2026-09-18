@@ -197,7 +197,7 @@ export async function copyLastDayForEmployee({
         const type = typesByCode.get(report.workTimeTypeCode);
         const isAbsence = type?.isAbsence ?? false;
         if (!isAbsence) {
-          return !report.workShift || !['FIRST', 'SECOND'].includes(report.workShift);
+          return !report.workShift || !['FIRST', 'SECOND', 'THIRD'].includes(report.workShift);
         }
         return false;
       });

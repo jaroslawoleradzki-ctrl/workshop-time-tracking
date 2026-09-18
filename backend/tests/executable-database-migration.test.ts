@@ -268,12 +268,12 @@ describe('Executable Database Migration and Production Seed Tests (v0.5.4)', () 
         stdio: 'ignore',
       });
 
-      // Verify _prisma_migrations now has 11 migrations and v0.5.4 & v0.5.9 migrations are applied
+      // Verify _prisma_migrations now has 12 migrations and v0.5.4, v0.5.9 initial and rework migrations are applied
       const postMigrations: Array<{ migration_name: string; rolled_back_at: Date | null }> =
         await prismaUpgrade.$queryRaw`
           SELECT migration_name, rolled_back_at FROM "_prisma_migrations" ORDER BY started_at ASC;
         `;
-      expect(postMigrations).toHaveLength(11);
+      expect(postMigrations).toHaveLength(12);
       const hardeningMigration = postMigrations.find((m) =>
         m.migration_name.includes('20260908120000_canonical_work_time_types_hardening'),
       );
@@ -285,6 +285,12 @@ describe('Executable Database Migration and Production Seed Tests (v0.5.4)', () 
       );
       expect(workShiftMigration).toBeDefined();
       expect(workShiftMigration!.rolled_back_at).toBeNull();
+
+      const thirdShiftMigration = postMigrations.find((m) =>
+        m.migration_name.includes('20260918190000_add_third_work_shift'),
+      );
+      expect(thirdShiftMigration).toBeDefined();
+      expect(thirdShiftMigration!.rolled_back_at).toBeNull();
 
       // STEP 2: Production seed command using compiled JavaScript artifact
       execSync('node dist/prisma/seed.js', {

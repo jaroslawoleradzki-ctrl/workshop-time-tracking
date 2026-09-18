@@ -278,7 +278,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     }
 
     // 2c. Validate shift according to work time type semantics
-    let validatedShift: 'FIRST' | 'SECOND' | null = null;
+    let validatedShift: 'FIRST' | 'SECOND' | 'THIRD' | null = null;
     if (type.isAbsence) {
       if (workShift !== null && workShift !== undefined && workShift !== '') {
         return res.status(400).json({
@@ -288,9 +288,9 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       }
       validatedShift = null;
     } else {
-      if (!workShift || !['FIRST', 'SECOND'].includes(workShift)) {
+      if (!workShift || !['FIRST', 'SECOND', 'THIRD'].includes(workShift)) {
         return res.status(400).json({
-          message: 'Wybór zmiany (I lub II zmiana) jest wymagany dla czasu pracy.',
+          message: 'Wybór zmiany (I, II lub III zmiana) jest wymagany dla czasu pracy.',
           code: 'WORK_SHIFT_REQUIRED',
         });
       }
@@ -420,7 +420,7 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
     }
 
     // Validate shift according to work time type semantics
-    let validatedShift: 'FIRST' | 'SECOND' | null = null;
+    let validatedShift: 'FIRST' | 'SECOND' | 'THIRD' | null = null;
     if (type.isAbsence) {
       if (workShift !== null && workShift !== undefined && workShift !== '') {
         return res.status(400).json({
@@ -430,9 +430,9 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
       }
       validatedShift = null;
     } else {
-      if (!workShift || !['FIRST', 'SECOND'].includes(workShift)) {
+      if (!workShift || !['FIRST', 'SECOND', 'THIRD'].includes(workShift)) {
         return res.status(400).json({
-          message: 'Wybór zmiany (I lub II zmiana) jest wymagany dla czasu pracy.',
+          message: 'Wybór zmiany (I, II lub III zmiana) jest wymagany dla czasu pracy.',
           code: 'WORK_SHIFT_REQUIRED',
         });
       }

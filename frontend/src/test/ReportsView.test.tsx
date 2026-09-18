@@ -88,14 +88,13 @@ describe('ReportsView — miesięczny raport pracowników', () => {
         return response([{
           employeeId: '20000000-0000-4000-8000-000000000001',
           employeeName: 'Kowalski Jan',
+          workShift: 'FIRST',
+          workShiftLabel: 'I',
           G: 8,
           NOC: 2.5,
           LEGACY: 3,
           suma: 13.5,
           sumaBezNadgodzin: 13.5,
-          shiftFirst: 8,
-          shiftSecond: 2.5,
-          shiftUnspecified: 0,
         }]);
       }
       if (url.startsWith('/api/analytics/report-by-account')) {
@@ -281,10 +280,9 @@ describe('ReportsView — miesięczny raport pracowników', () => {
 
     expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
       'Pracownik',
+      'Zmiana',
       'Suma godzin z nadgodzinami',
       'Suma godzin bez nadgodzin',
-      'I zmiana',
-      'II zmiana',
       'G (Standardowe godziny pracy)',
       'NDR (Nadgodziny)',
       'NS (Nadgodziny sobota/niedziela)',
@@ -295,7 +293,7 @@ describe('ReportsView — miesięczny raport pracowników', () => {
       'NOC (Zmiana nocna)',
     ]);
     expect(screen.queryByRole('columnheader', { name: /LEGACY/ })).not.toBeInTheDocument();
-    expect(screen.getAllByText('2.5 h')).toHaveLength(2);
+    expect(screen.getByText('2.5 h')).toBeInTheDocument();
   });
 
   it('exports the same employee rows and dictionary columns to CSV as the table', async () => {
@@ -332,36 +330,63 @@ describe('ReportsView — miesięczny raport pracowników', () => {
 
     expect(lines[5]).toBe([
       'Pracownik',
+      'Zmiana',
       'Suma godzin z nadgodzinami',
       'Suma godzin bez nadgodzin',
-      'I zmiana',
-      'II zmiana',
       ...workTimeTypes
         .slice()
         .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
         .map((type) => `${type.code} (${type.name})`),
     ].join(';'));
-    expect(lines[6]).toBe('Kowalski Jan;13.5;13.5;8;2.5;8;0;0;0;0;0;0;2.5');
+    expect(lines[6]).toBe('Kowalski Jan;I;13.5;13.5;8;0;0;0;0;0;0;2.5');
     expect(lines.join('\n')).not.toContain('LEGACY');
   });
 
-  it('renders conditional Brak danych o zmianie column in table and CSV when unassigned shifts exist', async () => {
+  it('renders multiple rows per employee with distinct shifts and labels in table and CSV', async () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url === '/api/employees') return response(employees);
       if (url === '/api/orders') return response(orders);
       if (url === '/api/work-time-types') return response(workTimeTypes);
       if (url.startsWith('/api/analytics/report-by-employee')) {
-        return response([{
-          employeeId: '20000000-0000-4000-8000-000000000001',
-          employeeName: 'Kowalski Jan',
-          G: 16,
-          suma: 16,
-          sumaBezNadgodzin: 16,
-          shiftFirst: 8,
-          shiftSecond: 0,
-          shiftUnspecified: 8,
-        }]);
+        return response([
+          {
+            employeeId: '20000000-0000-4000-8000-000000000001',
+            employeeName: 'Kowalski Jan',
+            workShift: 'FIRST',
+            workShiftLabel: 'I',
+            G: 8,
+            suma: 8,
+            sumaBezNadgodzin: 8,
+          },
+          {
+            employeeId: '20000000-0000-4000-8000-000000000001',
+            employeeName: 'Kowalski Jan',
+            workShift: 'THIRD',
+            workShiftLabel: 'III',
+            NOC: 8,
+            suma: 8,
+            sumaBezNadgodzin: 8,
+          },
+          {
+            employeeId: '20000000-0000-4000-8000-000000000001',
+            employeeName: 'Kowalski Jan',
+            workShift: null,
+            workShiftLabel: 'Brak danych',
+            G: 8,
+            suma: 8,
+            sumaBezNadgodzin: 8,
+          },
+          {
+            employeeId: '20000000-0000-4000-8000-000000000001',
+            employeeName: 'Kowalski Jan',
+            workShift: null,
+            workShiftLabel: 'Nie dotyczy',
+            UW: 8,
+            suma: 8,
+            sumaBezNadgodzin: 8,
+          },
+        ]);
       }
       return response([]);
     }));
@@ -369,7 +394,7 @@ describe('ReportsView — miesięczny raport pracowników', () => {
     let exportedBlob: Blob | undefined;
     vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
       if (blob instanceof Blob) exportedBlob = blob;
-      return 'blob:test-unassigned';
+      return 'blob:test-shifts';
     });
 
     render(
@@ -380,16 +405,32 @@ describe('ReportsView — miesięczny raport pracowników', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Wg Pracowników (Miesięczny)' }));
-    await screen.findByRole('columnheader', { name: 'Brak danych o zmianie' });
+    await screen.findByRole('columnheader', { name: 'Zmiana' });
 
-    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toContain('Brak danych o zmianie');
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toContain('Zmiana');
+    expect(screen.getByText('I')).toBeInTheDocument();
+    expect(screen.getByText('III')).toBeInTheDocument();
+    expect(screen.getByText('Brak danych')).toBeInTheDocument();
+    expect(screen.getByText('Nie dotyczy')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Pobierz plik CSV' }));
     expect(exportedBlob).toBeDefined();
     const csv = (await exportedBlob!.text()).replace(/^\uFEFF/, '');
     const lines = csv.split('\n');
-    expect(lines[5]).toContain('I zmiana;II zmiana;Brak danych o zmianie');
-    expect(lines[6]).toBe('Kowalski Jan;16;16;8;0;8;16;0;0;0;0;0;0;0');
+    expect(lines[5]).toBe([
+      'Pracownik',
+      'Zmiana',
+      'Suma godzin z nadgodzinami',
+      'Suma godzin bez nadgodzin',
+      ...workTimeTypes
+        .slice()
+        .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
+        .map((type) => `${type.code} (${type.name})`),
+    ].join(';'));
+    expect(lines[6]).toBe('Kowalski Jan;I;8;8;8;0;0;0;0;0;0;0');
+    expect(lines[7]).toBe('Kowalski Jan;III;8;8;0;0;0;0;0;0;0;8');
+    expect(lines[8]).toBe('Kowalski Jan;Brak danych;8;8;8;0;0;0;0;0;0;0');
+    expect(lines[9]).toBe('Kowalski Jan;Nie dotyczy;8;8;0;0;0;8;0;0;0;0');
   });
 
   it('correctly escapes semicolons, quotes, newlines, and preserves Polish characters in CSV export', async () => {

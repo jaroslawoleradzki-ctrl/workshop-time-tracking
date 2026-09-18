@@ -474,6 +474,46 @@ describe('Work shift tracking validations and endpoints (v0.5.9)', () => {
     expect(res.body.report.workShift).toBe('SECOND');
   });
 
+  it('creates worked-time entry with THIRD shift on a working day', async () => {
+    vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue({
+      code: 'G',
+      name: 'Godziny standardowe',
+      requiresOrder: false,
+      isAbsence: false,
+    } as any);
+
+    vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => {
+      const tx = {
+        $executeRaw: vi.fn(),
+        workTimeReport: {
+          create: vi.fn().mockResolvedValue({
+            id: 'r-shift-3',
+            date: new Date('2026-08-03T00:00:00.000Z'),
+            employeeId: EMPLOYEE_ID,
+            orderId: null,
+            hours: 8,
+            workTimeTypeCode: 'G',
+            workShift: 'THIRD',
+            missingCard: false,
+            createdByUserId: USER_ID,
+          }),
+        },
+      };
+      return callback(tx);
+    });
+
+    const res = await authenticatedPost('/api/reports', {
+      date: '2026-08-03',
+      employeeId: EMPLOYEE_ID,
+      hours: 8,
+      workTimeTypeCode: 'G',
+      workShift: 'THIRD',
+    }).expect(201);
+
+    expect(res.body.report).toBeDefined();
+    expect(res.body.report.workShift).toBe('THIRD');
+  });
+
   it('rejects worked-time entry without shift with 400 WORK_SHIFT_REQUIRED', async () => {
     vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue({
       code: 'G',
@@ -506,7 +546,7 @@ describe('Work shift tracking validations and endpoints (v0.5.9)', () => {
       employeeId: EMPLOYEE_ID,
       hours: 8,
       workTimeTypeCode: 'G',
-      workShift: 'THIRD',
+      workShift: 'FOURTH',
     }).expect(400);
 
     expect(res.body.code).toBe('WORK_SHIFT_REQUIRED');
@@ -616,6 +656,99 @@ describe('Work shift tracking validations and endpoints (v0.5.9)', () => {
 
     expect(res.body.report.workShift).toBe('SECOND');
     expect(res.body.report.hours).toBe(6);
+  });
+
+  it('allows editing report to THIRD shift', async () => {
+    vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue({
+      code: 'G',
+      name: 'Godziny standardowe',
+      requiresOrder: false,
+      isAbsence: false,
+    } as any);
+
+    vi.spyOn(prisma.workTimeReport, 'findUnique').mockResolvedValue({
+      id: 'r-edit-3',
+      date: new Date('2026-08-03T00:00:00.000Z'),
+      employeeId: EMPLOYEE_ID,
+      orderId: null,
+      hours: 8,
+      workTimeTypeCode: 'G',
+      workShift: 'FIRST',
+      deletedAt: null,
+    } as any);
+
+    vi.spyOn(prisma.workTimeReport, 'update').mockResolvedValue({
+      id: 'r-edit-3',
+      date: new Date('2026-08-03T00:00:00.000Z'),
+      employeeId: EMPLOYEE_ID,
+      orderId: null,
+      hours: 8,
+      workTimeTypeCode: 'G',
+      workShift: 'THIRD',
+      missingCard: false,
+      modifiedByUserId: USER_ID,
+    } as any);
+
+    const res = await request(app)
+      .put('/api/reports/r-edit-3')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        date: '2026-08-03',
+        employeeId: EMPLOYEE_ID,
+        hours: 8,
+        workTimeTypeCode: 'G',
+        workShift: 'THIRD',
+      })
+      .expect(200);
+
+    expect(res.body.report.workShift).toBe('THIRD');
+  });
+
+  it('clears shift when updating from THIRD shift to an absence type with workShift = null', async () => {
+    vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue({
+      code: 'UW',
+      name: 'Urlop wypoczynkowy',
+      requiresOrder: false,
+      isAbsence: true,
+    } as any);
+
+    vi.spyOn(prisma.workTimeReport, 'findUnique').mockResolvedValue({
+      id: 'r-edit-abs',
+      date: new Date('2026-08-03T00:00:00.000Z'),
+      employeeId: EMPLOYEE_ID,
+      orderId: null,
+      hours: 8,
+      workTimeTypeCode: 'G',
+      workShift: 'THIRD',
+      deletedAt: null,
+    } as any);
+
+    vi.spyOn(prisma.workTimeReport, 'update').mockResolvedValue({
+      id: 'r-edit-abs',
+      date: new Date('2026-08-03T00:00:00.000Z'),
+      employeeId: EMPLOYEE_ID,
+      orderId: null,
+      hours: 8,
+      workTimeTypeCode: 'UW',
+      workShift: null,
+      missingCard: false,
+      modifiedByUserId: USER_ID,
+    } as any);
+
+    const res = await request(app)
+      .put('/api/reports/r-edit-abs')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        date: '2026-08-03',
+        employeeId: EMPLOYEE_ID,
+        hours: 8,
+        workTimeTypeCode: 'UW',
+        workShift: null,
+      })
+      .expect(200);
+
+    expect(res.body.report.workShift).toBeNull();
+    expect(res.body.report.workTimeTypeCode).toBe('UW');
   });
 
   it('allows reading historical attendance record with workShift = null via GET /by-employee-date', async () => {

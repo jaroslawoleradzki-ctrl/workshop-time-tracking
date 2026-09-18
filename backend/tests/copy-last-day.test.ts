@@ -378,7 +378,7 @@ class FakePrismaClient {
     deletedAt?: Date | null;
     orderId?: string | null;
     workTimeTypeCode?: string;
-    workShift?: 'FIRST' | 'SECOND' | null;
+    workShift?: 'FIRST' | 'SECOND' | 'THIRD' | null;
   }) {
     const code = params.workTimeTypeCode ?? 'G';
     const isAbsence = ['UW', 'UOK', 'UŻ', 'L4', 'CUSTOM_ABS'].includes(code);
@@ -1074,6 +1074,18 @@ describe('POST /api/reports/copy-last-day', () => {
           createdAt: new Date('2026-07-23T16:00:00.000Z'),
           deletedAt: null,
         },
+        {
+          id: randomUUID(),
+          date: Thursday,
+          employeeId: EMPLOYEE_A_ID,
+          orderId,
+          hours: 8,
+          workTimeTypeCode: 'G',
+          workShift: 'THIRD',
+          createdByUserId: ADMIN_ID,
+          createdAt: new Date('2026-07-23T23:00:00.000Z'),
+          deletedAt: null,
+        },
       );
 
       const res = await request(app)
@@ -1085,13 +1097,20 @@ describe('POST /api/reports/copy-last-day', () => {
         })
         .expect(201);
 
-      expect(res.body.createdCount).toBe(2);
+      expect(res.body.createdCount).toBe(3);
       const copiedReports = fakePrisma.reports.filter(
         (r) => r.employeeId === EMPLOYEE_A_ID && sameDate(r.date, new Date('2026-07-29T00:00:00.000Z')),
       );
-      expect(copiedReports).toHaveLength(2);
-      expect(copiedReports.find((r) => r.workTimeTypeCode === 'G')?.workShift).toBe('FIRST');
-      expect(copiedReports.find((r) => r.workTimeTypeCode === 'NDR')?.workShift).toBe('SECOND');
+      expect(copiedReports).toHaveLength(3);
+      const firstCopied = copiedReports.filter((r) => r.workShift === 'FIRST');
+      const secondCopied = copiedReports.filter((r) => r.workShift === 'SECOND');
+      const thirdCopied = copiedReports.filter((r) => r.workShift === 'THIRD');
+      expect(firstCopied).toHaveLength(1);
+      expect(secondCopied).toHaveLength(1);
+      expect(thirdCopied).toHaveLength(1);
+      expect(firstCopied[0].workTimeTypeCode).toBe('G');
+      expect(secondCopied[0].workTimeTypeCode).toBe('NDR');
+      expect(thirdCopied[0].workTimeTypeCode).toBe('G');
     });
 
     it('should never assign a workShift to a copied absence entry', async () => {

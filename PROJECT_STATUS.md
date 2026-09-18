@@ -7,23 +7,24 @@
 - Aktualna wersja development: `0.5.9`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: v0.5.8 wydane i zweryfikowane; v0.5.9 zintegrowane z `development`, z pełną weryfikacją automatyczną.
+- Stan prac: v0.5.8 wydane i zweryfikowane; v0.5.9 dostosowane na dedykowanej gałęzi `fix/v0.5.9-manual-acceptance-shift-report` po uwagach z akceptacji manualnej, z pełną weryfikacją automatyczną.
 
-Zakres wersji `0.5.9`:
+Zakres wersji `0.5.9` (po uwagach z akceptacji manualnej):
 
-- Rejestracja zmian roboczych (`I zmiana` / `II zmiana`) w bazie danych (`WorkShift` enum, `work_shift` w tabeli `work_time_reports`).
-- Ścisłe rozgraniczenie: zmiana jest wymagana dla czasu przepracowanego (`isAbsence === false`) i niedozwolona / nieaktywna dla nieobecności (`isAbsence === true`, `workShift = null`).
-- Pełna kompatybilność wsteczna dla danych historycznych (`workShift = null`).
-- Widoczność zmian w panelu raportowania (etykiety w tabeli, walidacja wyboru) oraz w miesięcznym raporcie pracowników (kolumny `I zmiana`, `II zmiana` oraz warunkowa kolumna `Brak danych o zmianie` w UI, CSV i XLSX).
-- Obsługa kopiowania dnia (`copy-last-day`) oraz rejestracji zakresów nieobecności (`absence-range`).
+- Rejestracja zmian roboczych (`I`, `II` oraz `III` zmiana) w bazie danych (`WorkShift` enum z wartościami `FIRST`, `SECOND`, `THIRD`, pole `work_shift` w tabeli `work_time_reports`).
+- Ścisłe rozgraniczenie: zmiana jest wymagana dla czasu przepracowanego (`isAbsence === false`) i niedozwolona / nieaktywna dla nieobecności (`isAbsence === true`, `workShift = null`). Przełączenie na nieobecność czyści wybór zmiany; powrót na czas przepracowany wymusza ponowny wybór `I`, `II` lub `III`.
+- Pełna kompatybilność wsteczna dla danych historycznych (`workShift = null`); edycja wpisu historycznego bez zmiany wymaga jawnego wyboru zmiany przed zapisem.
+- Miesięczny raport pracowników i eksporty XLSX/CSV posiadają pojedynczą kolumnę `Zmiana` z podziałem wierszy per pracownik i zmiana (`I`, `II`, `III`, `Brak danych` dla wpisów historycznych, `Nie dotyczy` dla nieobecności). Godziny nieobecności nie są duplikowane.
+- Niezmienniczość sum kontrolnych: łączna suma godzin per pracownik oraz zgodność modułu kontroli rozliczenia czasu (`closure-control-summary`) pozostają w 100% zachowane.
+- Obsługa kopiowania dnia (`copy-last-day` ze wsparciem `THIRD`, blokadą `WORK_SHIFT_REQUIRED` dla wpisów historycznych bez zmiany i zerowaniem zmiany dla nieobecności) oraz rejestracji zakresów nieobecności (`absence-range`).
 
 ## Weryfikacja wersji 0.5.9
 
-- backend: 211 testów zakończonych powodzeniem (15 plików testowych),
+- backend: 214 testów zakończonych powodzeniem (15 plików testowych),
 - backend: build (`npm run build`) zakończony powodzeniem,
 - frontend: 121 testów zakończonych powodzeniem (10 plików testowych),
 - frontend: lint (`npm run lint`) oraz build (`npm run build`) zakończone powodzeniem,
-- Prisma: migracja `20260918160000_add_work_shift_to_work_time_reports` przetestowana na czystej bazie oraz bazie produkcyjnej.
+- Prisma: migracje `20260918160000_add_work_shift_to_work_time_reports` oraz `20260918190000_add_third_work_shift` przetestowane na czystej bazie oraz ścieżce produkcyjnej (`executable-database-migration.test.ts`).
 
 Zakres wersji `0.5.8`:
 

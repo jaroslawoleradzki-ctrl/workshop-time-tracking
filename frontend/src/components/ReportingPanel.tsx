@@ -113,7 +113,7 @@ interface ReportEntry {
   orderId: string | null;
   hours: number;
   workTimeTypeCode: string;
-  workShift?: 'FIRST' | 'SECOND' | null;
+  workShift?: 'FIRST' | 'SECOND' | 'THIRD' | null;
   missingCard?: boolean;
   order?: {
     orderNumber: string;
@@ -201,7 +201,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [hoursInput, setHoursInput] = useState('8.00');
   const [selectedWorkType, setSelectedWorkType] = useState('G');
-  const [workShift, setWorkShift] = useState<'FIRST' | 'SECOND' | ''>('FIRST');
+  const [workShift, setWorkShift] = useState<'FIRST' | 'SECOND' | 'THIRD' | ''>('FIRST');
   const [missingCard, setMissingCard] = useState(false);
 
   // Autocomplete UI states
@@ -623,8 +623,8 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
     }
 
     if (!currentType.isAbsence) {
-      if (!workShift || !['FIRST', 'SECOND'].includes(workShift)) {
-        setValidationError('Wybór zmiany (I lub II zmiana) jest wymagany dla czasu pracy.');
+      if (!workShift || !['FIRST', 'SECOND', 'THIRD'].includes(workShift)) {
+        setValidationError('Wybór zmiany (I, II lub III zmiana) jest wymagany dla czasu pracy.');
         return;
       }
     }
@@ -717,7 +717,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
     const isEntryAbsence = entry.workTimeType?.isAbsence ?? false;
     if (isEntryAbsence) {
       setWorkShift('');
-    } else if (entry.workShift === 'FIRST' || entry.workShift === 'SECOND') {
+    } else if (entry.workShift === 'FIRST' || entry.workShift === 'SECOND' || entry.workShift === 'THIRD') {
       setWorkShift(entry.workShift);
     } else {
       setWorkShift('');
@@ -1073,7 +1073,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                 disabled={workTypes.find(t => t.code === selectedWorkType)?.isAbsence ?? false}
                 onChange={e => {
                   markFormModified();
-                  setWorkShift(e.target.value as 'FIRST' | 'SECOND' | '');
+                  setWorkShift(e.target.value as 'FIRST' | 'SECOND' | 'THIRD' | '');
                   setValidationError('');
                 }}
               >
@@ -1084,6 +1084,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                     <option value="">-- Wybierz zmianę --</option>
                     <option value="FIRST">I</option>
                     <option value="SECOND">II</option>
+                    <option value="THIRD">III</option>
                   </>
                 )}
               </select>
@@ -1278,7 +1279,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                         </span>
                         {entry.workShift ? (
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
-                            {entry.workShift === 'FIRST' ? 'I zmiana' : 'II zmiana'}
+                            {entry.workShift === 'FIRST' ? 'I zmiana' : entry.workShift === 'SECOND' ? 'II zmiana' : 'III zmiana'}
                           </div>
                         ) : !entry.workTimeType.isAbsence ? (
                           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.15rem', fontStyle: 'italic' }}>

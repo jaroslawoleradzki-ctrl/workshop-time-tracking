@@ -383,24 +383,18 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
         filterItems = [
           { label: 'Pracownik', value: empName },
         ];
-        const hasUnspecified = safeReportData.some(r => (Number(r.shiftUnspecified) || 0) > 0);
-        const shiftColHeaders = hasUnspecified
-          ? ['I zmiana', 'II zmiana', 'Brak danych o zmianie']
-          : ['I zmiana', 'II zmiana'];
         headers = [
           'Pracownik',
+          'Zmiana',
           'Suma godzin z nadgodzinami',
           'Suma godzin bez nadgodzin',
-          ...shiftColHeaders,
           ...workTimeTypes.map(type => `${type.code} (${type.name})`)
         ];
         rows = safeReportData.map(r => [
           r.employeeName,
+          r.workShiftLabel || r.workShift || '-',
           r.suma,
           r.sumaBezNadgodzin,
-          r.shiftFirst || 0,
-          r.shiftSecond || 0,
-          ...(hasUnspecified ? [r.shiftUnspecified || 0] : []),
           ...workTimeTypes.map(type => Number(r[type.code]) || 0),
         ]);
         break;
@@ -777,61 +771,51 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
             </ScrollableTable>
           )}
 
-          {activeReportTab === 'by-employee' && (() => {
-            const hasUnspecifiedShifts = Array.isArray(reportData) && reportData.some((row) => (Number(row.shiftUnspecified) || 0) > 0);
-            return (
-              <ScrollableTable ariaLabel="Raport według pracowników" containerStyle={{ margin: 0, border: 'none' }}>
-                  <thead>
-                    <tr>
-                      <th>Pracownik</th>
-                      <th style={{ textAlign: 'right', fontWeight: 'bold' }}>Suma godzin z nadgodzinami</th>
-                      <th style={{ textAlign: 'right', fontWeight: 'bold' }}>Suma godzin bez nadgodzin</th>
-                      <th style={{ textAlign: 'right', fontWeight: 'bold' }}>I zmiana</th>
-                      <th style={{ textAlign: 'right', fontWeight: 'bold' }}>II zmiana</th>
-                      {hasUnspecifiedShifts && (
-                        <th style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--text-muted)' }}>
-                          Brak danych o zmianie
-                        </th>
-                      )}
+          {activeReportTab === 'by-employee' && (
+            <ScrollableTable ariaLabel="Raport według pracowników" containerStyle={{ margin: 0, border: 'none' }}>
+                <thead>
+                  <tr>
+                    <th>Pracownik</th>
+                    <th>Zmiana</th>
+                    <th style={{ textAlign: 'right', fontWeight: 'bold' }}>Suma godzin z nadgodzinami</th>
+                    <th style={{ textAlign: 'right', fontWeight: 'bold' }}>Suma godzin bez nadgodzin</th>
+                    {workTimeTypes.map((type) => (
+                      <th key={type.code} style={{ textAlign: 'right' }}>
+                        {type.code} ({type.name})
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.isArray(reportData) && reportData.map((row, idx) => (
+                    <tr key={idx}>
+                      <td style={{ fontWeight: 'bold' }}>{row.employeeName}</td>
+                      <td>
+                        <span style={{
+                          fontWeight: 600,
+                          color: row.workShift === 'ABSENCE' ? 'var(--text-muted)' :
+                                 row.workShift === 'UNSPECIFIED' ? 'var(--warning-color)' :
+                                 'var(--text-primary)',
+                        }}>
+                          {row.workShiftLabel || row.workShift || '-'}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--primary-color)' }}>
+                        {(Number(row.suma) || 0).toFixed(1)} h
+                      </td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--success-color)' }}>
+                        {(Number(row.sumaBezNadgodzin) || 0).toFixed(1)} h
+                      </td>
                       {workTimeTypes.map((type) => (
-                        <th key={type.code} style={{ textAlign: 'right' }}>
-                          {type.code} ({type.name})
-                        </th>
+                        <td key={type.code} style={{ textAlign: 'right' }}>
+                          {(Number(row[type.code]) || 0).toFixed(1)} h
+                        </td>
                       ))}
                     </tr>
-                  </thead>
-                  <tbody>
-                    {Array.isArray(reportData) && reportData.map((row, idx) => (
-                      <tr key={idx}>
-                        <td style={{ fontWeight: 'bold' }}>{row.employeeName}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--primary-color)' }}>
-                          {(Number(row.suma) || 0).toFixed(1)} h
-                        </td>
-                        <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--success-color)' }}>
-                          {(Number(row.sumaBezNadgodzin) || 0).toFixed(1)} h
-                        </td>
-                        <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '0.95rem' }}>
-                          {(Number(row.shiftFirst) || 0).toFixed(1)} h
-                        </td>
-                        <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '0.95rem' }}>
-                          {(Number(row.shiftSecond) || 0).toFixed(1)} h
-                        </td>
-                        {hasUnspecifiedShifts && (
-                          <td style={{ textAlign: 'right', color: 'var(--text-muted)' }}>
-                            {(Number(row.shiftUnspecified) || 0).toFixed(1)} h
-                          </td>
-                        )}
-                        {workTimeTypes.map((type) => (
-                          <td key={type.code} style={{ textAlign: 'right' }}>
-                            {(Number(row[type.code]) || 0).toFixed(1)} h
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-              </ScrollableTable>
-            );
-          })()}
+                  ))}
+                </tbody>
+            </ScrollableTable>
+          )}
 
           {activeReportTab === 'by-account' && (
             <ScrollableTable ariaLabel="Raport kont księgowych" containerStyle={{ margin: 0, border: 'none' }}>

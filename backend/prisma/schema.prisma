@@ -91,6 +91,7 @@ model Order {
 enum WorkShift {
   FIRST
   SECOND
+  THIRD
 }
 
 model WorkTimeReport {

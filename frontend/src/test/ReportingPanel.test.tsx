@@ -1514,7 +1514,7 @@ describe('ReportingPanel — Work Shift Tracking UI (v0.5.9)', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders shift select with I and II options for worked time, and renders shift badges in table', async () => {
+  it('renders shift select with I, II and III options for worked time, and renders shift badges in table', async () => {
     render(
       <ReportingPanel
         token="test-token"
@@ -1529,6 +1529,7 @@ describe('ReportingPanel — Work Shift Tracking UI (v0.5.9)', () => {
     expect(screen.getByRole('option', { name: '-- Wybierz zmianę --' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'I' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'II' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'III' })).toBeInTheDocument();
 
     // Verify shift labels in daily reports table
     expect(screen.getByText('I zmiana')).toBeInTheDocument();
@@ -1584,12 +1585,12 @@ describe('ReportingPanel — Work Shift Tracking UI (v0.5.9)', () => {
     fireEvent.click(saveButton);
 
     await waitFor(() => {
-      expect(screen.getByText('Wybór zmiany (I lub II zmiana) jest wymagany dla czasu pracy.')).toBeInTheDocument();
+      expect(screen.getByText('Wybór zmiany (I, II lub III zmiana) jest wymagany dla czasu pracy.')).toBeInTheDocument();
     });
     expect(capturedRequestBody).toBeNull();
   });
 
-  it('allows saving worked time when shift is chosen, sending workShift in POST payload', async () => {
+  it('allows saving worked time when THIRD shift is chosen, sending workShift in POST payload', async () => {
     render(
       <ReportingPanel
         token="test-token"
@@ -1603,14 +1604,14 @@ describe('ReportingPanel — Work Shift Tracking UI (v0.5.9)', () => {
     fireEvent.change(hoursInput, { target: { value: '8.00' } });
 
     const shiftSelect = screen.getByLabelText('Zmiana') as HTMLSelectElement;
-    fireEvent.change(shiftSelect, { target: { value: 'SECOND' } });
+    fireEvent.change(shiftSelect, { target: { value: 'THIRD' } });
 
     const saveButton = screen.getByRole('button', { name: /Zapisz wpis/ });
     fireEvent.click(saveButton);
 
     await waitFor(() => {
       expect(capturedRequestBody).not.toBeNull();
-      expect(capturedRequestBody.workShift).toBe('SECOND');
+      expect(capturedRequestBody.workShift).toBe('THIRD');
       expect(capturedRequestBody.hours).toBe(8);
     });
   });
@@ -1637,16 +1638,16 @@ describe('ReportingPanel — Work Shift Tracking UI (v0.5.9)', () => {
     fireEvent.click(saveButton);
 
     await waitFor(() => {
-      expect(screen.getByText('Wybór zmiany (I lub II zmiana) jest wymagany dla czasu pracy.')).toBeInTheDocument();
+      expect(screen.getByText('Wybór zmiany (I, II lub III zmiana) jest wymagany dla czasu pracy.')).toBeInTheDocument();
     });
 
-    // Now select 'FIRST' and save
-    fireEvent.change(shiftSelect, { target: { value: 'FIRST' } });
+    // Now select 'THIRD' and save
+    fireEvent.change(shiftSelect, { target: { value: 'THIRD' } });
     fireEvent.click(saveButton);
 
     await waitFor(() => {
       expect(capturedRequestBody).not.toBeNull();
-      expect(capturedRequestBody.workShift).toBe('FIRST');
+      expect(capturedRequestBody.workShift).toBe('THIRD');
     });
   });
 });
