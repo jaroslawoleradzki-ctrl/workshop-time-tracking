@@ -11,14 +11,14 @@ Otwórz aplikację, wpisz login i hasło, wybierz **Zaloguj się**. Po zalogowan
 ### Rejestrowanie czasu
 
 1. W Raportowaniu wybierz datę lub przycisk **Dzisiaj**. Przy polu daty wyświetlany jest skrót dnia tygodnia: `(pn)`, `(wt)`, `(śr)`, `(czw)`, `(pt)`, `(sob)`, `(nd)`.
-2. Formularz automatycznie podpowiada domyślny rodzaj czasu pracy: dla dni roboczych (poniedziałek–piątek) jest to `G` (Godziny standardowe), a dla sobót i niedziel `NS` (Nadgodziny sobota/niedziela).
+2. Formularz automatycznie podpowiada domyślny rodzaj czasu pracy zgodnie z Kalendarzem zakładowym: zwykły dzień roboczy to `G` (Godziny standardowe), a zwykła sobota lub niedziela to `NS` (Nadgodziny sobota/niedziela), jeżeli dany kod istnieje w słowniku. Święto ustawowe lub firmowy dzień wolny pozostawia typ pusty. Firma może oznaczyć sobotę albo niedzielę jako dzień roboczy — wtedy formularz podpowiada `G`. Jeśli wymagany typ (`G` lub `NS`) nie istnieje w słowniku, formularz pozostawia typ pusty.
 3. Wyszukaj pracownika po nazwie lub identyfikatorze; możesz użyć przycisków poprzedni/następny.
 4. Wybierz rodzaj czasu. Jeśli wymaga zlecenia (np. `NS`), wyszukaj aktywne zlecenie po numerze, produkcie lub koncie. W dni wolne praca jest dopuszczalna wyłącznie ze zleceniem.
 5. Wprowadź dodatnią liczbę godzin i zapisz. Klawisze strzałek i Enter obsługują listy i przejście do pola godzin.
 
 > **Zrzut ekranu do wstawienia:** panel Raportowanie z wybranym pracownikiem i datą, otwartą listą pasujących zleceń oraz formularzem nowego wpisu.
 
-Wpisy wybranego pracownika i dnia są widoczne obok formularza. **Edytuj** ładuje wpis do formularza (zachowując jego oryginalny typ czasu); **Usuń** wymaga potwierdzenia i wykonuje soft delete. **Kopiuj ostatni dzień** kopiuje wyłącznie wpisy aktualnie wybranego pracownika z jego najnowszej wcześniejszej daty. W dni robocze kopiowany jest kompletny zestaw, również nieobecności takie jak UW i L4. Wybranie soboty lub niedzieli jako dnia docelowego blokuje całą operację bez utworzenia wpisów, niezależnie od ich rodzaju. Podczas operacji przycisk jest zablokowany. Jeśli wybrany dzień zawiera już wpis tego pracownika, aplikacja nie dopisze danych i wyświetli komunikat o konflikcie.
+Wpisy wybranego pracownika i dnia są widoczne obok formularza. Możesz ręcznie wybrać inny dozwolony rodzaj czasu pracy niż podpowiedź. **Edytuj** ładuje wpis do formularza, zachowując jego zapisany typ czasu, zlecenie, liczbę godzin i oznaczenie braku karty; **Usuń** wymaga potwierdzenia i wykonuje soft delete. **Kopiuj ostatni dzień** kopiuje wyłącznie wpisy aktualnie wybranego pracownika z jego najnowszej wcześniejszej daty. W dni robocze kopiowany jest kompletny zestaw, również nieobecności takie jak UW i L4. Wybranie soboty lub niedzieli jako dnia docelowego blokuje całą operację bez utworzenia wpisów, niezależnie od ich rodzaju. Podczas operacji przycisk jest zablokowany. Jeśli wybrany dzień zawiera już wpis tego pracownika, aplikacja nie dopisze danych i wyświetli komunikat o konflikcie.
 
 Jeśli kod `G` przekroczy 8 godzin lub suma przekroczy 12/24 godziny, pojawi się ostrzeżenie. Można anulować albo wybrać **Ignoruj i zapisz**.
 
