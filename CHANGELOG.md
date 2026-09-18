@@ -5,6 +5,19 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.5.9] - 2026-09-18
+
+### Added
+- Śledzenie zmian roboczych (`I zmiana` / `II zmiana`) na poziomie wpisów obecności (`WorkShift` enum i pole `work_shift` w bazie danych).
+- Walidacja wymagania zmiany dla czasu przepracowanego (`isAbsence === false`) i blokada wyboru dla nieobecności (`isAbsence === true`).
+- Miesięczny raport pracowników i eksport XLSX/CSV prezentują sumy godzin `I zmiana`, `II zmiana` oraz warunkowo kolumnę `Brak danych o zmianie` dla nieprzypisanych wpisów historycznych.
+- Prezentacja etykiet zmian w tabeli dziennych wpisów panelu raportowania.
+- Obsługa przepisywania zmian w mechanizmie kopiowania poprzedniego dnia (`copy-last-day`) oraz rejestracji zakresów nieobecności (`absence-range`).
+
+### Changed
+- Zachowano pełną zgodność wsteczną dla danych historycznych (`workShift = null`).
+- Godziny nieobecności (np. urlopy, L4, WKU) są wykluczone z podsumowań zmian.
+
 ## [0.5.8] - 2026-09-18
 
 ### Added

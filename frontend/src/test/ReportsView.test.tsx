@@ -93,6 +93,9 @@ describe('ReportsView — miesięczny raport pracowników', () => {
           LEGACY: 3,
           suma: 13.5,
           sumaBezNadgodzin: 13.5,
+          shiftFirst: 8,
+          shiftSecond: 2.5,
+          shiftUnspecified: 0,
         }]);
       }
       if (url.startsWith('/api/analytics/report-by-account')) {
@@ -280,6 +283,8 @@ describe('ReportsView — miesięczny raport pracowników', () => {
       'Pracownik',
       'Suma godzin z nadgodzinami',
       'Suma godzin bez nadgodzin',
+      'I zmiana',
+      'II zmiana',
       'G (Standardowe godziny pracy)',
       'NDR (Nadgodziny)',
       'NS (Nadgodziny sobota/niedziela)',
@@ -290,7 +295,7 @@ describe('ReportsView — miesięczny raport pracowników', () => {
       'NOC (Zmiana nocna)',
     ]);
     expect(screen.queryByRole('columnheader', { name: /LEGACY/ })).not.toBeInTheDocument();
-    expect(screen.getByText('2.5 h')).toBeInTheDocument();
+    expect(screen.getAllByText('2.5 h')).toHaveLength(2);
   });
 
   it('exports the same employee rows and dictionary columns to CSV as the table', async () => {
@@ -329,13 +334,62 @@ describe('ReportsView — miesięczny raport pracowników', () => {
       'Pracownik',
       'Suma godzin z nadgodzinami',
       'Suma godzin bez nadgodzin',
+      'I zmiana',
+      'II zmiana',
       ...workTimeTypes
         .slice()
         .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
         .map((type) => `${type.code} (${type.name})`),
     ].join(';'));
-    expect(lines[6]).toBe('Kowalski Jan;13.5;13.5;8;0;0;0;0;0;0;2.5');
+    expect(lines[6]).toBe('Kowalski Jan;13.5;13.5;8;2.5;8;0;0;0;0;0;0;2.5');
     expect(lines.join('\n')).not.toContain('LEGACY');
+  });
+
+  it('renders conditional Brak danych o zmianie column in table and CSV when unassigned shifts exist', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/employees') return response(employees);
+      if (url === '/api/orders') return response(orders);
+      if (url === '/api/work-time-types') return response(workTimeTypes);
+      if (url.startsWith('/api/analytics/report-by-employee')) {
+        return response([{
+          employeeId: '20000000-0000-4000-8000-000000000001',
+          employeeName: 'Kowalski Jan',
+          G: 16,
+          suma: 16,
+          sumaBezNadgodzin: 16,
+          shiftFirst: 8,
+          shiftSecond: 0,
+          shiftUnspecified: 8,
+        }]);
+      }
+      return response([]);
+    }));
+
+    let exportedBlob: Blob | undefined;
+    vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
+      if (blob instanceof Blob) exportedBlob = blob;
+      return 'blob:test-unassigned';
+    });
+
+    render(
+      <ReportsView
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Wg Pracowników (Miesięczny)' }));
+    await screen.findByRole('columnheader', { name: 'Brak danych o zmianie' });
+
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toContain('Brak danych o zmianie');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pobierz plik CSV' }));
+    expect(exportedBlob).toBeDefined();
+    const csv = (await exportedBlob!.text()).replace(/^\uFEFF/, '');
+    const lines = csv.split('\n');
+    expect(lines[5]).toContain('I zmiana;II zmiana;Brak danych o zmianie');
+    expect(lines[6]).toBe('Kowalski Jan;16;16;8;0;8;16;0;0;0;0;0;0;0');
   });
 
   it('correctly escapes semicolons, quotes, newlines, and preserves Polish characters in CSV export', async () => {

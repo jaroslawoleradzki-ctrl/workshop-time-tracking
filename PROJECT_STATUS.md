@@ -4,10 +4,26 @@
 
 - Projekt: Workshop Time Tracking
 - Aktualna wersja produkcyjna: `0.5.7`
-- Aktualna wersja development: `0.5.8`
+- Aktualna wersja development: `0.5.9`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: v0.5.7 wydane i zweryfikowane; v0.5.8 zintegrowane z `development`, niezależnie zrewidowane i gotowe do akceptacji ręcznej.
+- Stan prac: v0.5.7 wydane i zweryfikowane; v0.5.8 zintegrowane z `development`; v0.5.9 zaimplementowane na gałęzi `feature/v0.5.9-work-shift-tracking`, z pełną weryfikacją automatyczną.
+
+Zakres wersji `0.5.9`:
+
+- Rejestracja zmian roboczych (`I zmiana` / `II zmiana`) w bazie danych (`WorkShift` enum, `work_shift` w tabeli `work_time_reports`).
+- Ścisłe rozgraniczenie: zmiana jest wymagana dla czasu przepracowanego (`isAbsence === false`) i niedozwolona / nieaktywna dla nieobecności (`isAbsence === true`, `workShift = null`).
+- Pełna kompatybilność wsteczna dla danych historycznych (`workShift = null`).
+- Widoczność zmian w panelu raportowania (etykiety w tabeli, walidacja wyboru) oraz w miesięcznym raporcie pracowników (kolumny `I zmiana`, `II zmiana` oraz warunkowa kolumna `Brak danych o zmianie` w UI, CSV i XLSX).
+- Obsługa kopiowania dnia (`copy-last-day`) oraz rejestracji zakresów nieobecności (`absence-range`).
+
+## Weryfikacja wersji 0.5.9
+
+- backend: 209 testów zakończonych powodzeniem (15 plików testowych),
+- backend: build (`npm run build`) zakończony powodzeniem,
+- frontend: 121 testów zakończonych powodzeniem (10 plików testowych),
+- frontend: lint (`npm run lint`) oraz build (`npm run build`) zakończone powodzeniem,
+- Prisma: migracja `20260918160000_add_work_shift_to_work_time_reports` przetestowana na czystej bazie oraz bazie produkcyjnej.
 
 Zakres wersji `0.5.8`:
 

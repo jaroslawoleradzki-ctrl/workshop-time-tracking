@@ -56,6 +56,7 @@ router.get('/by-employee-date', async (req: AuthRequest, res: Response) => {
             code: true,
             name: true,
             requiresOrder: true,
+            isAbsence: true,
           },
         },
       },
@@ -69,6 +70,7 @@ router.get('/by-employee-date', async (req: AuthRequest, res: Response) => {
       orderId: r.orderId,
       hours: Number(r.hours),
       workTimeTypeCode: r.workTimeTypeCode,
+      workShift: r.workShift,
       missingCard: r.missingCard,
       createdByUserId: r.createdByUserId,
       createdAt: r.createdAt,
@@ -229,7 +231,7 @@ router.post(
 
 // POST / - create a report
 router.post('/', async (req: AuthRequest, res: Response) => {
-  const { date, employeeId, orderId, hours, workTimeTypeCode, missingCard } = req.body;
+  const { date, employeeId, orderId, hours, workTimeTypeCode, workShift, missingCard } = req.body;
 
   if (!date || !employeeId || hours === undefined || !workTimeTypeCode) {
     return res.status(400).json({ message: 'Wymagane pola: date, employeeId, hours, workTimeTypeCode' });
@@ -275,6 +277,26 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       });
     }
 
+    // 2c. Validate shift according to work time type semantics
+    let validatedShift: 'FIRST' | 'SECOND' | null = null;
+    if (type.isAbsence) {
+      if (workShift !== null && workShift !== undefined && workShift !== '') {
+        return res.status(400).json({
+          message: 'Wybór zmiany jest niedozwolony dla nieobecności.',
+          code: 'SHIFT_NOT_ALLOWED_FOR_ABSENCE',
+        });
+      }
+      validatedShift = null;
+    } else {
+      if (!workShift || !['FIRST', 'SECOND'].includes(workShift)) {
+        return res.status(400).json({
+          message: 'Wybór zmiany (I lub II zmiana) jest wymagany dla czasu pracy.',
+          code: 'WORK_SHIFT_REQUIRED',
+        });
+      }
+      validatedShift = workShift;
+    }
+
     // 3. Enforce order requirement
     if (type.requiresOrder) {
       if (!orderId) {
@@ -310,6 +332,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
             orderId: type.requiresOrder ? orderId : null,
             hours: hoursNum,
             workTimeTypeCode,
+            workShift: validatedShift,
             missingCard: missingCardBool,
             createdByUserId: req.user!.id,
           },
@@ -351,7 +374,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 // PUT /:id - update report
 router.put('/:id', async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  const { date, employeeId, orderId, hours, workTimeTypeCode, missingCard } = req.body;
+  const { date, employeeId, orderId, hours, workTimeTypeCode, workShift, missingCard } = req.body;
 
   if (!date || !employeeId || hours === undefined || !workTimeTypeCode) {
     return res.status(400).json({ message: 'Wszystkie pola są wymagane' });
@@ -396,6 +419,26 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
       });
     }
 
+    // Validate shift according to work time type semantics
+    let validatedShift: 'FIRST' | 'SECOND' | null = null;
+    if (type.isAbsence) {
+      if (workShift !== null && workShift !== undefined && workShift !== '') {
+        return res.status(400).json({
+          message: 'Wybór zmiany jest niedozwolony dla nieobecności.',
+          code: 'SHIFT_NOT_ALLOWED_FOR_ABSENCE',
+        });
+      }
+      validatedShift = null;
+    } else {
+      if (!workShift || !['FIRST', 'SECOND'].includes(workShift)) {
+        return res.status(400).json({
+          message: 'Wybór zmiany (I lub II zmiana) jest wymagany dla czasu pracy.',
+          code: 'WORK_SHIFT_REQUIRED',
+        });
+      }
+      validatedShift = workShift;
+    }
+
     if (type.requiresOrder) {
       if (!orderId) {
         return res.status(400).json({ message: `Dla typu '${workTimeTypeCode}' wymagane jest podanie zlecenia` });
@@ -416,6 +459,7 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
         orderId: type.requiresOrder ? orderId : null,
         hours: hoursNum,
         workTimeTypeCode,
+        workShift: validatedShift,
         missingCard: missingCardBool,
         modifiedByUserId: req.user!.id,
       },

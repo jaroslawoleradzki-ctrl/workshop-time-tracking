@@ -31,6 +31,11 @@ Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.5.2.
 - W dniu wolnym nie można zapisać typu `G` ani typu oznaczonego `isAbsence=true`. Dozwolona pozostaje praca nad zleceniem z typem niebędącym nieobecnością, np. istniejący `NS`.
 
 - Wpis wymaga daty, pracownika, liczby godzin większej od zera i istniejącego kodu rodzaju czasu pracy.
+- **Zmiany robocze (`workShift`)**:
+  - Dla czasu przepracowanego (`isAbsence=false`) wybór zmiany (`FIRST` – I zmiana, `SECOND` – II zmiana) jest **bezwzględnie wymagany**. Próba zapisu bez wybranej zmiany kończy się błędem walidacji (kod `WORK_SHIFT_REQUIRED`, HTTP 400).
+  - Dla nieobecności (`isAbsence=true`) pole zmiany jest zablokowane i nieaktywne w interfejsie (`Nie dotyczy (nieobecność)`), a API oraz baza danych zawsze wymuszają wartość `workShift=null`. Próba przesłania wartości zmiany dla nieobecności jest odrzucana (kod `SHIFT_NOT_ALLOWED_FOR_ABSENCE`, HTTP 400).
+  - Wpisy historyczne utworzone przed wersją 0.5.9 posiadają wartość `workShift=null` i pozostają w pełni ważne. Podczas edycji wpisu historycznego bez przypisanej zmiany wymagane jest jej jawne uzupełnienie przed zapisem.
+  - Godziny nieobecności nigdy nie wliczają się do sum godzin na zmianach w raportach i zestawieniach analitycznych.
 - Wpis raportu czasu może zostać oznaczony jako „Brak karty” (`missingCard`) w sytuacji, gdy pracownik nie posiadał lub nie użył karty podczas rejestracji czasu pracy. Wartość ta jest przechowywana w bazie danych jako pole logiczne (domyślnie `false`).
 - Zlecenie jest wymagane tylko wtedy, gdy `WorkTimeType.requiresOrder=true`. Dla pozostałych typów API zapisuje `orderId=null`.
 - `WorkTimeType.isAbsence` niezależnie klasyfikuje typ jako nieobecność pracownika. Flagi `isAbsence` (czy reprezentuje nieobecność) i `requiresOrder` (czy wymaga zlecenia produkcyjnego) są całkowicie niezależne i zmiana jednej nie modyfikuje drugiej.
@@ -48,7 +53,8 @@ Dokument opisuje zachowanie zaimplementowane w API i interfejsie wersji 0.5.2.
 
 - Operację mogą uruchomić role `admin` i `leader`. Interfejs wysyła identyfikator aktualnie wybranego pracownika oraz datę docelową.
 - Źródłem jest najnowsza data wcześniejsza od docelowej, na której ten pracownik ma co najmniej jeden aktywny wpis. Wpisy usunięte logicznie oraz wpisy powiązane z usuniętym zleceniem nie są kopiowane.
-- Pracownik musi istnieć, być aktywny i nieusunięty. Kopiowane są godziny, rodzaj czasu i opcjonalne zlecenie wyłącznie jego wpisów. Dotyczy to również nieobecności, takich jak UW, L4 i WKU, gdy dniem docelowym jest dzień roboczy.
+- Pracownik musi istnieć, być aktywny i nieusunięty. Kopiowane są godziny, rodzaj czasu, przypisana zmiana robocza i opcjonalne zlecenie wyłącznie jego wpisów. Dotyczy to również nieobecności, takich jak UW, L4 i WKU, gdy dniem docelowym jest dzień roboczy (dla nieobecności kopiowana zmiana wynosi `null`).
+- **Wymóg określonej zmiany w dniu źródłowym**: Jeżeli dzień źródłowy zawiera jakikolwiek wpis czasu przepracowanego (`isAbsence=false`) bez określonej zmiany (`workShift=null` lub nieprawidłowa wartość), cała operacja kopiowania jest atomowo odrzucana odpowiedzią `400 Bad Request` z kodem `WORK_SHIFT_REQUIRED`. Nie powstaje żaden wpis w dniu docelowym (0 wpisów), a użytkownik musi jawnie uzupełnić zmianę we wpisie źródłowym przed ponowieniem kopiowania.
 - Jeżeli data docelowa przypada w sobotę lub niedzielę, cała operacja jest odrzucana odpowiedzią `400 Bad Request` i kodem `WEEKEND_COPY_NOT_ALLOWED`, zanim powstaną jakiekolwiek wpisy. Blokada zależy od dnia docelowego, a nie od rodzaju wpisu źródłowego.
 - Jeżeli dzień docelowy zawiera już aktywny wpis tego pracownika, cała operacja jest odrzucana odpowiedzią `409 Conflict`; nie ma trybu dopisywania, scalania ani nadpisywania.
 - Maksymalny rozmiar źródła wynosi 100 aktywnych wpisów. Przekroczenie limitu kończy operację bez utworzenia danych.
