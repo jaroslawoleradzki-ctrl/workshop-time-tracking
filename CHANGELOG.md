@@ -5,11 +5,19 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.5.8] - 2026-09-18
+
 ### Added
 - Domyślny rodzaj czasu pracy uwzględnia Kalendarz zakładowy: zwykłe dni robocze podpowiadają `G`, zwykłe weekendy `NS` (jeżeli kod istnieje), dni wolne pozostawiają typ pusty, a firmowe weekendy robocze podpowiadają `G`.
+- Przy niedostępności endpointu Kalendarza zakładowego formularz bezpiecznie stosuje lokalny domyślny wariant dnia roboczego albo weekendu.
 
 ### Fixed
 - Domyślny rodzaj czasu pracy nie nadpisuje ręcznego wyboru ani danych edytowanego wpisu po asynchronicznym pobraniu decyzji kalendarza.
+- Opóźnione lub nieaktualne odpowiedzi Kalendarza zakładowego nie mogą zastąpić bieżącego stanu formularza.
+- Edycja istniejącego wpisu zachowuje zapisany rodzaj czasu, zlecenie, godziny oraz stan braku karty.
+
+### Changed
+- Zachowano kompatybilność historycznego rozliczenia v0.5.6 oraz narastającego postępu zleceń v0.5.7; wydanie nie wymaga migracji bazy danych i nie wprowadza niekompatybilnej zmiany API.
 
 ## [0.5.7] - 2026-09-17
 
