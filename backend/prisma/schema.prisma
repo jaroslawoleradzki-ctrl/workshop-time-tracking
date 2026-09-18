@@ -88,6 +88,12 @@ model Order {
   @@map("orders")
 }
 
+enum WorkShift {
+  FIRST
+  SECOND
+  THIRD
+}
+
 model WorkTimeReport {
   id                 String       @id @default(uuid()) @db.Uuid
   date               DateTime     @db.Date
@@ -95,6 +101,7 @@ model WorkTimeReport {
   orderId            String?      @map("order_id") @db.Uuid
   hours              Decimal      @db.Decimal(4, 2)
   workTimeTypeCode   String       @map("work_time_type_code") @db.VarChar(10)
+  workShift          WorkShift?   @map("work_shift")
   createdByUserId    String       @map("created_by_user_id") @db.Uuid
   modifiedByUserId   String?      @map("modified_by_user_id") @db.Uuid
   createdAt          DateTime     @default(now()) @map("created_at")

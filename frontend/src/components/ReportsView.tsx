@@ -383,9 +383,16 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
         filterItems = [
           { label: 'Pracownik', value: empName },
         ];
-        headers = ['Pracownik', 'Suma godzin z nadgodzinami', 'Suma godzin bez nadgodzin', ...workTimeTypes.map(type => `${type.code} (${type.name})`)];
+        headers = [
+          'Pracownik',
+          'Zmiana',
+          'Suma godzin z nadgodzinami',
+          'Suma godzin bez nadgodzin',
+          ...workTimeTypes.map(type => `${type.code} (${type.name})`)
+        ];
         rows = safeReportData.map(r => [
           r.employeeName,
+          r.workShiftLabel || r.workShift || '-',
           r.suma,
           r.sumaBezNadgodzin,
           ...workTimeTypes.map(type => Number(r[type.code]) || 0),
@@ -769,6 +776,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                 <thead>
                   <tr>
                     <th>Pracownik</th>
+                    <th>Zmiana</th>
                     <th style={{ textAlign: 'right', fontWeight: 'bold' }}>Suma godzin z nadgodzinami</th>
                     <th style={{ textAlign: 'right', fontWeight: 'bold' }}>Suma godzin bez nadgodzin</th>
                     {workTimeTypes.map((type) => (
@@ -782,6 +790,16 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                   {Array.isArray(reportData) && reportData.map((row, idx) => (
                     <tr key={idx}>
                       <td style={{ fontWeight: 'bold' }}>{row.employeeName}</td>
+                      <td>
+                        <span style={{
+                          fontWeight: 600,
+                          color: row.workShift === 'ABSENCE' ? 'var(--text-muted)' :
+                                 row.workShift === 'UNSPECIFIED' ? 'var(--warning-color)' :
+                                 'var(--text-primary)',
+                        }}>
+                          {row.workShiftLabel || row.workShift || '-'}
+                        </span>
+                      </td>
                       <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--primary-color)' }}>
                         {(Number(row.suma) || 0).toFixed(1)} h
                       </td>

@@ -99,9 +99,9 @@ describe('Executable Database Migration and Production Seed Tests (v0.5.4)', () 
       // Copy schema.prisma
       cpSync(join(realPrismaDir, 'schema.prisma'), join(tempPrismaDir, 'schema.prisma'));
 
-      // Copy pre-v0.5.4 migrations (exclude 20260908120000)
+      // Copy pre-v0.5.4 migrations (exclude 20260908120000 and subsequent migrations)
       const migrationDirs = readdirSync(join(realPrismaDir, 'migrations'), { withFileTypes: true })
-        .filter((d) => d.isDirectory() && d.name.startsWith('20') && !d.name.includes('20260908120000'))
+        .filter((d) => d.isDirectory() && d.name.startsWith('20') && d.name < '20260908120000')
         .map((d) => d.name);
 
       for (const m of migrationDirs) {
@@ -268,15 +268,29 @@ describe('Executable Database Migration and Production Seed Tests (v0.5.4)', () 
         stdio: 'ignore',
       });
 
-      // Verify _prisma_migrations now has 10 migrations and v0.5.4 migration is applied
+      // Verify _prisma_migrations now has 12 migrations and v0.5.4, v0.5.9 initial and rework migrations are applied
       const postMigrations: Array<{ migration_name: string; rolled_back_at: Date | null }> =
         await prismaUpgrade.$queryRaw`
           SELECT migration_name, rolled_back_at FROM "_prisma_migrations" ORDER BY started_at ASC;
         `;
-      expect(postMigrations).toHaveLength(10);
-      const lastMigration = postMigrations[9];
-      expect(lastMigration.migration_name).toContain('20260908120000_canonical_work_time_types_hardening');
-      expect(lastMigration.rolled_back_at).toBeNull();
+      expect(postMigrations).toHaveLength(12);
+      const hardeningMigration = postMigrations.find((m) =>
+        m.migration_name.includes('20260908120000_canonical_work_time_types_hardening'),
+      );
+      expect(hardeningMigration).toBeDefined();
+      expect(hardeningMigration!.rolled_back_at).toBeNull();
+
+      const workShiftMigration = postMigrations.find((m) =>
+        m.migration_name.includes('20260918160000_add_work_shift_to_work_time_reports'),
+      );
+      expect(workShiftMigration).toBeDefined();
+      expect(workShiftMigration!.rolled_back_at).toBeNull();
+
+      const thirdShiftMigration = postMigrations.find((m) =>
+        m.migration_name.includes('20260918190000_add_third_work_shift'),
+      );
+      expect(thirdShiftMigration).toBeDefined();
+      expect(thirdShiftMigration!.rolled_back_at).toBeNull();
 
       // STEP 2: Production seed command using compiled JavaScript artifact
       execSync('node dist/prisma/seed.js', {

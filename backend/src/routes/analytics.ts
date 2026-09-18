@@ -39,10 +39,31 @@ type EmployeeReportFilters = {
   employeeId?: string;
 };
 
-type EmployeeReportRow = {
+export type ShiftDimension = 'FIRST' | 'SECOND' | 'THIRD' | 'UNSPECIFIED' | 'ABSENCE';
+
+export const SHIFT_LABELS: Record<ShiftDimension, string> = {
+  FIRST: 'I',
+  SECOND: 'II',
+  THIRD: 'III',
+  UNSPECIFIED: 'Brak danych',
+  ABSENCE: 'Nie dotyczy',
+};
+
+export const SHIFT_ORDER: Record<ShiftDimension, number> = {
+  FIRST: 1,
+  SECOND: 2,
+  THIRD: 3,
+  UNSPECIFIED: 4,
+  ABSENCE: 5,
+};
+
+export type EmployeeReportRow = {
   employeeId: string;
   employeeName: string;
+  workShift: ShiftDimension;
+  workShiftLabel: string;
   suma: number;
+  sumaBezNadgodzin: number;
   [workTimeTypeCode: string]: string | number;
 };
 
@@ -97,7 +118,10 @@ export const OVERTIME_CODES = ['NDR', 'NS'];
 type InternalPivotRow = {
   employeeId: string;
   employeeName: string;
+  workShift: ShiftDimension;
+  workShiftLabel: string;
   sortKey: string;
+  shiftOrder: number;
   suma: number;
   sumaBezNadgodzin: number;
   counts: Record<string, number>;
@@ -280,18 +304,36 @@ export async function getEmployeeReportRows(
   const pivot: Record<string, InternalPivotRow> = {};
 
   reports.forEach((report) => {
-    const employeeId = report.employeeId;
-    if (!pivot[employeeId]) {
+    const isAbsence = report.workTimeType?.isAbsence ?? false;
+    let shiftKey: ShiftDimension;
+    if (isAbsence) {
+      shiftKey = 'ABSENCE';
+    } else if (report.workShift === 'FIRST') {
+      shiftKey = 'FIRST';
+    } else if (report.workShift === 'SECOND') {
+      shiftKey = 'SECOND';
+    } else if (report.workShift === 'THIRD') {
+      shiftKey = 'THIRD';
+    } else {
+      shiftKey = 'UNSPECIFIED';
+    }
+
+    const rowKey = `${report.employeeId}\u0000${shiftKey}`;
+
+    if (!pivot[rowKey]) {
       const emp = report.employee;
       const lastNameForSort = (emp.lastName || (emp.fullName ? emp.fullName.trim().split(' ').slice(-1)[0] : '') || '').trim();
       const firstNameForSort = (emp.firstName || (emp.fullName ? emp.fullName.trim().split(' ').slice(0, -1).join(' ') : '') || '').trim();
       const sortKey = `${lastNameForSort} ${firstNameForSort}`.trim().toLowerCase();
       const employeeName = formatEmployeeName(emp);
 
-      pivot[employeeId] = {
-        employeeId,
+      pivot[rowKey] = {
+        employeeId: report.employeeId,
         employeeName,
+        workShift: shiftKey,
+        workShiftLabel: SHIFT_LABELS[shiftKey],
         sortKey,
+        shiftOrder: SHIFT_ORDER[shiftKey],
         suma: 0,
         sumaBezNadgodzin: 0,
         counts: {},
@@ -306,17 +348,21 @@ export async function getEmployeeReportRows(
       code.startsWith('NS') ||
       (report.workTimeType?.name?.toLowerCase().includes('nadgodzin') ?? false);
 
-    pivot[employeeId].counts[code] = (pivot[employeeId].counts[code] || 0) + hours;
-    pivot[employeeId].suma += hours;
+    pivot[rowKey].counts[code] = (pivot[rowKey].counts[code] || 0) + hours;
+    pivot[rowKey].suma += hours;
     if (!isOvertime) {
-      pivot[employeeId].sumaBezNadgodzin += hours;
+      pivot[rowKey].sumaBezNadgodzin += hours;
     }
   });
 
   return Object.values(pivot)
-    .sort((a, b) => a.sortKey.localeCompare(b.sortKey, 'pl'))
+    .sort((a, b) => {
+      const cmp = a.sortKey.localeCompare(b.sortKey, 'pl');
+      if (cmp !== 0) return cmp;
+      return a.shiftOrder - b.shiftOrder;
+    })
     .map((item) => {
-      const { sortKey, counts, ...rest } = item;
+      const { sortKey, shiftOrder, counts, ...rest } = item;
       return {
         ...rest,
         ...counts,
@@ -1009,6 +1055,7 @@ router.get('/report-detailed', async (req: AuthRequest, res: Response) => {
       accountingAccount: r.order?.accountingAccount || 'brak',
       hours: Number(r.hours),
       workTimeTypeCode: r.workTimeTypeCode,
+      workShift: r.workShift,
       creatorName: r.createdByUser.fullName,
       createdAt: r.createdAt.toISOString(),
       missingCard: r.missingCard,
@@ -1143,6 +1190,7 @@ router.get('/export/by-employee', async (req: AuthRequest, res: Response) => {
 
     const headers = [
       'Pracownik',
+      'Zmiana',
       'Suma godzin z nadgodzinami',
       'Suma godzin bez nadgodzin',
       ...workTimeTypes.map((type) => `${type.code} (${type.name})`),
@@ -1150,13 +1198,14 @@ router.get('/export/by-employee', async (req: AuthRequest, res: Response) => {
 
     const data = rows.map((row) => [
       row.employeeName,
+      row.workShiftLabel,
       row.suma,
       row.sumaBezNadgodzin,
       ...workTimeTypes.map((type) => Number(row[type.code]) || 0),
     ]);
     const numberColumns = Array.from(
-      { length: workTimeTypes.length + 2 },
-      (_, index) => index + 2,
+      { length: headers.length - 2 },
+      (_, index) => index + 3,
     );
 
     let empNameVal = 'Wszyscy pracownicy';

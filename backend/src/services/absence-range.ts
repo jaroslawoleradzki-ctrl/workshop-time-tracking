@@ -242,6 +242,7 @@ export async function createAbsenceRange({
       date: new Date(`${dateStr}T00:00:00.000Z`),
       hours: hoursPerDay,
       workTimeTypeCode,
+      workShift: null,
       orderId: null,
       missingCard: false,
       createdByUserId: userId,
