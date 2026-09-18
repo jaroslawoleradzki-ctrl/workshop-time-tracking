@@ -3,6 +3,83 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+## [0.5.9] - 2026-09-18
+
+### Added
+- Śledzenie zmian roboczych (`I`, `II` oraz `III` zmiana) na poziomie wpisów obecności (`WorkShift` enum i pole `work_shift` w bazie danych).
+- Walidacja wymagania wyboru zmiany (`I`, `II`, `III`) dla czasu przepracowanego (`isAbsence === false`) i blokada wyboru dla nieobecności (`isAbsence === true`, `workShift = null`).
+- Miesięczny raport pracowników i eksport XLSX/CSV: pojedyncza kolumna `Zmiana` z podziałem wierszy per pracownik i zmiana (`I`, `II`, `III`, `Brak danych` dla wpisów historycznych, `Nie dotyczy` dla nieobecności).
+- Prezentacja etykiet zmian w tabeli dziennych wpisów panelu raportowania (`I zmiana`, `II zmiana`, `III zmiana`, `Brak danych o zmianie` dla wpisów historycznych, `Nie dotyczy (nieobecność)` dla nieobecności).
+- Obsługa przepisywania zmian (`I`, `II`, `III`) w mechanizmie kopiowania poprzedniego dnia (`copy-last-day`) oraz rejestracji zakresów nieobecności (`absence-range`).
+
+### Changed
+- Zachowano pełną zgodność wsteczną dla danych historycznych (`workShift = null`).
+- Godziny nieobecności (np. urlopy, L4, WKU) są przypisane wyłącznie do wiersza `Nie dotyczy` i nie są powielane pomiędzy wierszami zmian.
+- Łączna suma godzin oraz mechanizm kontroli rozliczenia czasu (`closure-control-summary`) zachowują pełną niezmienniczość sum i spójność matematyczną.
+
+## [0.5.8] - 2026-09-18
+
+### Added
+- Domyślny rodzaj czasu pracy uwzględnia Kalendarz zakładowy: zwykłe dni robocze podpowiadają `G`, zwykłe weekendy `NS` (jeżeli kod istnieje), dni wolne pozostawiają typ pusty, a firmowe weekendy robocze podpowiadają `G`.
+- Przy niedostępności endpointu Kalendarza zakładowego formularz bezpiecznie stosuje lokalny domyślny wariant dnia roboczego albo weekendu.
+
+### Fixed
+- Domyślny rodzaj czasu pracy nie nadpisuje ręcznego wyboru ani danych edytowanego wpisu po asynchronicznym pobraniu decyzji kalendarza.
+- Opóźnione lub nieaktualne odpowiedzi Kalendarza zakładowego nie mogą zastąpić bieżącego stanu formularza.
+- Edycja istniejącego wpisu zachowuje zapisany rodzaj czasu, zlecenie, godziny oraz stan braku karty.
+
+### Changed
+- Zachowano kompatybilność historycznego rozliczenia v0.5.6 oraz narastającego postępu zleceń v0.5.7; wydanie nie wymaga migracji bazy danych i nie wprowadza niekompatybilnej zmiany API.
+
+## [0.5.7] - 2026-09-17
+
+### Changed
+- Raport „Godziny wg zleceń”: „Godziny rzeczywiste” pozostają sumą wybranego okresu, natomiast „Odchylenie” i „Procent realizacji” są liczone narastająco od `orderDate` zlecenia do końca raportowanego okresu. XLSX i CSV zachowują tę samą semantykę co UI.
+
+## [0.5.6] - 2026-09-16
+
+### Fixed
+- Ustabilizowano historyczne raporty zamknięcia: zlecenia OPEN/CLOSED z nieusuniętymi wpisami czasu w raportowanym okresie pozostają uwzględnione po późniejszym zamknięciu zlecenia.
+
+### Added
+- Dodano regresyjne testy kontroli rozliczenia i raportu wg zleceń dla zamkniętego zlecenia z datą zakończenia po okresie raportu, w tym scenariusz 35 godzin oraz przypadek bez wpisów w okresie.
+- Wzmocniono testy tak, aby sprawdzały rzeczywistą strukturę zapytania Prisma i odrzucały powrót do starego, dwu-rozgałęzieniowego predykatu.
+
+## [0.5.5] - 2026-09-10
+
+### Fixed
+- Naprawiono regresję widoczności zakładek w Centrum Raportów (`ReportsView.tsx`, `index.css`): wyizolowano przyciski zakładek dedykowaną klasą `.report-tab` (`flex: 0 0 auto`, `flex-shrink: 0`, `white-space: nowrap`), uniezależniając je od globalnych stylów `.nav-item`.
+- Zawężono reguły responsywne w media queries (`max-width: 900px` oraz `max-width: 600px`) wyłącznie do paska bocznego (`.sidebar .nav-item`), eliminując niepożądane zawijanie i kompresję zakładek raportów na tabletach i ekranach mobilnych.
+- Zapewniono przewijanie poziome (`overflow-x: auto`) kontenera zakładek na wąskich viewportach przy zachowaniu stałych szerokości etykiet.
+- Zagwarantowano stałą widoczność i pełną dostępność wszystkich 5 zakładek raportowych (`Wg zleceń`, `Wg pracowników`, `Szczegółowy`, `Podsumowanie`, `Okresy nieobecności`) po uruchomieniu sekcji Raportu zamknięcia (`closure-control-summary`).
+- Zachowano dotychczasowy model uprawnień bez zmian — role `admin` oraz `leader` posiadają pełny i równorzędny dostęp do Centrum Raportów.
+
+### Added
+- Wprowadzono zestaw testów regresyjnych zakładek raportów (`ReportsView.test.tsx`) weryfikujących obecność wszystkich 5 zakładek dla ról admin i leader, zachowanie zakładek po włączeniu raportu zamknięcia, przełączanie aktywnej zakładki oraz statyczny guard reguł CSS w `index.css`.
+
+## [0.5.4] - 2026-09-09
+
+### Fixed
+- Naprawiono klasyfikację kodu `WKU` w słowniku rodzajów czasu pracy: `requiresOrder = false` oraz `isAbsence = true`, eliminując fałszywe rozbieżności kontroli rozliczenia i niepoprawny komunikat o braku zlecenia.
+- Bezpieczna migracja bazy danych `20260908120000_canonical_work_time_types_hardening`: aktualizuje wyłącznie kod `WKU`, zachowując nienaruszoną nazwę klienta (`name`) oraz stan własności (`is_system = false`), bez modyfikacji pozostałych kodów oraz tabeli `work_time_reports`.
+- Bezpieczny seed produkcyjny (`seed.ts`): ograniczono wyłącznie do 7 ustalonych kanonicznych kodów systemowych (`G`, `NDR`, `NS`, `UW`, `UOK`, `UŻ`, `L4`), zachowując nazwy administratora i zapobiegając przejmowaniu typów własnych (np. OP, NN itp.).
+- Naprawiono wyrównanie kolumn w tabeli Słownika Rodzajów Czasu Pracy (`DictionariesView.tsx`): mapowanie nagłówków `Kod`, `Pełna nazwa`, `Wymaga zlecenia`, `Nieobecność`, `Status słownika`, `Akcje`.
+- Poprawiono semantykę diagnostyki kontroli rozliczenia w `analytics.ts`: rozróżniono powód `Typ nie jest nieobecnością i nie wymaga zlecenia` od `Brak zlecenia` oraz dodano precyzyjną diagnostykę podwójnego naliczenia nieobecności ze zleceniem w rozliczeniu.
+
+### Added
+- Wykonywalne testy migracji i seeda na kontenerze PostgreSQL (`executable-database-migration.test.ts`), sprawdzające zachowanie rekordów custom WKU, custom OP, kolizji, typów własnych oraz instalacji od zera.
+- Testy integracji WKU z kalendarzem i nieobecnościami v0.5.3 (`analytics.test.ts`, `ReportsView.test.tsx`): mostkowanie przez weekendy, święta ustawowe, Wigilię 2025+, nadrzędność wyjątków kalendarza zakładowego, eksport XLSX i CSV.
+
+## [0.5.3] - 2026-09-09
+
+### Added
+- Automatyczne wyznaczanie polskich świąt ustawowych w nowym module `backend/src/utils/holidays.ts` (w tym Wigilii 24 grudnia od roku 2025).
+- Kalendarz zakładowy: nadrzędność wyjątków administratora nad dniami roboczymi i świętami.
+- Mostkowanie w Raporcie Okresów Nieobecności przez święta i weekendy bez sztucznego zwiększania liczby dni roboczych (`workingDays`).
+- Podsumowanie łącznej liczby dni nieobecności w stopce tabeli oraz spójny eksport CSV.
+
 ## [0.5.2] - 2026-09-04
 
 ### Fixed

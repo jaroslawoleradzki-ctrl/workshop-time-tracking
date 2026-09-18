@@ -67,26 +67,28 @@ Zapewnia administratorom syntetyczne spojrzenie na statusy produkcyjne:
 
 ### 3. Panel Szybkiego Raportowania (Raportowanie)
 * **Wyszukiwarka pracowników**: Panel wyboru filtrujący na żywo po imieniu, nazwisku i numerze ewidencyjnym pracownika.
+* **Ewidencja zmian roboczych**: Każdy wpis obecności (czasu przepracowanego) rejestruje przypisaną zmianę (`I`, `II` lub `III` zmiana). Dla nieobecności pole jest automatycznie blokowane i zapisywane jako null.
 * **Optymalizacja pod kątem szybkiego pisania**: Cały formularz obsługuje się bez użycia myszy – wciśnięcie klawisza `Enter` zatwierdza wybór zlecenia, pozwala wpisać godziny i zapisuje wpis, po czym kursor automatycznie wraca do wyboru kolejnego zlecenia.
 * **Przycisk "Dzisiaj"**: Jedno kliknięcie ustawia datę raportu na dzisiejszy dzień w lokalnej strefie czasowej, automatycznie odświeżając widoczne wpisy.
-* **Kopiowanie poprzedniego dnia**: Automatyczne powielenie struktury wpisów z ostatniego dnia roboczego wybranego pracownika w celu przyspieszenia ewidencji powtarzalnych prac.
+* **Kopiowanie poprzedniego dnia**: Automatyczne powielenie struktury wpisów z ostatniego dnia roboczego wybranego pracownika (z zachowaniem przypisanych zmian `I`, `II`, `III` dla obecności) w celu przyspieszenia ewidencji powtarzalnych prac.
 * **Ostrzeżenia dobowe (Soft Validation)**: Wyświetlanie ostrzeżeń w kolorach żółtym (Standard > 8h), pomarańczowym (Suma > 12h) lub czerwonym (Suma > 24h) bez blokowania możliwości zapisu.
 
 ### 4. Centrum Raportów (Raporty)
 * Generowanie okresowych zestawień i rozliczeń zleceniowych dla liderów oraz administracji.
+* **Miesięczny raport pracowników**: Prezentuje sumaryczny czas pracy pracowników z pojedynczą kolumną `Zmiana` i podziałem na wiersze per pracownik i zmiana (`I`, `II`, `III`, `Brak danych` dla wpisów historycznych, `Nie dotyczy` dla nieobecności) w widoku tabeli oraz eksportach XLSX i CSV.
 * Istniejący raport „Godziny wg zleceń” udostępnia tryb „Raport zamknięcia”, łączący otwarte zlecenia z godzinami oraz zlecenia zamknięte w wybranym okresie, także z zerową liczbą godzin.
-* Raport okresów nieobecności grupuje kolejne dni robocze tego samego pracownika i rodzaju nieobecności, pozwala filtrować wyniki oraz eksportować je do XLSX.
+* Raport okresów nieobecności grupuje kolejne dni robocze tego samego pracownika i rodzaju nieobecności, mostkuje przez dni wolne (święta ustawowe, weekendy, wyjątki kalendarza), pozwala filtrować wyniki oraz eksportować je do XLSX i CSV.
 * Każdy raport zachowuje własne filtry w bieżącej sesji karty przeglądarki; wartości są odtwarzane po zmianie widoku i odświeżeniu strony, a zamknięcie karty usuwa je automatycznie.
 * Eksport raportów do arkuszy Excel z automatycznym formatowaniem szerokości kolumn, autofiltrami i zamrożonym pierwszym wierszem nagłówkowym w celu wygodnej pracy w arkuszu.
 
 ### 5. Kalendarz zakładowy
-* Administrator może definiować wyjątki dla konkretnych dat: dzień roboczy albo dzień wolny, z opcjonalnym opisem.
-* Bez wyjątku obowiązuje kalendarz poniedziałek–piątek robocze, sobota–niedziela wolne. Automatyczna baza świąt nie jest częścią systemu.
+* System automatycznie wyznacza polskie święta ustawowe (w tym Wigilię od 2025 roku) oraz weekendy.
+* Administrator może definiować wyjątki dla konkretnych dat: dzień roboczy albo dzień wolny, z opcjonalnym opisem, które mają pierwszeństwo przed domyślnymi regułami kalendarza.
 
-### 5. Administracja i Konfiguracja
+### 6. Administracja i Konfiguracja
 * **Pracownicy**: Zarządzanie danymi pracowników (imię, nazwisko, unikalny numer ewidencyjny). Wspiera masowy import z plików Excel.
 * **Użytkownicy**: Zarządzanie kontami użytkowników z uprawnieniami logowania do systemu.
-* **Słowniki**: Konfiguracja kodów klasyfikacji czasu pracy (np. godziny standardowe, nadgodziny, urlopy).
+* **Słowniki**: Konfiguracja kodów klasyfikacji czasu pracy (godziny standardowe, nadgodziny, urlopy, nieobecności). Typy systemowe podlegają ochronie, a typy własne zachowują pełną swobodę konfiguracji.
 * **Import danych**: Kreator masowego wgrywania zleceń i pracowników z plików Excel.
 
 ---
@@ -328,7 +330,7 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 
 ## Status projektu
 
-* **Aktualna wersja**: `0.5.2`
+* **Aktualna wersja**: `0.5.9`
 * **Docelowa gałąź integracyjna**: `development`
 * **Status prac**: Aktywny rozwój (Active development)
 

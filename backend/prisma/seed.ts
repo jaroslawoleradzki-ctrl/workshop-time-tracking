@@ -50,8 +50,10 @@ async function main() {
   });
   console.log(`Leader user created/verified: ${leader.username} (password: ${leaderPassword})`);
 
-  // 2. Seed work time types
-  const workTimeTypes = [
+  // 2. Seed established canonical system work time types
+  // Only established canonical system types are seeded. Custom/client types (including custom collisions)
+  // must never be overwritten, taken over, or normalized by production startup seed.
+  const canonicalSystemTypes = [
     { code: 'G', name: 'Standardowe godziny pracy', requiresOrder: true, isAbsence: false, isSystem: true },
     { code: 'NDR', name: 'Nadgodziny', requiresOrder: true, isAbsence: false, isSystem: true },
     { code: 'NS', name: 'Nadgodziny sobota/niedziela', requiresOrder: true, isAbsence: false, isSystem: true },
@@ -61,17 +63,31 @@ async function main() {
     { code: 'L4', name: 'Zwolnienie chorobowe', requiresOrder: false, isAbsence: true, isSystem: true },
   ];
 
-  for (const type of workTimeTypes) {
-    await prisma.workTimeType.upsert({
+  for (const type of canonicalSystemTypes) {
+    const existing = await prisma.workTimeType.findUnique({
       where: { code: type.code },
-      update: {
-        name: type.name,
-        requiresOrder: type.requiresOrder,
-        isAbsence: type.isAbsence,
-        isSystem: type.isSystem,
-      },
-      create: type,
     });
+
+    if (!existing) {
+      await prisma.workTimeType.create({
+        data: type,
+      });
+    } else if (existing.isSystem) {
+      // For existing system types, ensure required system invariant flags without overwriting custom names
+      if (
+        existing.requiresOrder !== type.requiresOrder ||
+        existing.isAbsence !== type.isAbsence
+      ) {
+        await prisma.workTimeType.update({
+          where: { code: type.code },
+          data: {
+            requiresOrder: type.requiresOrder,
+            isAbsence: type.isAbsence,
+          },
+        });
+      }
+    }
+    // If existing and NOT isSystem: client-owned row, preserved intact without takeover.
   }
   console.log('Work time types seeded.');
   console.log('System seed completed successfully!');

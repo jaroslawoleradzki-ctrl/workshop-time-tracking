@@ -38,12 +38,49 @@ export function isWeekend(dateStr: string): boolean {
   return dayOfWeek === 0 || dayOfWeek === 6;
 }
 
-export function getDefaultWorkType(dateStr: string, workTypes: WorkTimeType[]): string {
+export interface CalendarDecision {
+  date: string;
+  isWorkingDay: boolean;
+  source: 'standard weekday' | 'weekend' | 'public holiday' | 'company override';
+  reason?: string | null;
+}
+
+export function getDefaultWorkType(
+  calendarOrDate: CalendarDecision | string | null | undefined,
+  workTypes: WorkTimeType[],
+  dateStrFallback?: string
+): string {
+  if (!calendarOrDate) {
+    const fallback = dateStrFallback || '';
+    if (fallback && isWeekend(fallback)) {
+      const nsType = workTypes.find(t => t.code === 'NS');
+      return nsType ? 'NS' : '';
+    }
+    const gType = workTypes.find(t => t.code === 'G');
+    return gType ? 'G' : '';
+  }
+
+  if (typeof calendarOrDate === 'string') {
+    if (isWeekend(calendarOrDate)) {
+      const nsType = workTypes.find(t => t.code === 'NS');
+      return nsType ? 'NS' : '';
+    }
+    const gType = workTypes.find(t => t.code === 'G');
+    return gType ? 'G' : '';
+  }
+
+  if (calendarOrDate.isWorkingDay) {
+    const gType = workTypes.find(t => t.code === 'G');
+    return gType ? 'G' : '';
+  }
+
+  const dateStr = calendarOrDate.date || dateStrFallback || '';
   if (isWeekend(dateStr)) {
     const nsType = workTypes.find(t => t.code === 'NS');
-    if (nsType) return 'NS';
+    return nsType ? 'NS' : '';
   }
-  return 'G';
+
+  return '';
 }
 
 interface Employee {
@@ -76,6 +113,7 @@ interface ReportEntry {
   orderId: string | null;
   hours: number;
   workTimeTypeCode: string;
+  workShift?: 'FIRST' | 'SECOND' | 'THIRD' | null;
   missingCard?: boolean;
   order?: {
     orderNumber: string;
@@ -87,6 +125,7 @@ interface ReportEntry {
     code: string;
     name: string;
     requiresOrder: boolean;
+    isAbsence: boolean;
   };
 }
 
@@ -162,6 +201,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [hoursInput, setHoursInput] = useState('8.00');
   const [selectedWorkType, setSelectedWorkType] = useState('G');
+  const [workShift, setWorkShift] = useState<'FIRST' | 'SECOND' | 'THIRD' | ''>('FIRST');
   const [missingCard, setMissingCard] = useState(false);
 
   // Autocomplete UI states
@@ -193,9 +233,16 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
 
   // Edit Mode state
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
+  const formModeRef = useRef<'pristine' | 'modified' | 'editing'>('pristine');
+  const formContextRef = useRef<string | null>(null);
 
   // Current reported entries list
   const [dayEntries, setDayEntries] = useState<ReportEntry[]>([]);
+
+  // Company Calendar Decision state & caching
+  const [calendarDecision, setCalendarDecision] = useState<CalendarDecision | null>(null);
+  const calendarCacheRef = useRef<Map<string, CalendarDecision>>(new Map());
+  const activeCalendarFetchDateRef = useRef<string>(currentDate);
 
   // Notifications & Alerts
   const [successNotification, setSuccessNotification] = useState('');
@@ -219,6 +266,12 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
   currentSelectionRef.current = {
     employeeId: currentEmployee?.id || null,
     date: currentDate,
+  };
+
+  const markFormModified = () => {
+    if (formModeRef.current === 'pristine') {
+      formModeRef.current = 'modified';
+    }
   };
 
   // 1. Initial Load: Dictionaries
@@ -278,14 +331,49 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
     fetchDictionaries();
   }, [token]);
 
-  // 2. Initialize form when dictionaries are loaded (fixes race condition on first render)
+  // Fetch calendar decision for currentDate with race condition protection and safe fallback
   useEffect(() => {
-    if (dictionariesLoaded && currentEmployee) {
-      resetForm();
-    }
-  }, [dictionariesLoaded, currentEmployee, currentDate, workTypes]);
+    let isCurrent = true;
+    const dateToFetch = currentDate;
+    activeCalendarFetchDateRef.current = dateToFetch;
 
-  // 3. Load Day Entries when date or employee changes
+    if (calendarCacheRef.current.has(dateToFetch)) {
+      const cached = calendarCacheRef.current.get(dateToFetch)!;
+      setCalendarDecision(cached);
+      return;
+    }
+
+    const fetchCalendarDecision = async () => {
+      try {
+        const res = await fetch(`/api/company-calendar/day/${dateToFetch}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        const decision: CalendarDecision = await res.json();
+        if (!isCurrent || activeCalendarFetchDateRef.current !== dateToFetch) return;
+        calendarCacheRef.current.set(dateToFetch, decision);
+        setCalendarDecision(decision);
+      } catch {
+        if (!isCurrent || activeCalendarFetchDateRef.current !== dateToFetch) return;
+        const fallbackDecision: CalendarDecision = {
+          date: dateToFetch,
+          isWorkingDay: !isWeekend(dateToFetch),
+          source: isWeekend(dateToFetch) ? 'weekend' : 'standard weekday',
+          reason: null,
+        };
+        calendarCacheRef.current.set(dateToFetch, fallbackDecision);
+        setCalendarDecision(fallbackDecision);
+      }
+    };
+
+    fetchCalendarDecision();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [currentDate, token]);
+
+  // Load Day Entries when date or employee changes
   useEffect(() => {
     if (currentEmployee) {
       fetchDayEntries(currentEmployee.id, currentDate);
@@ -334,19 +422,53 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
   };
 
   // Reset Form
-  const resetForm = useCallback((preserveWorkType = false) => {
+  const resetForm = useCallback(() => {
+    formModeRef.current = 'pristine';
     setSearchOrderQuery('');
     setSelectedOrder(null);
     setHoursInput('8.00');
-    if (!preserveWorkType) {
-      setSelectedWorkType(getDefaultWorkType(currentDate, workTypes));
-    }
+    const cachedDecision = calendarCacheRef.current.get(currentDate);
+    const defaultType =
+      cachedDecision?.date === currentDate
+        ? getDefaultWorkType(cachedDecision, workTypes, currentDate)
+        : '';
+    setSelectedWorkType(defaultType);
+    setWorkShift('');
     setMissingCard(false);
     setValidationError('');
     setEditingReportId(null);
     setAutocompleteHighlightIdx(-1);
     setShowOrderAutocomplete(false);
   }, [currentDate, workTypes]);
+
+  // Reset only when the new-entry context changes. A calendar response must not
+  // reset user input or an edit form.
+  useEffect(() => {
+    if (!dictionariesLoaded || !currentEmployee) return;
+
+    const context = `${currentEmployee.id}:${currentDate}`;
+    if (formContextRef.current === context) return;
+
+    formContextRef.current = context;
+    resetForm();
+  }, [dictionariesLoaded, currentEmployee, currentDate, resetForm]);
+
+  // Apply a calendar-aware default only to a pristine new form and only when
+  // the decision belongs to the currently selected date.
+  useEffect(() => {
+    if (
+      !dictionariesLoaded ||
+      !currentEmployee ||
+      formModeRef.current !== 'pristine' ||
+      calendarDecision?.date !== currentDate
+    ) {
+      return;
+    }
+
+    const defaultType = getDefaultWorkType(calendarDecision, workTypes, currentDate);
+    setSelectedWorkType(defaultType);
+    setWorkShift('');
+  }, [dictionariesLoaded, currentEmployee, currentDate, calendarDecision, workTypes]);
 
   // Navigation handlers
   const handlePrevEmployee = () => {
@@ -407,6 +529,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
 
   // Order Autocomplete click selection
   const handleSelectOrder = (order: Order) => {
+    markFormModified();
     setSelectedOrder(order);
     setSearchOrderQuery(order.orderNumber);
     setShowOrderAutocomplete(false);
@@ -499,6 +622,13 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
       return;
     }
 
+    if (!currentType.isAbsence) {
+      if (!workShift || !['FIRST', 'SECOND', 'THIRD'].includes(workShift)) {
+        setValidationError('Wybór zmiany (I, II lub III zmiana) jest wymagany dla czasu pracy.');
+        return;
+      }
+    }
+
     // Pre-flight warning check
     if (!bypassWarningsCheck) {
       try {
@@ -538,6 +668,8 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
     try {
       const url = editingReportId ? `/api/reports/${editingReportId}` : '/api/reports';
       const method = editingReportId ? 'PUT' : 'POST';
+      const currentType = workTypes.find(t => t.code === selectedWorkType);
+      const isAbsence = currentType?.isAbsence ?? false;
 
       const res = await fetch(url, {
         method,
@@ -551,6 +683,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
           orderId: selectedOrder?.id || null,
           hours,
           workTimeTypeCode: selectedWorkType,
+          workShift: isAbsence ? null : workShift,
           missingCard
         })
       });
@@ -578,8 +711,17 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
 
   // Edit current report handler
   const handleEditEntry = (entry: ReportEntry) => {
+    formModeRef.current = 'editing';
     setEditingReportId(entry.id);
     setSelectedWorkType(entry.workTimeTypeCode);
+    const isEntryAbsence = entry.workTimeType?.isAbsence ?? false;
+    if (isEntryAbsence) {
+      setWorkShift('');
+    } else if (entry.workShift === 'FIRST' || entry.workShift === 'SECOND' || entry.workShift === 'THIRD') {
+      setWorkShift(entry.workShift);
+    } else {
+      setWorkShift('');
+    }
     setHoursInput(entry.hours.toString());
 
     if (entry.order) {
@@ -896,20 +1038,55 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
 
             {/* Type selector */}
             <div className="form-group">
-              <label className="form-label">Rodzaj czasu pracy</label>
+              <label className="form-label" htmlFor="workTypeSelect">Rodzaj czasu pracy</label>
               <select
+                id="workTypeSelect"
                 className="form-control"
                 value={selectedWorkType}
                 onChange={e => {
-                  setSelectedWorkType(e.target.value);
+                  markFormModified();
+                  const newCode = e.target.value;
+                  setSelectedWorkType(newCode);
+                  const targetType = workTypes.find(t => t.code === newCode);
+                  if (targetType?.isAbsence) {
+                    setWorkShift('');
+                  }
                   setValidationError('');
                 }}
               >
+                <option value="">-- Wybierz rodzaj czasu pracy --</option>
                 {Array.isArray(workTypes) && workTypes.map(t => (
                   <option key={t.code} value={t.code}>
                     {t.code} - {t.name}
                   </option>
                 ))}
+              </select>
+            </div>
+
+            {/* Shift selector */}
+            <div className="form-group">
+              <label className="form-label" htmlFor="workShiftSelect">Zmiana</label>
+              <select
+                id="workShiftSelect"
+                className="form-control"
+                value={workTypes.find(t => t.code === selectedWorkType)?.isAbsence ? '' : workShift}
+                disabled={workTypes.find(t => t.code === selectedWorkType)?.isAbsence ?? false}
+                onChange={e => {
+                  markFormModified();
+                  setWorkShift(e.target.value as 'FIRST' | 'SECOND' | 'THIRD' | '');
+                  setValidationError('');
+                }}
+              >
+                {workTypes.find(t => t.code === selectedWorkType)?.isAbsence ? (
+                  <option value="">Nie dotyczy (nieobecność)</option>
+                ) : (
+                  <>
+                    <option value="">-- Wybierz zmianę --</option>
+                    <option value="FIRST">I</option>
+                    <option value="SECOND">II</option>
+                    <option value="THIRD">III</option>
+                  </>
+                )}
               </select>
             </div>
 
@@ -925,6 +1102,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                     placeholder="Wpisz numer zlecenia lub produktu..."
                     value={searchOrderQuery}
                     onChange={e => {
+                      markFormModified();
                       setSearchOrderQuery(e.target.value);
                       setSelectedOrder(null); // Clear selected order if text changed
                       setShowOrderAutocomplete(true);
@@ -981,7 +1159,10 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                   ref={hoursInputRef}
                   className="form-control"
                   value={hoursInput}
-                  onChange={e => setHoursInput(e.target.value)}
+                  onChange={e => {
+                    markFormModified();
+                    setHoursInput(e.target.value);
+                  }}
                   placeholder="np. 8.00"
                   onKeyDown={e => {
                     if (e.key === 'Enter') {
@@ -1000,7 +1181,10 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                 id="missingCard"
                 style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                 checked={missingCard}
-                onChange={e => setMissingCard(e.target.checked)}
+                onChange={e => {
+                  markFormModified();
+                  setMissingCard(e.target.checked);
+                }}
               />
               <label htmlFor="missingCard" className="form-label" style={{ margin: 0, cursor: 'pointer' }}>
                 Brak karty
@@ -1093,6 +1277,15 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                         }}>
                           {entry.workTimeTypeCode}
                         </span>
+                        {entry.workShift ? (
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
+                            {entry.workShift === 'FIRST' ? 'I zmiana' : entry.workShift === 'SECOND' ? 'II zmiana' : 'III zmiana'}
+                          </div>
+                        ) : !entry.workTimeType.isAbsence ? (
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.15rem', fontStyle: 'italic' }}>
+                            Brak danych o zmianie
+                          </div>
+                        ) : null}
                         {entry.missingCard && (
                           <div style={{ fontSize: '0.7rem', color: 'var(--danger-color)', marginTop: '0.15rem', fontWeight: 'bold' }}>
                             Brak karty

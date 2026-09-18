@@ -39,10 +39,31 @@ type EmployeeReportFilters = {
   employeeId?: string;
 };
 
-type EmployeeReportRow = {
+export type ShiftDimension = 'FIRST' | 'SECOND' | 'THIRD' | 'UNSPECIFIED' | 'ABSENCE';
+
+export const SHIFT_LABELS: Record<ShiftDimension, string> = {
+  FIRST: 'I',
+  SECOND: 'II',
+  THIRD: 'III',
+  UNSPECIFIED: 'Brak danych',
+  ABSENCE: 'Nie dotyczy',
+};
+
+export const SHIFT_ORDER: Record<ShiftDimension, number> = {
+  FIRST: 1,
+  SECOND: 2,
+  THIRD: 3,
+  UNSPECIFIED: 4,
+  ABSENCE: 5,
+};
+
+export type EmployeeReportRow = {
   employeeId: string;
   employeeName: string;
+  workShift: ShiftDimension;
+  workShiftLabel: string;
   suma: number;
+  sumaBezNadgodzin: number;
   [workTimeTypeCode: string]: string | number;
 };
 
@@ -97,7 +118,10 @@ export const OVERTIME_CODES = ['NDR', 'NS'];
 type InternalPivotRow = {
   employeeId: string;
   employeeName: string;
+  workShift: ShiftDimension;
+  workShiftLabel: string;
   sortKey: string;
+  shiftOrder: number;
   suma: number;
   sumaBezNadgodzin: number;
   counts: Record<string, number>;
@@ -280,18 +304,36 @@ export async function getEmployeeReportRows(
   const pivot: Record<string, InternalPivotRow> = {};
 
   reports.forEach((report) => {
-    const employeeId = report.employeeId;
-    if (!pivot[employeeId]) {
+    const isAbsence = report.workTimeType?.isAbsence ?? false;
+    let shiftKey: ShiftDimension;
+    if (isAbsence) {
+      shiftKey = 'ABSENCE';
+    } else if (report.workShift === 'FIRST') {
+      shiftKey = 'FIRST';
+    } else if (report.workShift === 'SECOND') {
+      shiftKey = 'SECOND';
+    } else if (report.workShift === 'THIRD') {
+      shiftKey = 'THIRD';
+    } else {
+      shiftKey = 'UNSPECIFIED';
+    }
+
+    const rowKey = `${report.employeeId}\u0000${shiftKey}`;
+
+    if (!pivot[rowKey]) {
       const emp = report.employee;
       const lastNameForSort = (emp.lastName || (emp.fullName ? emp.fullName.trim().split(' ').slice(-1)[0] : '') || '').trim();
       const firstNameForSort = (emp.firstName || (emp.fullName ? emp.fullName.trim().split(' ').slice(0, -1).join(' ') : '') || '').trim();
       const sortKey = `${lastNameForSort} ${firstNameForSort}`.trim().toLowerCase();
       const employeeName = formatEmployeeName(emp);
 
-      pivot[employeeId] = {
-        employeeId,
+      pivot[rowKey] = {
+        employeeId: report.employeeId,
         employeeName,
+        workShift: shiftKey,
+        workShiftLabel: SHIFT_LABELS[shiftKey],
         sortKey,
+        shiftOrder: SHIFT_ORDER[shiftKey],
         suma: 0,
         sumaBezNadgodzin: 0,
         counts: {},
@@ -306,17 +348,21 @@ export async function getEmployeeReportRows(
       code.startsWith('NS') ||
       (report.workTimeType?.name?.toLowerCase().includes('nadgodzin') ?? false);
 
-    pivot[employeeId].counts[code] = (pivot[employeeId].counts[code] || 0) + hours;
-    pivot[employeeId].suma += hours;
+    pivot[rowKey].counts[code] = (pivot[rowKey].counts[code] || 0) + hours;
+    pivot[rowKey].suma += hours;
     if (!isOvertime) {
-      pivot[employeeId].sumaBezNadgodzin += hours;
+      pivot[rowKey].sumaBezNadgodzin += hours;
     }
   });
 
   return Object.values(pivot)
-    .sort((a, b) => a.sortKey.localeCompare(b.sortKey, 'pl'))
+    .sort((a, b) => {
+      const cmp = a.sortKey.localeCompare(b.sortKey, 'pl');
+      if (cmp !== 0) return cmp;
+      return a.shiftOrder - b.shiftOrder;
+    })
     .map((item) => {
-      const { sortKey, counts, ...rest } = item;
+      const { sortKey, shiftOrder, counts, ...rest } = item;
       return {
         ...rest,
         ...counts,
@@ -502,6 +548,16 @@ export async function getOrderReportRows(
         ? [
             { status: OrderStatus.OPEN },
             { status: OrderStatus.CLOSED, completionDate: completionDateRange },
+            // Historical stability: include OPEN or CLOSED orders with reports in range regardless of current status/completionDate
+            {
+              status: { in: [OrderStatus.OPEN, OrderStatus.CLOSED] },
+              reports: {
+                some: {
+                  deletedAt: null,
+                  date: reportDateRange,
+                },
+              },
+            },
           ]
         : undefined,
     },
@@ -509,9 +565,11 @@ export async function getOrderReportRows(
       reports: {
         where: {
           deletedAt: null,
-          date: reportDateRange,
+          // Fetch all non-deleted reports up to the report end.  The same set
+          // supplies periodActualHours and cumulativeActualHours below.
+          date: { lte: reportDateRange.lte },
         },
-        select: { hours: true },
+        select: { hours: true, date: true },
       },
     },
     orderBy: { orderNumber: 'asc' },
@@ -519,9 +577,20 @@ export async function getOrderReportRows(
 
   let rows = orders.map((order): OrderReportRow => {
     const plannedHours = Number(order.plannedHours);
-    const actualHours = order.reports.reduce((sum, report) => sum + Number(report.hours), 0);
-    const deviation = plannedHours - actualHours;
-    const percent = plannedHours > 0 ? (actualHours / plannedHours) * 100 : 0;
+    const orderStartDate = order.orderDate
+      ? new Date(`${formatDateKey(order.orderDate)}T00:00:00.000Z`)
+      : undefined;
+    const periodActualHours = order.reports
+      .filter(report =>
+        (!reportDateRange.gte || report.date >= reportDateRange.gte) &&
+        (!reportDateRange.lte || report.date <= reportDateRange.lte),
+      )
+      .reduce((sum, report) => sum + Number(report.hours), 0);
+    const cumulativeActualHours = order.reports
+      .filter(report => !orderStartDate || report.date >= orderStartDate)
+      .reduce((sum, report) => sum + Number(report.hours), 0);
+    const deviation = plannedHours - cumulativeActualHours;
+    const percent = plannedHours > 0 ? (cumulativeActualHours / plannedHours) * 100 : 0;
 
     return {
       orderNumber: order.orderNumber,
@@ -531,7 +600,7 @@ export async function getOrderReportRows(
       quantity: order.quantity !== null ? Number(order.quantity) : null,
       quantityUnit: order.quantityUnit || 'szt.',
       plannedHours,
-      actualHours: Math.round(actualHours * 100) / 100,
+      actualHours: Math.round(periodActualHours * 100) / 100,
       deviation: Math.round(deviation * 100) / 100,
       percent: Math.round(percent * 100) / 100,
       status: order.status,
@@ -578,7 +647,10 @@ export async function getReconciliationDiagnostics(
     orderBy: [{ employee: { lastName: 'asc' } }, { date: 'asc' }, { createdAt: 'asc' }],
   });
 
-  // Get orders included in closure report (OPEN or CLOSED with completionDate in range)
+  // Get orders included in closure report:
+  // - OPEN orders (currently active)
+  // - CLOSED orders with completionDate in range (closed during the period)
+  // - OPEN or CLOSED orders with ANY work time reports in the date range (historical stability: hours logged in period must remain in reconciliation regardless of later status change)
   const ordersInClosure = await db.order.findMany({
     where: {
       deletedAt: null,
@@ -589,6 +661,18 @@ export async function getReconciliationDiagnostics(
           completionDate: {
             gte: new Date(`${dateFrom}T00:00:00.000Z`),
             lte: new Date(`${dateTo}T23:59:59.999Z`),
+          },
+        },
+        {
+          status: { in: [OrderStatus.OPEN, OrderStatus.CLOSED] },
+          reports: {
+            some: {
+              deletedAt: null,
+              date: {
+                gte: new Date(`${dateFrom}T00:00:00.000Z`),
+                lte: new Date(`${dateTo}T23:59:59.999Z`),
+              },
+            },
           },
         },
       ],
@@ -632,7 +716,13 @@ export async function getReconciliationDiagnostics(
       } else {
         // Not in reconciliation at all
         contribution = -hours;
-        reason = !orderId ? 'Brak zlecenia' : 'Zlecenie nieobjęte raportem zamknięcia';
+        if (orderId) {
+          reason = 'Zlecenie nieobjęte raportem zamknięcia';
+        } else if (!report.workTimeType.requiresOrder) {
+          reason = 'Typ nie jest nieobecnością i nie wymaga zlecenia';
+        } else {
+          reason = 'Brak zlecenia';
+        }
       }
     }
 
@@ -965,6 +1055,7 @@ router.get('/report-detailed', async (req: AuthRequest, res: Response) => {
       accountingAccount: r.order?.accountingAccount || 'brak',
       hours: Number(r.hours),
       workTimeTypeCode: r.workTimeTypeCode,
+      workShift: r.workShift,
       creatorName: r.createdByUser.fullName,
       createdAt: r.createdAt.toISOString(),
       missingCard: r.missingCard,
@@ -1099,6 +1190,7 @@ router.get('/export/by-employee', async (req: AuthRequest, res: Response) => {
 
     const headers = [
       'Pracownik',
+      'Zmiana',
       'Suma godzin z nadgodzinami',
       'Suma godzin bez nadgodzin',
       ...workTimeTypes.map((type) => `${type.code} (${type.name})`),
@@ -1106,13 +1198,14 @@ router.get('/export/by-employee', async (req: AuthRequest, res: Response) => {
 
     const data = rows.map((row) => [
       row.employeeName,
+      row.workShiftLabel,
       row.suma,
       row.sumaBezNadgodzin,
       ...workTimeTypes.map((type) => Number(row[type.code]) || 0),
     ]);
     const numberColumns = Array.from(
-      { length: workTimeTypes.length + 2 },
-      (_, index) => index + 2,
+      { length: headers.length - 2 },
+      (_, index) => index + 3,
     );
 
     let empNameVal = 'Wszyscy pracownicy';

@@ -156,19 +156,6 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
                 </div>
               )}
 
-              <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
-                <input
-                  type="checkbox"
-                  id="isAbsence"
-                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                  checked={isAbsence}
-                  onChange={e => setIsAbsence(e.target.checked)}
-                />
-                <label htmlFor="isAbsence" className="form-label" style={{ margin: 0, cursor: 'pointer' }}>
-                  Nieobecność
-                </label>
-              </div>
-
               <div className="form-group">
                 <label className="form-label" htmlFor="work-time-type-code">Kod rodzaju czasu pracy</label>
                 <input
@@ -194,6 +181,19 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
                   value={name}
                   onChange={e => setName(e.target.value)}
                 />
+              </div>
+
+              <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
+                <input
+                  type="checkbox"
+                  id="isAbsence"
+                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  checked={isAbsence}
+                  onChange={e => setIsAbsence(e.target.checked)}
+                />
+                <label htmlFor="isAbsence" className="form-label" style={{ margin: 0, cursor: 'pointer' }}>
+                  Nieobecność pracownika
+                </label>
               </div>
 
               {/* requiresOrder is locked for system codes to prevent workflow breaking */}
@@ -269,9 +269,9 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
               <tr>
                 <th>Kod</th>
                 <th>Pełna nazwa</th>
-                <th>Zlecenie produkcyjne</th>
+                <th>Wymaga zlecenia</th>
                 <th>Nieobecność</th>
-                <th>Typ słownika</th>
+                <th>Status słownika</th>
                 <th style={{ textAlign: 'center' }}>Akcje</th>
               </tr>
             </thead>
@@ -288,15 +288,6 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
                       {t.code}
                     </code>
                   </td>
-                  <td>
-                    {t.isAbsence ? (
-                      <span className="badge badge-suspended">Tak</span>
-                    ) : (
-                      <span className="badge badge-open" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}>
-                        Nie
-                      </span>
-                    )}
-                  </td>
                   <td style={{ fontWeight: 500 }}>{t.name}</td>
                   <td>
                     {t.requiresOrder ? (
@@ -304,6 +295,15 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
                     ) : (
                       <span className="badge badge-open" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}>
                         Niewymagane
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    {t.isAbsence ? (
+                      <span className="badge badge-suspended">Tak</span>
+                    ) : (
+                      <span className="badge badge-open" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}>
+                        Nie
                       </span>
                     )}
                   </td>

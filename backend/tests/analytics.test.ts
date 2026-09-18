@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as jwt from 'jsonwebtoken';
 import * as ExcelJS from 'exceljs';
 import request from 'supertest';
-import { Prisma } from '@prisma/client';
+import { Prisma, OrderStatus } from '@prisma/client';
 import {
   formatEmployeeName,
   getClosureControlSummary,
@@ -52,6 +52,11 @@ const closureOrders = [
   { id: 'suspended', orderNumber: 'ZL-010', status: 'SUSPENDED', completionDate: null, deletedAt: null, reports: [{ hours: 3, date: new Date('2026-08-20T00:00:00.000Z'), deletedAt: null }] },
   { id: 'boundary-from', orderNumber: 'ZL-011', status: 'CLOSED', completionDate: new Date('2026-08-01T00:00:00.000Z'), deletedAt: null, reports: [] },
   { id: 'boundary-to', orderNumber: 'ZL-012', status: 'CLOSED', completionDate: new Date('2026-08-31T00:00:00.000Z'), deletedAt: null, reports: [] },
+  // Regression test: CLOSED after range (2026-09-10) WITH hours in range (2026-08-15, 2026-08-20)
+  { id: 'closed-after-with-hours', orderNumber: 'ZL-013', status: 'CLOSED', completionDate: new Date('2026-09-10T00:00:00.000Z'), deletedAt: null, reports: [
+    { hours: 20, date: new Date('2026-08-15T00:00:00.000Z'), deletedAt: null },
+    { hours: 15, date: new Date('2026-08-20T00:00:00.000Z'), deletedAt: null },
+  ] },
 ].map(order => ({
   productName: `Produkt ${order.orderNumber}`,
   productCode: `P-${order.orderNumber}`,
@@ -65,14 +70,22 @@ const closureOrders = [
 const mockOrderReportQuery = () => vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
   // Diagnostic query for closure control summary - only selects id, no include
   if (args?.select?.id && !args?.include?.reports) {
+    const dateFrom = new Date('2026-08-01T00:00:00.000Z');
+    const dateTo = new Date('2026-08-31T23:59:59.999Z');
     return closureOrders
       .filter(order => order.deletedAt === null)
-      .filter(order => order.status === 'OPEN' || (
-        order.status === 'CLOSED' &&
-        order.completionDate &&
-        order.completionDate >= new Date('2026-08-01T00:00:00.000Z') &&
-        order.completionDate <= new Date('2026-08-31T23:59:59.999Z')
-      ))
+      .filter(order => {
+        // OPEN orders always included
+        if (order.status === 'OPEN') return true;
+        // CLOSED with completionDate in range
+        if (order.status === 'CLOSED' && order.completionDate &&
+            order.completionDate >= dateFrom && order.completionDate <= dateTo) return true;
+        // OPEN or CLOSED orders with reports in range (historical stability)
+        if ((order.status === 'OPEN' || order.status === 'CLOSED') &&
+            order.reports.some(r => r.deletedAt === null &&
+                r.date >= dateFrom && r.date <= dateTo)) return true;
+        return false;
+      })
       .map(order => ({ id: order.id })) as any;
   }
 
@@ -84,12 +97,24 @@ const mockOrderReportQuery = () => vi.spyOn(prisma.order, 'findMany').mockImplem
     .filter(order => order.deletedAt === null)
     .filter(order => {
       if (!closureBranches) return !args.where.status || order.status === args.where.status;
-      return order.status === 'OPEN' || (
-        order.status === 'CLOSED' &&
-        order.completionDate &&
-        order.completionDate >= completionRange.gte &&
-        order.completionDate <= completionRange.lte
-      );
+      // OPEN orders
+      if (order.status === 'OPEN') return true;
+      // CLOSED with completionDate in range
+      if (order.status === 'CLOSED' && order.completionDate &&
+          order.completionDate >= completionRange.gte &&
+          order.completionDate <= completionRange.lte) return true;
+      // OPEN or CLOSED orders with reports in range (historical stability) - check third OR branch
+      const reportsBranch = closureBranches?.[2];
+      if (reportsBranch?.status?.in?.includes(order.status) && reportsBranch?.reports?.some) {
+        const someCondition = reportsBranch.reports.some;
+        if (someCondition.deletedAt === null && someCondition.date) {
+          const dateFrom = someCondition.date.gte;
+          const dateTo = someCondition.date.lte;
+          if (order.reports.some(r => r.deletedAt === null &&
+              r.date >= dateFrom && r.date <= dateTo)) return true;
+        }
+      }
+      return false;
     })
     .map(order => ({
       ...order,
@@ -135,12 +160,14 @@ describe('Analytics reports', () => {
         employee: { fullName: 'Jan Kowalski' },
         hours: 2.5,
         workTimeTypeCode: 'NOC',
+        workShift: null,
       },
       {
         employeeId: EMPLOYEE_ID,
         employee: { fullName: 'Jan Kowalski' },
         hours: 1.5,
         workTimeTypeCode: 'NOC',
+        workShift: 'FIRST',
       },
     ] as any);
 
@@ -152,9 +179,20 @@ describe('Analytics reports', () => {
       {
         employeeId: EMPLOYEE_ID,
         employeeName: 'Jan Kowalski',
-        NOC: 4,
-        suma: 4,
-        sumaBezNadgodzin: 4,
+        workShift: 'FIRST',
+        workShiftLabel: 'I',
+        NOC: 1.5,
+        suma: 1.5,
+        sumaBezNadgodzin: 1.5,
+      },
+      {
+        employeeId: EMPLOYEE_ID,
+        employeeName: 'Jan Kowalski',
+        workShift: 'UNSPECIFIED',
+        workShiftLabel: 'Brak danych',
+        NOC: 2.5,
+        suma: 2.5,
+        sumaBezNadgodzin: 2.5,
       },
     ]);
   });
@@ -166,12 +204,14 @@ describe('Analytics reports', () => {
         employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
         hours: 8,
         workTimeTypeCode: 'G',
+        workShift: 'FIRST',
       },
       {
         employeeId: EMPLOYEE_ID,
         employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
         hours: 2.5,
         workTimeTypeCode: 'NOC',
+        workShift: 'SECOND',
       },
     ];
     const reportSpy = vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue(reports as any);
@@ -192,6 +232,26 @@ describe('Analytics reports', () => {
     expect(reportSpy).toHaveBeenCalledTimes(2);
     expect(reportSpy.mock.calls[0][0]).toEqual(reportSpy.mock.calls[1][0]);
 
+    expect(jsonResponse.body).toHaveLength(2);
+    expect(jsonResponse.body[0]).toEqual({
+      employeeId: EMPLOYEE_ID,
+      employeeName: 'Kowalski Jan',
+      workShift: 'FIRST',
+      workShiftLabel: 'I',
+      G: 8,
+      suma: 8,
+      sumaBezNadgodzin: 8,
+    });
+    expect(jsonResponse.body[1]).toEqual({
+      employeeId: EMPLOYEE_ID,
+      employeeName: 'Kowalski Jan',
+      workShift: 'SECOND',
+      workShiftLabel: 'II',
+      NOC: 2.5,
+      suma: 2.5,
+      sumaBezNadgodzin: 2.5,
+    });
+
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(xlsxResponse.body);
     const worksheet = workbook.getWorksheet('Czas pracy');
@@ -203,29 +263,248 @@ describe('Analytics reports', () => {
     expect(worksheet?.getRow(4).getCell(1).value).toMatch(/^Wygenerowano: \d{2}\.\d{2}\.\d{4}, \d{2}:\d{2}$/);
     expect(worksheet?.getRow(5).values).toEqual([]);
 
-    // Wiersz 6: Nagłówek tabeli
+    // Wiersz 6: Nagłówek tabeli z jedną kolumną "Zmiana"
     expect(worksheet?.getRow(6).values).toEqual([
       undefined,
       'Pracownik',
+      'Zmiana',
       'Suma godzin z nadgodzinami',
       'Suma godzin bez nadgodzin',
       'G (Standardowe godziny pracy)',
       'NOC (Zmiana nocna)',
     ]);
 
-    // Wiersz 7: Dane
+    // Wiersz 7: Dane dla I zmiany
     expect(worksheet?.getRow(7).values).toEqual([
       undefined,
-      jsonResponse.body[0].employeeName,
-      jsonResponse.body[0].suma,
-      jsonResponse.body[0].sumaBezNadgodzin,
-      jsonResponse.body[0].G,
-      jsonResponse.body[0].NOC,
+      'Kowalski Jan',
+      'I',
+      8,
+      8,
+      8,
+      0,
+    ]);
+
+    // Wiersz 8: Dane dla II zmiany
+    expect(worksheet?.getRow(8).values).toEqual([
+      undefined,
+      'Kowalski Jan',
+      'II',
+      2.5,
+      2.5,
+      0,
+      2.5,
     ]);
 
     // Weryfikacja zamrożenia widoku (ySplit) i filtra tabeli
     expect(worksheet?.views[0]).toEqual(expect.objectContaining({ state: 'frozen', ySplit: 6 }));
-    expect(worksheet?.autoFilter).toBe('A6:E7');
+    expect(worksheet?.autoFilter).toBe('A6:F8');
+  });
+
+  it('v0.5.9 manual acceptance rework: correctly supports I, II, III shifts, historical NULL as Brak danych, and absences as Nie dotyczy without duplication in JSON and XLSX', async () => {
+    const employee1 = { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' };
+    const employee2 = { fullName: 'Adam Nowak', firstName: 'Adam', lastName: 'Nowak' };
+
+    vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
+      { code: 'G', name: 'Godziny standardowe', isAbsence: false },
+      { code: 'NDR', name: 'Nadgodziny', isAbsence: false },
+      { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true },
+      { code: 'L4', name: 'Zwolnienie lekarskie', isAbsence: true },
+    ] as any);
+
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([
+      // Employee 1: 8h shift I (G), 4h shift II (NDR), 6h shift III (G), 8h absence (UW), 8h historical without shift (G)
+      {
+        employeeId: EMPLOYEE_ID,
+        employee: employee1,
+        hours: 8,
+        workTimeTypeCode: 'G',
+        workShift: 'FIRST',
+        workTimeType: { isAbsence: false },
+      },
+      {
+        employeeId: EMPLOYEE_ID,
+        employee: employee1,
+        hours: 4,
+        workTimeTypeCode: 'NDR',
+        workShift: 'SECOND',
+        workTimeType: { isAbsence: false },
+      },
+      {
+        employeeId: EMPLOYEE_ID,
+        employee: employee1,
+        hours: 6,
+        workTimeTypeCode: 'G',
+        workShift: 'THIRD',
+        workTimeType: { isAbsence: false },
+      },
+      {
+        employeeId: EMPLOYEE_ID,
+        employee: employee1,
+        hours: 8,
+        workTimeTypeCode: 'UW',
+        workShift: null,
+        workTimeType: { isAbsence: true },
+      },
+      {
+        employeeId: EMPLOYEE_ID,
+        employee: employee1,
+        hours: 8,
+        workTimeTypeCode: 'G',
+        workShift: null, // Historical record
+        workTimeType: { isAbsence: false },
+      },
+      // Employee 2: 8h shift I (G), 8h shift II (G), 8h absence (L4)
+      {
+        employeeId: 'emp-2',
+        employee: employee2,
+        hours: 8,
+        workTimeTypeCode: 'G',
+        workShift: 'FIRST',
+        workTimeType: { isAbsence: false },
+      },
+      {
+        employeeId: 'emp-2',
+        employee: employee2,
+        hours: 8,
+        workTimeTypeCode: 'G',
+        workShift: 'SECOND',
+        workTimeType: { isAbsence: false },
+      },
+      {
+        employeeId: 'emp-2',
+        employee: employee2,
+        hours: 8,
+        workTimeTypeCode: 'L4',
+        workShift: null,
+        workTimeType: { isAbsence: true },
+      },
+    ] as any);
+
+    // 1. JSON endpoint
+    const jsonRes = await authenticatedGet('/api/analytics/report-by-employee').expect(200);
+
+    // Sorted by lastName then shift order:
+    // Kowalski Jan (I, II, III, Brak danych, Nie dotyczy) -> 5 rows
+    // Nowak Adam (I, II, Nie dotyczy) -> 3 rows
+    // Total rows: 8
+    expect(jsonRes.body).toHaveLength(8);
+
+    // Kowalski Jan rows
+    expect(jsonRes.body[0]).toEqual({
+      employeeId: EMPLOYEE_ID,
+      employeeName: 'Kowalski Jan',
+      workShift: 'FIRST',
+      workShiftLabel: 'I',
+      G: 8,
+      suma: 8,
+      sumaBezNadgodzin: 8,
+    });
+    expect(jsonRes.body[1]).toEqual({
+      employeeId: EMPLOYEE_ID,
+      employeeName: 'Kowalski Jan',
+      workShift: 'SECOND',
+      workShiftLabel: 'II',
+      NDR: 4,
+      suma: 4,
+      sumaBezNadgodzin: 0,
+    });
+    expect(jsonRes.body[2]).toEqual({
+      employeeId: EMPLOYEE_ID,
+      employeeName: 'Kowalski Jan',
+      workShift: 'THIRD',
+      workShiftLabel: 'III',
+      G: 6,
+      suma: 6,
+      sumaBezNadgodzin: 6,
+    });
+    expect(jsonRes.body[3]).toEqual({
+      employeeId: EMPLOYEE_ID,
+      employeeName: 'Kowalski Jan',
+      workShift: 'UNSPECIFIED',
+      workShiftLabel: 'Brak danych',
+      G: 8,
+      suma: 8,
+      sumaBezNadgodzin: 8,
+    });
+    expect(jsonRes.body[4]).toEqual({
+      employeeId: EMPLOYEE_ID,
+      employeeName: 'Kowalski Jan',
+      workShift: 'ABSENCE',
+      workShiftLabel: 'Nie dotyczy',
+      UW: 8,
+      suma: 8,
+      sumaBezNadgodzin: 8,
+    });
+
+    // Nowak Adam rows
+    expect(jsonRes.body[5]).toEqual({
+      employeeId: 'emp-2',
+      employeeName: 'Nowak Adam',
+      workShift: 'FIRST',
+      workShiftLabel: 'I',
+      G: 8,
+      suma: 8,
+      sumaBezNadgodzin: 8,
+    });
+    expect(jsonRes.body[6]).toEqual({
+      employeeId: 'emp-2',
+      employeeName: 'Nowak Adam',
+      workShift: 'SECOND',
+      workShiftLabel: 'II',
+      G: 8,
+      suma: 8,
+      sumaBezNadgodzin: 8,
+    });
+    expect(jsonRes.body[7]).toEqual({
+      employeeId: 'emp-2',
+      employeeName: 'Nowak Adam',
+      workShift: 'ABSENCE',
+      workShiftLabel: 'Nie dotyczy',
+      L4: 8,
+      suma: 8,
+      sumaBezNadgodzin: 8,
+    });
+
+    // Control sum: sum of suma across all rows equals total input hours (34 + 24 = 58h)
+    const totalSuma = jsonRes.body.reduce((sum: number, r: any) => sum + r.suma, 0);
+    expect(totalSuma).toBe(58);
+
+    // 2. XLSX Export with single 'Zmiana' column
+    const xlsxRes = await authenticatedGet('/api/analytics/export/by-employee')
+      .buffer(true)
+      .parse(binaryParser)
+      .expect(200)
+      .expect('Content-Type', /spreadsheetml/);
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(xlsxRes.body);
+    const worksheet = workbook.getWorksheet('Czas pracy');
+
+    // Row 6 headers MUST have single 'Zmiana' column, NO 'I zmiana' or 'II zmiana' columns
+    expect(worksheet?.getRow(6).values).toEqual([
+      undefined,
+      'Pracownik',
+      'Zmiana',
+      'Suma godzin z nadgodzinami',
+      'Suma godzin bez nadgodzin',
+      'G (Godziny standardowe)',
+      'NDR (Nadgodziny)',
+      'UW (Urlop wypoczynkowy)',
+      'L4 (Zwolnienie lekarskie)',
+    ]);
+
+    // Kowalski Jan rows in XLSX
+    expect(worksheet?.getRow(7).values).toEqual([undefined, 'Kowalski Jan', 'I', 8, 8, 8, 0, 0, 0]);
+    expect(worksheet?.getRow(8).values).toEqual([undefined, 'Kowalski Jan', 'II', 4, 0, 0, 4, 0, 0]);
+    expect(worksheet?.getRow(9).values).toEqual([undefined, 'Kowalski Jan', 'III', 6, 6, 6, 0, 0, 0]);
+    expect(worksheet?.getRow(10).values).toEqual([undefined, 'Kowalski Jan', 'Brak danych', 8, 8, 8, 0, 0, 0]);
+    expect(worksheet?.getRow(11).values).toEqual([undefined, 'Kowalski Jan', 'Nie dotyczy', 8, 8, 0, 0, 8, 0]);
+
+    // Nowak Adam rows in XLSX
+    expect(worksheet?.getRow(12).values).toEqual([undefined, 'Nowak Adam', 'I', 8, 8, 8, 0, 0, 0]);
+    expect(worksheet?.getRow(13).values).toEqual([undefined, 'Nowak Adam', 'II', 8, 8, 8, 0, 0, 0]);
+    expect(worksheet?.getRow(14).values).toEqual([undefined, 'Nowak Adam', 'Nie dotyczy', 8, 8, 0, 0, 0, 8]);
   });
 
   it('presents a missing accounting account as brak', async () => {
@@ -591,6 +870,141 @@ describe('Analytics reports', () => {
     });
   });
 
+  it('v0.5.3 + v0.5.4 integration: correctly handles WKU across holidays, weekends, Wigilia 2025+, company overrides, and exports XLSX', async () => {
+    const employee = { id: 'emp-wku-v053', fullName: 'WKU Integracja', firstName: 'WKU', lastName: 'Integracja' };
+    const wkuType = { code: 'WKU', name: 'Służba wojskowa', isAbsence: true, requiresOrder: false };
+
+    const calendarSpy = vi.spyOn(prisma.companyCalendarDay, 'findUnique');
+    const reportSpy = vi.spyOn(prisma.workTimeReport, 'findMany');
+
+    // 1. WKU across weekend: Friday 2026-09-04 and Monday 2026-09-07
+    // Saturday and Sunday are free, so they bridge into 1 period with exactly 2 workingDays.
+    calendarSpy.mockResolvedValue(null);
+    reportSpy.mockResolvedValue([
+      { employeeId: 'emp-wku-v053', employee, workTimeTypeCode: 'WKU', workTimeType: wkuType, hours: 8, date: new Date('2026-09-04T00:00:00.000Z') },
+      { employeeId: 'emp-wku-v053', employee, workTimeTypeCode: 'WKU', workTimeType: wkuType, hours: 8, date: new Date('2026-09-07T00:00:00.000Z') },
+    ] as any);
+
+    const weekendRes = await authenticatedGet(
+      '/api/analytics/report-absence-periods?dateFrom=2026-09-01&dateTo=2026-09-30&employeeId=emp-wku-v053&workTimeTypeCode=WKU',
+    ).expect(200);
+
+    expect(weekendRes.body).toHaveLength(1);
+    expect(weekendRes.body[0]).toMatchObject({
+      employeeId: 'emp-wku-v053',
+      workTimeTypeCode: 'WKU',
+      absenceType: 'WKU (Służba wojskowa)',
+      dateFrom: '2026-09-04',
+      dateTo: '2026-09-07',
+      workingDays: 2,
+    });
+
+    // 2. WKU across statutory Polish holiday: Boże Ciało (Thursday 2026-06-04)
+    // Wednesday 2026-06-03 and Friday 2026-06-05. 2026-06-04 is a statutory holiday without override.
+    // Must bridge into 1 period: 2026-06-03 to 2026-06-05, workingDays = 2, no invented hours on 2026-06-04.
+    reportSpy.mockResolvedValue([
+      { employeeId: 'emp-wku-v053', employee, workTimeTypeCode: 'WKU', workTimeType: wkuType, hours: 8, date: new Date('2026-06-03T00:00:00.000Z') },
+      { employeeId: 'emp-wku-v053', employee, workTimeTypeCode: 'WKU', workTimeType: wkuType, hours: 8, date: new Date('2026-06-05T00:00:00.000Z') },
+    ] as any);
+
+    const holidayRes = await authenticatedGet(
+      '/api/analytics/report-absence-periods?dateFrom=2026-06-01&dateTo=2026-06-30&employeeId=emp-wku-v053&workTimeTypeCode=WKU',
+    ).expect(200);
+
+    expect(holidayRes.body).toHaveLength(1);
+    expect(holidayRes.body[0]).toMatchObject({
+      employeeId: 'emp-wku-v053',
+      workTimeTypeCode: 'WKU',
+      dateFrom: '2026-06-03',
+      dateTo: '2026-06-05',
+      workingDays: 2,
+    });
+
+    // 3. WKU across 24 December from 2025+ (Wigilia)
+    // 2025: 23 Dec (Tue) and 29 Dec (Mon). 24 Dec (Wigilia) + 25-26 Dec (Christmas) + 27-28 Dec (Weekend) are free.
+    // Forms 1 bridged period: 2025-12-23 to 2025-12-29, workingDays = 2.
+    reportSpy.mockResolvedValue([
+      { employeeId: 'emp-wku-v053', employee, workTimeTypeCode: 'WKU', workTimeType: wkuType, hours: 8, date: new Date('2025-12-23T00:00:00.000Z') },
+      { employeeId: 'emp-wku-v053', employee, workTimeTypeCode: 'WKU', workTimeType: wkuType, hours: 8, date: new Date('2025-12-29T00:00:00.000Z') },
+    ] as any);
+
+    const wigiliaRes = await authenticatedGet(
+      '/api/analytics/report-absence-periods?dateFrom=2025-12-01&dateTo=2025-12-31&employeeId=emp-wku-v053&workTimeTypeCode=WKU',
+    ).expect(200);
+
+    expect(wigiliaRes.body).toHaveLength(1);
+    expect(wigiliaRes.body[0]).toMatchObject({
+      employeeId: 'emp-wku-v053',
+      workTimeTypeCode: 'WKU',
+      dateFrom: '2025-12-23',
+      dateTo: '2025-12-29',
+      workingDays: 2,
+    });
+
+    // 4. Company calendar override precedence:
+    // A. Administrator marks Boże Ciało (2026-06-04) as an explicit working day.
+    // Because employee did NOT report WKU on 2026-06-04, the missing working day splits the period into 2!
+    calendarSpy.mockImplementation(async ({ where }: any) =>
+      where.date.toISOString().startsWith('2026-06-04')
+        ? { date: where.date, isWorkingDay: true, reason: 'Praca w Boże Ciało' }
+        : null,
+    );
+    reportSpy.mockResolvedValue([
+      { employeeId: 'emp-wku-v053', employee, workTimeTypeCode: 'WKU', workTimeType: wkuType, hours: 8, date: new Date('2026-06-03T00:00:00.000Z') },
+      { employeeId: 'emp-wku-v053', employee, workTimeTypeCode: 'WKU', workTimeType: wkuType, hours: 8, date: new Date('2026-06-05T00:00:00.000Z') },
+    ] as any);
+
+    const overrideWorkRes = await authenticatedGet(
+      '/api/analytics/report-absence-periods?dateFrom=2026-06-01&dateTo=2026-06-30&employeeId=emp-wku-v053&workTimeTypeCode=WKU',
+    ).expect(200);
+
+    expect(overrideWorkRes.body).toHaveLength(2);
+    expect(overrideWorkRes.body[0]).toMatchObject({ dateFrom: '2026-06-03', dateTo: '2026-06-03', workingDays: 1 });
+    expect(overrideWorkRes.body[1]).toMatchObject({ dateFrom: '2026-06-05', dateTo: '2026-06-05', workingDays: 1 });
+
+    // B. Administrator marks a Tuesday (2026-09-08) as a free day (e.g. company holiday).
+    // WKU on Monday (2026-09-07) and Wednesday (2026-09-09) must bridge into 1 period.
+    calendarSpy.mockImplementation(async ({ where }: any) =>
+      where.date.toISOString().startsWith('2026-09-08')
+        ? { date: where.date, isWorkingDay: false, reason: 'Dzień wolny zakładowy' }
+        : null,
+    );
+    reportSpy.mockResolvedValue([
+      { employeeId: 'emp-wku-v053', employee, workTimeTypeCode: 'WKU', workTimeType: wkuType, hours: 8, date: new Date('2026-09-07T00:00:00.000Z') },
+      { employeeId: 'emp-wku-v053', employee, workTimeTypeCode: 'WKU', workTimeType: wkuType, hours: 8, date: new Date('2026-09-09T00:00:00.000Z') },
+    ] as any);
+
+    const overrideFreeRes = await authenticatedGet(
+      '/api/analytics/report-absence-periods?dateFrom=2026-09-01&dateTo=2026-09-30&employeeId=emp-wku-v053&workTimeTypeCode=WKU',
+    ).expect(200);
+
+    expect(overrideFreeRes.body).toHaveLength(1);
+    expect(overrideFreeRes.body[0]).toMatchObject({
+      dateFrom: '2026-09-07',
+      dateTo: '2026-09-09',
+      workingDays: 2,
+    });
+
+    // 5. XLSX export for WKU absence periods
+    vi.spyOn(prisma.employee, 'findUnique').mockResolvedValue(employee as any);
+    vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue(wkuType as any);
+
+    const xlsxRes = await authenticatedGet(
+      '/api/analytics/export/absence-periods?dateFrom=2026-09-01&dateTo=2026-09-30&employeeId=emp-wku-v053&workTimeTypeCode=WKU',
+    )
+      .buffer(true)
+      .parse(binaryParser)
+      .expect(200)
+      .expect('Content-Type', /spreadsheetml/);
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(xlsxRes.body);
+    const worksheet = workbook.getWorksheet('Okresy nieobecności');
+    expect(worksheet?.getRow(1).getCell(1).value).toBe('Raport: Raport okresów nieobecności');
+    expect(worksheet?.getRow(8).getCell(2).value).toBe('WKU (Służba wojskowa)');
+    expect(worksheet?.getRow(8).getCell(5).value).toBe(2);
+  });
+
   it('exports the same clipped absence periods to XLSX with report metadata', async () => {
     vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([{
       employeeId: EMPLOYEE_ID,
@@ -696,6 +1110,143 @@ describe('Analytics reports', () => {
     expect(filteredRes.body[0].orderNumber).toBe('ZL-001');
   });
 
+  it('keeps period hours while calculating order progress cumulatively through the report end', async () => {
+    const july = new Date('2026-07-01T00:00:00.000Z');
+    const august = new Date('2026-08-01T00:00:00.000Z');
+    const orders = [
+      {
+        orderNumber: 'ZL-CUMULATIVE-OPEN', productName: 'Wielomiesięczne', productCode: null,
+        accountingAccount: null, quantity: null, quantityUnit: 'szt.', plannedHours: 100,
+        orderDate: july, status: 'OPEN', completionDate: null,
+        reports: [
+          { hours: 30, date: new Date('2026-07-15T00:00:00.000Z') },
+          { hours: 20, date: new Date('2026-08-15T00:00:00.000Z') },
+          { hours: 10, date: new Date('2026-09-15T00:00:00.000Z') },
+          { hours: 8, date: new Date('2026-08-20T00:00:00.000Z'), deletedAt: new Date('2026-08-21T00:00:00.000Z') },
+        ],
+      },
+      {
+        orderNumber: 'ZL-CURRENT-CLOSED', productName: 'Tylko sierpień', productCode: null,
+        accountingAccount: null, quantity: null, quantityUnit: 'szt.', plannedHours: 10,
+        orderDate: august, status: 'CLOSED', completionDate: new Date('2026-08-31T00:00:00.000Z'),
+        reports: [{ hours: 10, date: new Date('2026-08-10T00:00:00.000Z') }],
+      },
+      {
+        orderNumber: 'ZL-CUMULATIVE-SUSPENDED', productName: 'Wstrzymane', productCode: null,
+        accountingAccount: null, quantity: null, quantityUnit: 'szt.', plannedHours: 50,
+        orderDate: july, status: 'SUSPENDED', completionDate: null,
+        reports: [{ hours: 15, date: new Date('2026-07-15T00:00:00.000Z') }, { hours: 3, date: new Date('2026-08-15T00:00:00.000Z') }],
+      },
+      {
+        orderNumber: 'ZL-HISTORICAL-ONLY', productName: 'Bez godzin w sierpniu', productCode: null,
+        accountingAccount: null, quantity: null, quantityUnit: 'szt.', plannedHours: 10,
+        orderDate: july, status: 'OPEN', completionDate: null,
+        reports: [{ hours: 6, date: new Date('2026-07-15T00:00:00.000Z') }],
+      },
+      {
+        orderNumber: 'ZL-ZERO-PLAN', productName: 'Plan zerowy', productCode: null,
+        accountingAccount: null, quantity: null, quantityUnit: 'szt.', plannedHours: 0,
+        orderDate: july, status: 'OPEN', completionDate: null,
+        reports: [{ hours: 10, date: new Date('2026-07-15T00:00:00.000Z') }, { hours: 5, date: new Date('2026-08-15T00:00:00.000Z') }],
+      },
+    ];
+    const orderQuery = vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+      const reportEnd = args.include.reports.where.date.lte;
+      return orders.map(order => ({
+        ...order,
+        reports: order.reports.filter(report =>
+          !report.deletedAt && (!reportEnd || report.date <= reportEnd),
+        ),
+      })) as any;
+    });
+
+    const range = 'dateFrom=2026-08-01&dateTo=2026-08-31';
+    const response = await authenticatedGet(`/api/analytics/report-by-order?${range}`).expect(200);
+    const cumulative = response.body.find((row: any) => row.orderNumber === 'ZL-CUMULATIVE-OPEN');
+    expect(cumulative).toMatchObject({ actualHours: 20, deviation: 50, percent: 50, status: 'OPEN' });
+    expect(orderQuery).toHaveBeenCalledWith(expect.objectContaining({
+      include: expect.objectContaining({
+        reports: expect.objectContaining({
+          where: expect.objectContaining({ deletedAt: null, date: { lte: new Date('2026-08-31T00:00:00.000Z') } }),
+        }),
+      }),
+    }));
+    expect(response.body.find((row: any) => row.orderNumber === 'ZL-CURRENT-CLOSED'))
+      .toMatchObject({ actualHours: 10, deviation: 0, percent: 100, status: 'CLOSED' });
+    expect(response.body.find((row: any) => row.orderNumber === 'ZL-CUMULATIVE-SUSPENDED'))
+      .toMatchObject({ actualHours: 3, deviation: 32, percent: 36, status: 'SUSPENDED' });
+    expect(response.body.find((row: any) => row.orderNumber === 'ZL-ZERO-PLAN'))
+      .toMatchObject({ actualHours: 5, deviation: -15, percent: 0 });
+
+    const xlsxResponse = await authenticatedGet(`/api/analytics/export/by-order?${range}`)
+      .buffer(true)
+      .parse(binaryParser)
+      .expect(200);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(xlsxResponse.body);
+    const worksheet = workbook.getWorksheet('Zlecenia')!;
+    const headerRowNumber = worksheet.getColumn(1).values.findIndex(value => value === 'Numer zlecenia');
+    const xlsxCumulativeRow = (worksheet.getRows(headerRowNumber + 1, orders.length) || [])
+      .find(row => row.getCell(1).value === 'ZL-CUMULATIVE-OPEN')!;
+    expect([xlsxCumulativeRow.getCell(7).value, xlsxCumulativeRow.getCell(8).value, xlsxCumulativeRow.getCell(9).value])
+      .toEqual([20, 50, 50]);
+
+    const onlyWithHours = await authenticatedGet(`/api/analytics/report-by-order?${range}&onlyWithHours=true`).expect(200);
+    expect(onlyWithHours.body.some((row: any) => row.orderNumber === 'ZL-HISTORICAL-ONLY')).toBe(false);
+
+    const closure = await authenticatedGet(`/api/analytics/report-by-order?${range}&closureReport=true`).expect(200);
+    expect(closure.body.find((row: any) => row.orderNumber === 'ZL-CUMULATIVE-OPEN'))
+      .toMatchObject({ actualHours: 20, deviation: 50, percent: 50 });
+  });
+
+  it('keeps cumulative progress for a later-closed order included by historical closure stability', async () => {
+    const range = 'dateFrom=2026-08-01&dateTo=2026-08-31&closureReport=true';
+    const orderQuery = vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+      const historicalBranch = args.where.OR?.[2];
+      const hasHistoricalClosurePredicate =
+        historicalBranch?.status?.in?.includes(OrderStatus.OPEN) &&
+        historicalBranch?.status?.in?.includes(OrderStatus.CLOSED) &&
+        historicalBranch?.reports?.some?.deletedAt === null &&
+        historicalBranch?.reports?.some?.date?.gte instanceof Date &&
+        historicalBranch?.reports?.some?.date?.lte instanceof Date;
+
+      if (!hasHistoricalClosurePredicate) return [] as any;
+
+      const reportEnd = args.include.reports.where.date.lte;
+      const reports = [
+        { hours: 30, date: new Date('2026-07-15T00:00:00.000Z') },
+        { hours: 20, date: new Date('2026-08-15T00:00:00.000Z') },
+        { hours: 10, date: new Date('2026-09-15T00:00:00.000Z') },
+        { hours: 8, date: new Date('2026-08-20T00:00:00.000Z'), deletedAt: new Date('2026-08-21T00:00:00.000Z') },
+      ].filter(report => !report.deletedAt && report.date <= reportEnd);
+
+      return [{
+        orderNumber: 'ZL-CUMULATIVE-CLOSED-AFTER',
+        productName: 'Historycznie stabilne',
+        productCode: null,
+        accountingAccount: null,
+        quantity: null,
+        quantityUnit: 'szt.',
+        plannedHours: 100,
+        orderDate: new Date('2026-07-01T00:00:00.000Z'),
+        status: OrderStatus.CLOSED,
+        completionDate: new Date('2026-09-10T00:00:00.000Z'),
+        reports,
+      }] as any;
+    });
+
+    const response = await authenticatedGet(`/api/analytics/report-by-order?${range}`).expect(200);
+
+    expect(orderQuery).toHaveBeenCalledTimes(1);
+    expect(response.body).toEqual([expect.objectContaining({
+      orderNumber: 'ZL-CUMULATIVE-CLOSED-AFTER',
+      actualHours: 20,
+      deviation: 50,
+      percent: 50,
+      status: OrderStatus.CLOSED,
+    })]);
+  });
+
   describe('closure report by order', () => {
     it.each([
       ['OPEN with hours in range is visible', 'ZL-001', true, 5],
@@ -704,6 +1255,7 @@ describe('Analytics reports', () => {
       ['CLOSED completed in range without hours is visible with zero', 'ZL-004', true, 0],
       ['CLOSED completed before range is hidden', 'ZL-005', false, undefined],
       ['CLOSED completed after range is hidden', 'ZL-006', false, undefined],
+      ['CLOSED completed after range WITH hours in range is visible', 'ZL-013', true, 35],
       ['CLOSED with hours only outside range is visible with zero', 'ZL-007', true, 0],
       ['deleted work-time entries do not increase the total', 'ZL-008', true, 0],
       ['deleted order is hidden', 'ZL-009', false, undefined],
@@ -738,24 +1290,60 @@ describe('Analytics reports', () => {
         if (args?.where?.workTimeType?.isAbsence) {
           return [];
         }
+        if (args?.include?.employee && args?.include?.order && args?.include?.workTimeType) {
+          // Diagnostic query - include reports for all orders in closure (including ZL-013)
+          return [
+            {
+              employeeId: EMPLOYEE_ID,
+              employee: { fullName: 'Jan Kowalski' },
+              hours: 5,
+              workTimeTypeCode: 'G',
+              workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+              orderId: 'open-hours',
+              order: { orderNumber: 'ZL-001' },
+              date: new Date('2026-08-10T00:00:00.000Z'),
+            },
+            {
+              employeeId: EMPLOYEE_ID,
+              employee: { fullName: 'Jan Kowalski' },
+              hours: 4,
+              workTimeTypeCode: 'G',
+              workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+              orderId: 'closed-hours',
+              order: { orderNumber: 'ZL-003' },
+              date: new Date('2026-08-12T00:00:00.000Z'),
+            },
+            // ZL-013 reports (closed-after-with-hours)
+            {
+              employeeId: EMPLOYEE_ID,
+              employee: { fullName: 'Jan Kowalski' },
+              hours: 20,
+              workTimeTypeCode: 'G',
+              workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+              orderId: 'closed-after-with-hours',
+              order: { orderNumber: 'ZL-013' },
+              date: new Date('2026-08-15T00:00:00.000Z'),
+            },
+            {
+              employeeId: EMPLOYEE_ID,
+              employee: { fullName: 'Jan Kowalski' },
+              hours: 15,
+              workTimeTypeCode: 'G',
+              workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+              orderId: 'closed-after-with-hours',
+              order: { orderNumber: 'ZL-013' },
+              date: new Date('2026-08-20T00:00:00.000Z'),
+            },
+          ] as any;
+        }
+        // Employee report rows - total hours for all orders
         return [
           {
             employeeId: EMPLOYEE_ID,
             employee: { fullName: 'Jan Kowalski' },
-            hours: 5,
+            hours: 44, // 5 + 4 + 20 + 15
             workTimeTypeCode: 'G',
-            workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
-            orderId: 'open-hours',
-            date: new Date('2026-08-10T00:00:00.000Z'),
-          },
-          {
-            employeeId: EMPLOYEE_ID,
-            employee: { fullName: 'Jan Kowalski' },
-            hours: 4,
-            workTimeTypeCode: 'G',
-            workTimeType: { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
-            orderId: 'closed-hours',
-            date: new Date('2026-08-12T00:00:00.000Z'),
+            workTimeType: { name: 'Standardowe' },
           },
         ] as any;
       });
@@ -1030,6 +1618,7 @@ describe('Analytics reports', () => {
         orderId: 'order-111',
         hours: 8,
         workTimeTypeCode: 'G',
+        workShift: 'FIRST',
         missingCard: false,
         createdAt: new Date('2026-08-10T08:00:00.000Z'),
         deletedAt: null,
@@ -1044,6 +1633,7 @@ describe('Analytics reports', () => {
         orderId: 'order-222',
         hours: 6,
         workTimeTypeCode: 'G',
+        workShift: 'SECOND',
         missingCard: false,
         createdAt: new Date('2026-08-11T08:00:00.000Z'),
         deletedAt: null,
@@ -1058,6 +1648,7 @@ describe('Analytics reports', () => {
         orderId: null,
         hours: 8,
         workTimeTypeCode: 'UW',
+        workShift: null,
         missingCard: false,
         createdAt: new Date('2026-08-12T08:00:00.000Z'),
         deletedAt: null,
@@ -1087,9 +1678,9 @@ describe('Analytics reports', () => {
 
       const res = await authenticatedGet('/api/analytics/report-detailed').expect(200);
       expect(res.body.length).toBe(3);
-      expect(res.body.some((r: any) => r.orderNumber === '530-8-49')).toBe(true);
-      expect(res.body.some((r: any) => r.orderNumber === '530-8-04')).toBe(true);
-      expect(res.body.some((r: any) => r.orderNumber === '-')).toBe(true);
+      expect(res.body.some((r: any) => r.orderNumber === '530-8-49' && r.workShift === 'FIRST')).toBe(true);
+      expect(res.body.some((r: any) => r.orderNumber === '530-8-04' && r.workShift === 'SECOND')).toBe(true);
+      expect(res.body.some((r: any) => r.orderNumber === '-' && r.workShift === null)).toBe(true);
     });
 
     it('filters strictly by orderId and excludes other orders and entries without order (Brak zlecenia)', async () => {
@@ -1379,7 +1970,7 @@ describe('Analytics reports', () => {
         workTimeTypeCode: 'SZK',
         hours: 8,
         orderNumber: null,
-        reason: 'Brak zlecenia',
+        reason: 'Typ nie jest nieobecnością i nie wymaga zlecenia',
         contribution: -8,
       });
 
@@ -1836,7 +2427,7 @@ describe('Analytics reports', () => {
       expect(szkValues[3]).toBe(8);
       expect(typeof szkValues[3]).toBe('number');
       expect(szkValues[4]).toBe('—');
-      expect(szkValues[5]).toBe('Brak zlecenia');
+      expect(szkValues[5]).toBe('Typ nie jest nieobecnością i nie wymaga zlecenia');
       expect(szkValues[6]).toBe(-8);
       expect(typeof szkValues[6]).toBe('number');
       expect(szkRowExcel!.getCell(4).numFmt).toBe('#,##0.00');
@@ -1855,6 +2446,211 @@ describe('Analytics reports', () => {
       expect(typeof uwValues[6]).toBe('number');
       expect(uwRowExcel!.getCell(4).numFmt).toBe('#,##0.00');
       expect(uwRowExcel!.getCell(7).numFmt).toBe('+#,##0.00;-#,##0.00;0.00');
+    });
+
+    it('REGRESSION: CLOSED order with completionDate AFTER range but hours IN range is included in reconciliation (historical stability)', async () => {
+      // Client scenario: Order 530-8-49
+      // - Report range: 2026-08-01 to 2026-08-31
+      // - Order closed on 2026-09-10 (completionDate after range)
+      // - 35h logged in August (2026-08-15, 2026-08-20)
+      // Before fix: order excluded from closure (2-branch OR) → -35h difference
+      // After fix: order included via 3rd OR branch (reports.some) → MATCHED
+
+      const orderId = 'ord-530-8-49';
+      let capturedQuery: any = null;
+
+      vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+        // Capture the query for verification
+        if (args?.where?.OR) {
+          capturedQuery = args.where.OR;
+        }
+
+        // Diagnostic query (select id only) - verify 3-branch OR is present
+        if (args?.select?.id && !args?.include?.reports) {
+          // Only return order if query has the 3rd branch (reports.some with date range)
+          const hasHistoricalBranch = Array.isArray(args.where.OR) &&
+            args.where.OR.length >= 3 &&
+            args.where.OR[2]?.reports?.some?.deletedAt === null &&
+            args.where.OR[2]?.reports?.some?.date?.gte &&
+            args.where.OR[2]?.reports?.some?.date?.lte;
+
+          if (!hasHistoricalBranch) {
+            // On pre-fix code, this query would only have 2 branches → return empty
+            return [] as any;
+          }
+
+          return [{ id: orderId }] as any;
+        }
+
+        // Report-by-order query (with include reports) - verify 3-branch OR
+        if (args?.include?.reports) {
+          const hasHistoricalBranch = Array.isArray(args.where.OR) &&
+            args.where.OR.length >= 3 &&
+            args.where.OR[2]?.status?.in?.includes('OPEN') &&
+            args.where.OR[2]?.status?.in?.includes('CLOSED') &&
+            args.where.OR[2]?.reports?.some?.deletedAt === null &&
+            args.where.OR[2]?.reports?.some?.date;
+
+          if (!hasHistoricalBranch) {
+            // On pre-fix code, this query would only have 2 branches → return empty
+            return [] as any;
+          }
+
+          return [{
+            id: orderId,
+            orderNumber: '530-8-49',
+            productName: 'Forma zewnętrzna',
+            productCode: 'P-530',
+            accountingAccount: 'KK-1',
+            plannedHours: 100,
+            quantity: 1,
+            quantityUnit: 'szt.',
+            status: 'CLOSED',
+            completionDate: new Date('2026-09-10T00:00:00.000Z'),
+            deletedAt: null,
+            reports: [
+              { hours: 20, date: new Date('2026-08-15T00:00:00.000Z'), deletedAt: null },
+              { hours: 15, date: new Date('2026-08-20T00:00:00.000Z'), deletedAt: null },
+            ],
+          }] as any;
+        }
+
+        return [] as any;
+      });
+
+      vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
+        { code: 'G', name: 'Standardowe godziny pracy', isAbsence: false, requiresOrder: true },
+      ] as any);
+
+      vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
+        if (args?.where?.workTimeType?.isAbsence) {
+          return [] as any;
+        }
+        if (args?.include?.employee && args?.include?.order && args?.include?.workTimeType) {
+          // Diagnostic query
+          return [
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Test Employee', firstName: 'Test', lastName: 'Employee' },
+              hours: 20,
+              workTimeTypeCode: 'G',
+              workTimeType: { code: 'G', name: 'Standardowe godziny pracy', isAbsence: false, requiresOrder: true },
+              orderId,
+              order: { orderNumber: '530-8-49' },
+              date: new Date('2026-08-15T00:00:00.000Z'),
+            },
+            {
+              employeeId: 'emp-1',
+              employee: { fullName: 'Test Employee', firstName: 'Test', lastName: 'Employee' },
+              hours: 15,
+              workTimeTypeCode: 'G',
+              workTimeType: { code: 'G', name: 'Standardowe godziny pracy', isAbsence: false, requiresOrder: true },
+              orderId,
+              order: { orderNumber: '530-8-49' },
+              date: new Date('2026-08-20T00:00:00.000Z'),
+            },
+          ] as any;
+        }
+        // Employee report rows
+        return [
+          {
+            employeeId: 'emp-1',
+            employee: { fullName: 'Test Employee', firstName: 'Test', lastName: 'Employee' },
+            hours: 35,
+            workTimeTypeCode: 'G',
+            workTimeType: { name: 'Standardowe godziny pracy' },
+          },
+        ] as any;
+      });
+
+      const response = await authenticatedGet('/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31').expect(200);
+
+      // Verify the query actually used the 3-branch OR with historical stability branch
+      expect(capturedQuery).toBeDefined();
+      expect(capturedQuery.length).toBeGreaterThanOrEqual(3);
+      expect(capturedQuery[2]).toMatchObject({
+        status: { in: ['OPEN', 'CLOSED'] },
+        reports: {
+          some: {
+            deletedAt: null,
+            date: expect.objectContaining({
+              gte: expect.any(Date),
+              lte: expect.any(Date),
+            }),
+          },
+        },
+      });
+
+      // 35h from order should be in ordersHours
+      expect(response.body.ordersHours).toBe(35);
+      // No absences
+      expect(response.body.totalAbsenceHours).toBe(0);
+      // Total settled = 35
+      expect(response.body.totalSettledHours).toBe(35);
+      // Employee hours = 35
+      expect(response.body.totalEmployeeHours).toBe(35);
+      // Difference = 0 (MATCHED)
+      expect(response.body.difference).toBe(0);
+      expect(response.body.status).toBe('MATCHED');
+      expect(response.body.statusLabel).toBe('Zgodne');
+      // No diagnostics needed
+      expect(response.body.diagnostics).toBeUndefined();
+    });
+
+    it('REGRESSION: CLOSED order with completionDate AFTER range and NO hours in range is NOT included', async () => {
+      // Contrast test: order closed after range but no reports in range
+      // Should NOT appear in closure report (no completionDate in range, no in-range reports)
+      // The new 3rd OR branch (reports.some with date range) should NOT match this order
+      // because its only report is BEFORE the range (2026-07-15)
+
+      let capturedQuery: any = null;
+
+      vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+        if (args?.where?.OR) {
+          capturedQuery = args.where.OR;
+        }
+
+        // Diagnostic query (select id only)
+        if (args?.select?.id && !args?.include?.reports) {
+          // The query has 3 branches, but the 3rd branch requires reports in range
+          // This order has no reports in range → should return empty
+          return [] as any;
+        }
+
+        // Report-by-order query (with include reports)
+        if (args?.include?.reports) {
+          // The query has 3 branches, but the 3rd branch requires reports in range
+          // This order has no reports in range → should return empty
+          return [] as any;
+        }
+
+        return [] as any;
+      });
+
+      vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
+        { code: 'G', name: 'Standardowe godziny pracy', isAbsence: false, requiresOrder: true },
+      ] as any);
+
+      vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
+        if (args?.where?.workTimeType?.isAbsence) return [] as any;
+        if (args?.include?.employee && args?.include?.order && args?.include?.workTimeType) {
+          return [] as any;
+        }
+        return [] as any;
+      });
+
+      const response = await authenticatedGet('/api/analytics/closure-control-summary?dateFrom=2026-08-01&dateTo=2026-08-31').expect(200);
+
+      // Verify the query has the 3-branch OR structure
+      expect(capturedQuery).toBeDefined();
+      expect(capturedQuery.length).toBeGreaterThanOrEqual(3);
+
+      // Order has no reports in range → should not contribute to ordersHours
+      expect(response.body.ordersHours).toBe(0);
+      expect(response.body.totalSettledHours).toBe(0);
+      expect(response.body.totalEmployeeHours).toBe(0);
+      expect(response.body.difference).toBe(0);
+      expect(response.body.status).toBe('MATCHED');
     });
   });
 });
@@ -2269,7 +3065,7 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
     expect(response.body.diagnostics).toHaveLength(1);
     expect(response.body.diagnostics[0].hours).toBe(8);
     expect(response.body.diagnostics[0].contribution).toBe(-8);
-    expect(response.body.diagnostics[0].reason).toBe('Brak zlecenia');
+    expect(response.body.diagnostics[0].reason).toBe('Typ nie jest nieobecnością i nie wymaga zlecenia');
 
     // Invariant holds
     const sumContributions = Math.round(response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0) * 100) / 100;
@@ -2351,7 +3147,7 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
     expect(response.body.diagnostics).toHaveLength(1);
     expect(response.body.diagnostics[0].hours).toBe(8);
     expect(response.body.diagnostics[0].contribution).toBe(-8);
-    expect(response.body.diagnostics[0].reason).toBe('Brak zlecenia');
+    expect(response.body.diagnostics[0].reason).toBe('Typ nie jest nieobecnością i nie wymaga zlecenia');
 
     // Invariant holds
     const sumContributions = response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0);
@@ -2455,7 +3251,7 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
     expect(response.body.diagnostics).toHaveLength(1);
     expect(response.body.diagnostics[0].hours).toBe(8);
     expect(response.body.diagnostics[0].contribution).toBe(-8);
-    expect(response.body.diagnostics[0].reason).toBe('Brak zlecenia');
+    expect(response.body.diagnostics[0].reason).toBe('Typ nie jest nieobecnością i nie wymaga zlecenia');
 
     // Invariant holds
     const sumContributions = response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0);
@@ -2650,7 +3446,7 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
     expect(response.body.diagnostics).toHaveLength(1);
     expect(response.body.diagnostics[0].hours).toBe(8);
     expect(response.body.diagnostics[0].contribution).toBe(-8);
-    expect(response.body.diagnostics[0].reason).toBe('Brak zlecenia');
+    expect(response.body.diagnostics[0].reason).toBe('Typ nie jest nieobecnością i nie wymaga zlecenia');
 
     // Invariant holds
     const sumContributions = Math.round(response.body.diagnostics.reduce((sum: number, d: any) => sum + d.contribution, 0) * 100) / 100;

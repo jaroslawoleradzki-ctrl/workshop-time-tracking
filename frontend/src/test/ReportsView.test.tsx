@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ReportsView from '../components/ReportsView';
@@ -86,6 +88,8 @@ describe('ReportsView — miesięczny raport pracowników', () => {
         return response([{
           employeeId: '20000000-0000-4000-8000-000000000001',
           employeeName: 'Kowalski Jan',
+          workShift: 'FIRST',
+          workShiftLabel: 'I',
           G: 8,
           NOC: 2.5,
           LEGACY: 3,
@@ -276,6 +280,7 @@ describe('ReportsView — miesięczny raport pracowników', () => {
 
     expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
       'Pracownik',
+      'Zmiana',
       'Suma godzin z nadgodzinami',
       'Suma godzin bez nadgodzin',
       'G (Standardowe godziny pracy)',
@@ -325,6 +330,7 @@ describe('ReportsView — miesięczny raport pracowników', () => {
 
     expect(lines[5]).toBe([
       'Pracownik',
+      'Zmiana',
       'Suma godzin z nadgodzinami',
       'Suma godzin bez nadgodzin',
       ...workTimeTypes
@@ -332,8 +338,99 @@ describe('ReportsView — miesięczny raport pracowników', () => {
         .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
         .map((type) => `${type.code} (${type.name})`),
     ].join(';'));
-    expect(lines[6]).toBe('Kowalski Jan;13.5;13.5;8;0;0;0;0;0;0;2.5');
+    expect(lines[6]).toBe('Kowalski Jan;I;13.5;13.5;8;0;0;0;0;0;0;2.5');
     expect(lines.join('\n')).not.toContain('LEGACY');
+  });
+
+  it('renders multiple rows per employee with distinct shifts and labels in table and CSV', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/employees') return response(employees);
+      if (url === '/api/orders') return response(orders);
+      if (url === '/api/work-time-types') return response(workTimeTypes);
+      if (url.startsWith('/api/analytics/report-by-employee')) {
+        return response([
+          {
+            employeeId: '20000000-0000-4000-8000-000000000001',
+            employeeName: 'Kowalski Jan',
+            workShift: 'FIRST',
+            workShiftLabel: 'I',
+            G: 8,
+            suma: 8,
+            sumaBezNadgodzin: 8,
+          },
+          {
+            employeeId: '20000000-0000-4000-8000-000000000001',
+            employeeName: 'Kowalski Jan',
+            workShift: 'THIRD',
+            workShiftLabel: 'III',
+            NOC: 8,
+            suma: 8,
+            sumaBezNadgodzin: 8,
+          },
+          {
+            employeeId: '20000000-0000-4000-8000-000000000001',
+            employeeName: 'Kowalski Jan',
+            workShift: null,
+            workShiftLabel: 'Brak danych',
+            G: 8,
+            suma: 8,
+            sumaBezNadgodzin: 8,
+          },
+          {
+            employeeId: '20000000-0000-4000-8000-000000000001',
+            employeeName: 'Kowalski Jan',
+            workShift: null,
+            workShiftLabel: 'Nie dotyczy',
+            UW: 8,
+            suma: 8,
+            sumaBezNadgodzin: 8,
+          },
+        ]);
+      }
+      return response([]);
+    }));
+
+    let exportedBlob: Blob | undefined;
+    vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
+      if (blob instanceof Blob) exportedBlob = blob;
+      return 'blob:test-shifts';
+    });
+
+    render(
+      <ReportsView
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Wg Pracowników (Miesięczny)' }));
+    await screen.findByRole('columnheader', { name: 'Zmiana' });
+
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toContain('Zmiana');
+    expect(screen.getByText('I')).toBeInTheDocument();
+    expect(screen.getByText('III')).toBeInTheDocument();
+    expect(screen.getByText('Brak danych')).toBeInTheDocument();
+    expect(screen.getByText('Nie dotyczy')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pobierz plik CSV' }));
+    expect(exportedBlob).toBeDefined();
+    const csv = (await exportedBlob!.text()).replace(/^\uFEFF/, '');
+    const lines = csv.split('\n');
+    expect(lines[5]).toBe([
+      'Pracownik',
+      'Zmiana',
+      'Suma godzin z nadgodzinami',
+      'Suma godzin bez nadgodzin',
+      ...workTimeTypes
+        .slice()
+        .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
+        .map((type) => `${type.code} (${type.name})`),
+    ].join(';'));
+    expect(lines[6]).toBe('Kowalski Jan;I;8;8;8;0;0;0;0;0;0;0');
+    expect(lines[7]).toBe('Kowalski Jan;III;8;8;0;0;0;0;0;0;0;8');
+    expect(lines[8]).toBe('Kowalski Jan;Brak danych;8;8;8;0;0;0;0;0;0;0');
+    expect(lines[9]).toBe('Kowalski Jan;Nie dotyczy;8;8;0;0;0;8;0;0;0;0');
   });
 
   it('correctly escapes semicolons, quotes, newlines, and preserves Polish characters in CSV export', async () => {
@@ -500,6 +597,68 @@ describe('ReportsView — miesięczny raport pracowników', () => {
     const tfoot = table.querySelector('tfoot');
     expect(tfoot).not.toBeNull();
     expect(tfoot?.textContent).toContain('5');
+  });
+
+  it('renders WKU absence periods in the table and exports them to CSV', async () => {
+    let exportedBlob: Blob | null = null;
+    const createSpy = vi.spyOn(window.URL, 'createObjectURL').mockImplementation((blob: any) => {
+      exportedBlob = blob;
+      return 'blob:test-report-wku-csv';
+    });
+
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/employees') {
+        return { ok: true, json: async () => [{ id: '1', fullName: 'Kowalski Jan' }] };
+      }
+      if (url === '/api/work-time-types') {
+        return { ok: true, json: async () => [{ code: 'WKU', name: 'Służba wojskowa', isAbsence: true, requiresOrder: false }] };
+      }
+      if (url.startsWith('/api/analytics/report-absence-periods')) {
+        return {
+          ok: true,
+          json: async () => [
+            {
+              employeeId: '1',
+              employeeName: 'Kowalski Jan',
+              workTimeTypeCode: 'WKU',
+              absenceType: 'WKU (Służba wojskowa)',
+              dateFrom: '2026-09-01',
+              dateTo: '2026-09-04',
+              workingDays: 4,
+            },
+          ],
+        };
+      }
+      return { ok: true, json: async () => [] };
+    }));
+
+    render(
+      <ReportsView
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Okresy Nieobecności' }));
+    await screen.findByRole('table', { name: 'Raport okresów nieobecności' });
+
+    expect(screen.getByText('WKU (Służba wojskowa)')).toBeInTheDocument();
+    expect(screen.getByText('Łącznie dni nieobecności:')).toBeInTheDocument();
+
+    const table = screen.getByRole('table', { name: 'Raport okresów nieobecności' });
+    const tfoot = table.querySelector('tfoot');
+    expect(tfoot?.textContent).toContain('4');
+
+    // Test CSV export for WKU
+    const csvButton = screen.getByRole('button', { name: 'Pobierz plik CSV' });
+    fireEvent.click(csvButton);
+
+    expect(exportedBlob).not.toBeNull();
+    const csvContent = (await exportedBlob!.text()).replace(/^\uFEFF/, '');
+    expect(csvContent).toContain('Raport;Raport okresów nieobecności');
+    expect(csvContent).toContain('Kowalski Jan;WKU (Służba wojskowa);2026-09-01;2026-09-04;4');
+    createSpy.mockRestore();
   });
 
   describe('Raport zamknięcia', () => {
@@ -936,6 +1095,190 @@ describe('ReportsView — miesięczny raport pracowników', () => {
       expect(csv).toContain('Raport;Szczegółowy raport czasu pracy');
       expect(csv).toContain('Zlecenie;ZL-001');
       expect(csv).toContain('2026-08-10;Jan Kowalski;ZL-001;P-001;Produkt testowy;K-001;8;G;Admin');
+    });
+  });
+
+  describe('v0.5.5 — ochrona widoczności zakładek raportów i izolacja CSS (root cause regression protection)', () => {
+    /**
+     * OGRANICZENIE ŚRODOWISKA JSDOM:
+     * JSDOM nie implementuje silnika renderowania geometrii CSS (layout engine),
+     * nie oblicza rzeczywistych wymiarów pudełek (bounding box / getBoundingClientRect),
+     * nie ewaluuje zapytań mediów CSS (@media) w powiązaniu z DOM i nie symuluje
+     * zawijania tekstu ani kompresji flexbox w zależności od szerokości viewportu.
+     *
+     * Z tego względu poniższy zestaw testów weryfikuje:
+     * 1. Strukturę DOM, atrybuty (type="button") i dedykowane klasy (report-tab).
+     * 2. Integralność reguł w pliku index.css (kontrakt CSS i eliminację globalnego .nav-item w media queries).
+     * 3. Pełny przepływ interakcji użytkownika i przełączania zakładek dla ról leader i admin.
+     *
+     * Rzeczywisty rendering responsywny przy szerokościach desktop, <=900px i <=600px
+     * musi być weryfikowany w prawdziwej przeglądarce zgodnie ze scenariuszem
+     * manualnym opisanym w V0.5.5_REPORT_TABS_REGRESSION_REPORT.md.
+     */
+
+    const tabNames = [
+      'Godziny wg Zleceń',
+      'Wg Pracowników (Miesięczny)',
+      'Wg Kont Księgowych',
+      'Raport Szczegółowy',
+      'Okresy Nieobecności',
+    ] as const;
+
+    const roles = ['leader', 'admin'] as const;
+
+    roles.forEach((userRole) => {
+      it(`[rola: ${userRole}] przechodzi pełny scenariusz 7 kroków z dedykowaną klasą report-tab i ochroną widoczności`, async () => {
+        // Krok 1: Renderuje widok Raportów
+        render(
+          <ReportsView
+            token="test-token"
+            user={{
+              id: userRole === 'admin' ? 'admin-1' : 'leader-1',
+              username: userRole,
+              role: userRole,
+              fullName: userRole === 'admin' ? 'Admin Testowy' : 'Lider Testowy',
+            }}
+          />,
+        );
+
+        await screen.findByText('Centrum Raportów');
+        await screen.findByRole('table', { name: 'Raport według zleceń' });
+
+        const getTabButtons = () => tabNames.map((name) => screen.getByRole('button', { name }));
+
+        // Krok 2: Weryfikuje widoczność wszystkich 5 zakładek oraz strukturę flex i dedykowane klasy
+        let tabButtons = getTabButtons();
+        expect(tabButtons).toHaveLength(5);
+
+        // Kontener zakładek musi wspierać poziome przewijanie bez ucinania i kompresji pionowej
+        const container = tabButtons[0].parentElement;
+        expect(container).not.toBeNull();
+        expect(container?.style.display).toBe('flex');
+        expect(container?.style.overflowX).toBe('auto');
+        expect(container?.style.flexShrink).toBe('0');
+
+        tabButtons.forEach((btn) => {
+          expect(btn).toBeVisible();
+          expect(btn).toHaveAttribute('type', 'button');
+          // Potwierdzenie dedykowanej klasy report-tab
+          expect(btn).toHaveClass('report-tab');
+          // Potwierdzenie, że zakładki nie polegają wyłącznie na globalnym .nav-item
+          expect(btn).toHaveClass('nav-item');
+          expect(btn.classList.contains('report-tab')).toBe(true);
+          expect(btn.classList.contains('nav-item')).toBe(true);
+        });
+
+        // Weryfikacja początkowego stanu aktywności (Godziny wg Zleceń aktywne, pozostałe nieaktywne)
+        expect(tabButtons[0]).toHaveClass('active');
+        for (let i = 1; i < tabButtons.length; i++) {
+          expect(tabButtons[i]).not.toHaveClass('active');
+        }
+
+        // Krok 3: Wybiera opcję "Raport zamknięcia"
+        const closureButton = screen.getByRole('button', { name: /Raport zamknięcia/i });
+        expect(closureButton).toBeVisible();
+        expect(closureButton).toHaveAttribute('aria-pressed', 'false');
+
+        fireEvent.click(closureButton);
+        expect(closureButton).toHaveAttribute('aria-pressed', 'true');
+
+        // Krok 4: Weryfikuje, że wszystkie dozwolone etykiety zakładek są NADAL widoczne i zachowują dedykowaną klasę
+        tabButtons = getTabButtons();
+        expect(tabButtons).toHaveLength(5);
+        tabButtons.forEach((btn) => {
+          expect(btn).toBeVisible();
+          expect(btn).toHaveClass('report-tab');
+          expect(btn).toHaveClass('nav-item');
+          expect(btn).toHaveAttribute('type', 'button');
+        });
+        expect(tabButtons[0]).toHaveClass('active');
+
+        // Krok 5: Przełącza na inną zakładkę raportową (np. by-employee)
+        fireEvent.click(tabButtons[1]);
+
+        // Krok 6: Weryfikuje wyrenderowanie docelowego raportu
+        await screen.findByRole('table', { name: 'Raport według pracowników' });
+
+        // Krok 7: Weryfikuje poprawną zmianę stanu aktywnej/nieaktywnej zakładki
+        tabButtons = getTabButtons();
+        expect(tabButtons[1]).toHaveClass('active');
+        expect(tabButtons[0]).not.toHaveClass('active');
+        for (let i = 0; i < tabButtons.length; i++) {
+          expect(tabButtons[i]).toBeVisible();
+          expect(tabButtons[i]).toHaveClass('report-tab');
+          if (i === 1) {
+            expect(tabButtons[i]).toHaveClass('active');
+          } else {
+            expect(tabButtons[i]).not.toHaveClass('active');
+          }
+        }
+      });
+    });
+
+    it('przełącza się na Raport Szczegółowy po włączeniu raportu zamknięcia i zachowuje wszystkie etykiety zakładek', async () => {
+      renderReports();
+      await screen.findByRole('table', { name: 'Raport według zleceń' });
+
+      const closureBtn = screen.getByRole('button', { name: /Raport zamknięcia/i });
+      fireEvent.click(closureBtn);
+      expect(closureBtn).toHaveAttribute('aria-pressed', 'true');
+
+      // Przełączenie na Raport Szczegółowy
+      const detailedTab = screen.getByRole('button', { name: 'Raport Szczegółowy' });
+      fireEvent.click(detailedTab);
+
+      // Docelowy raport szczegółowy wyrenderowany
+      await screen.findByRole('table', { name: 'Raport szczegółowy' });
+      expect(detailedTab).toHaveClass('active');
+      expect(screen.getByRole('button', { name: 'Godziny wg Zleceń' })).not.toHaveClass('active');
+
+      // Wszystkie zakładki nadal widoczne, posiadają klasę report-tab i type="button"
+      tabNames.forEach((name) => {
+        const btn = screen.getByRole('button', { name });
+        expect(btn).toBeVisible();
+        expect(btn).toHaveClass('report-tab');
+        expect(btn).toHaveClass('nav-item');
+        expect(btn).toHaveAttribute('type', 'button');
+      });
+    });
+
+    it('chroni przed root cause w index.css: dedykowane reguły .report-tab oraz brak globalnego .nav-item w media queries', () => {
+      const cssPath = path.resolve(__dirname, '../index.css');
+      const cssContent = fs.readFileSync(cssPath, 'utf-8');
+
+      // 1. Dedykowana klasa .report-tab definiuje flex-shrink: 0, white-space: nowrap, flex: 0 0 auto
+      expect(cssContent).toMatch(/\.report-tab[^{]*\{[^}]*white-space:\s*nowrap/s);
+      expect(cssContent).toMatch(/\.report-tab[^{]*\{[^}]*flex-shrink:\s*0/s);
+      expect(cssContent).toMatch(/\.report-tab[^{]*\{[^}]*flex:\s*0\s+0\s+auto/s);
+
+      // Pomocnik do wyodrębniania pełnego bloku @media z uwzględnieniem zagnieżdżonych nawiasów klamrowych
+      const extractMediaBlock = (query: string): string => {
+        const startIdx = cssContent.indexOf(query);
+        if (startIdx === -1) return '';
+        const braceStart = cssContent.indexOf('{', startIdx);
+        if (braceStart === -1) return '';
+        let depth = 1;
+        let idx = braceStart + 1;
+        while (idx < cssContent.length && depth > 0) {
+          if (cssContent[idx] === '{') depth++;
+          else if (cssContent[idx] === '}') depth--;
+          idx++;
+        }
+        return cssContent.slice(braceStart + 1, idx - 1);
+      };
+
+      // 2. Media queries @media (max-width: 900px) oraz @media (max-width: 600px)
+      // NIE mogą zawierać nieskopowanego globalnego selektora ".nav-item {"
+      // który kompresowałby zakładki poza sidebarem
+      const media900Body = extractMediaBlock('@media (max-width: 900px)');
+      expect(media900Body).not.toBe('');
+      expect(media900Body).not.toMatch(/(^|[\n,;])\s*\.nav-item\s*\{/);
+      expect(media900Body).toMatch(/\.sidebar\s+\.nav-item\s*\{/);
+
+      const media600Body = extractMediaBlock('@media (max-width: 600px)');
+      expect(media600Body).not.toBe('');
+      expect(media600Body).not.toMatch(/(^|[\n,;])\s*\.nav-item\s*\{/);
+      expect(media600Body).toMatch(/\.sidebar\s+\.nav-item\s*\{/);
     });
   });
 });

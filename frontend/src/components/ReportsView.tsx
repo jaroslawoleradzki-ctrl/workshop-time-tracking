@@ -383,9 +383,16 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
         filterItems = [
           { label: 'Pracownik', value: empName },
         ];
-        headers = ['Pracownik', 'Suma godzin z nadgodzinami', 'Suma godzin bez nadgodzin', ...workTimeTypes.map(type => `${type.code} (${type.name})`)];
+        headers = [
+          'Pracownik',
+          'Zmiana',
+          'Suma godzin z nadgodzinami',
+          'Suma godzin bez nadgodzin',
+          ...workTimeTypes.map(type => `${type.code} (${type.name})`)
+        ];
         rows = safeReportData.map(r => [
           r.employeeName,
+          r.workShiftLabel || r.workShift || '-',
           r.suma,
           r.sumaBezNadgodzin,
           ...workTimeTypes.map(type => Number(r[type.code]) || 0),
@@ -513,43 +520,49 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
         marginBottom: '1.5rem',
         overflowX: 'auto',
         gap: '0.5rem',
-        paddingBottom: '2px'
+        paddingBottom: '2px',
+        flexShrink: 0
       }}>
         <button
+          type="button"
           onClick={() => setActiveReportTab('by-order')}
-          className={`nav-item ${activeReportTab === 'by-order' ? 'active' : ''}`}
+          className={`nav-item report-tab ${activeReportTab === 'by-order' ? 'active' : ''}`}
           style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
         >
           <FolderOpen size={16} />
           Godziny wg Zleceń
         </button>
         <button
+          type="button"
           onClick={() => setActiveReportTab('by-employee')}
-          className={`nav-item ${activeReportTab === 'by-employee' ? 'active' : ''}`}
+          className={`nav-item report-tab ${activeReportTab === 'by-employee' ? 'active' : ''}`}
           style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
         >
           <User size={16} />
           Wg Pracowników (Miesięczny)
         </button>
         <button
+          type="button"
           onClick={() => setActiveReportTab('by-account')}
-          className={`nav-item ${activeReportTab === 'by-account' ? 'active' : ''}`}
+          className={`nav-item report-tab ${activeReportTab === 'by-account' ? 'active' : ''}`}
           style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
         >
           <DollarSign size={16} />
           Wg Kont Księgowych
         </button>
         <button
+          type="button"
           onClick={() => setActiveReportTab('detailed')}
-          className={`nav-item ${activeReportTab === 'detailed' ? 'active' : ''}`}
+          className={`nav-item report-tab ${activeReportTab === 'detailed' ? 'active' : ''}`}
           style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
         >
           <Search size={16} />
           Raport Szczegółowy
         </button>
         <button
+          type="button"
           onClick={() => setActiveReportTab('absence-periods')}
-          className={`nav-item ${activeReportTab === 'absence-periods' ? 'active' : ''}`}
+          className={`nav-item report-tab ${activeReportTab === 'absence-periods' ? 'active' : ''}`}
           style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md) var(--radius-md) 0 0', border: '1px solid var(--border-color)', borderBottom: 'none' }}
         >
           <CalendarOff size={16} />
@@ -763,6 +776,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                 <thead>
                   <tr>
                     <th>Pracownik</th>
+                    <th>Zmiana</th>
                     <th style={{ textAlign: 'right', fontWeight: 'bold' }}>Suma godzin z nadgodzinami</th>
                     <th style={{ textAlign: 'right', fontWeight: 'bold' }}>Suma godzin bez nadgodzin</th>
                     {workTimeTypes.map((type) => (
@@ -776,6 +790,16 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                   {Array.isArray(reportData) && reportData.map((row, idx) => (
                     <tr key={idx}>
                       <td style={{ fontWeight: 'bold' }}>{row.employeeName}</td>
+                      <td>
+                        <span style={{
+                          fontWeight: 600,
+                          color: row.workShift === 'ABSENCE' ? 'var(--text-muted)' :
+                                 row.workShift === 'UNSPECIFIED' ? 'var(--warning-color)' :
+                                 'var(--text-primary)',
+                        }}>
+                          {row.workShiftLabel || row.workShift || '-'}
+                        </span>
+                      </td>
                       <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--primary-color)' }}>
                         {(Number(row.suma) || 0).toFixed(1)} h
                       </td>

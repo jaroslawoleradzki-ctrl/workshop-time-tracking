@@ -190,6 +190,21 @@ Przedstaw użytkownikowi raport zawierający:
 * Wynik polecenia `git status`,
 * Potwierdzenie spełnienia checklisty 6 punktów weryfikacyjnych (patrz sekcja 8).
 
+### Lokalizacja raportów wersji (Version Report Archive)
+
+Wszystkie raporty specyficzne dla danej wersji (review, audit, rework, signoff, validation, release report — np. `V<TARGET_VERSION>_INDEPENDENT_REVIEW.md`, `V<TARGET_VERSION>_FINAL_RELEASE_REPORT.md`) muszą być tworzone **bezpośrednio** w katalogu:
+
+```text
+docs/releases/v<TARGET_VERSION>/
+```
+
+przykład: raporty wersji `0.5.9` trafiają do `docs/releases/v0.5.9/`.
+
+Zasady:
+* Katalog główny repozytorium (`ROOT`) zawiera wyłącznie aktywną dokumentację projektu (`README.md`, `CHANGELOG.md`, `PROJECT_STATUS.md`, `AGENTS.md`, `DEPLOYMENT.md`).
+* Nie twórz raportów wersyjnych w katalogu głównym repozytorium.
+* Nie przenoś ani nie modyfikuj raportów historycznych już zarchiwizowanych w `docs/releases/`.
+
 ---
 
 ## 6. Kryteria Zatrzymania Procedury (Stop Conditions)
