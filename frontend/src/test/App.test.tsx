@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from '../App';
 
 // Mock global fetch
@@ -176,5 +176,52 @@ describe('Help foundation', () => {
   it('uses a help hash to select a chapter', () => {
     signIn('leader'); window.location.hash = '#help/logowanie'; render(<App />);
     expect(screen.getByRole('heading', { name: 'Logowanie' })).toBeInTheDocument();
+  });
+  it('clears the Help hash when a normal tab is selected and restores that tab on reload', () => {
+    signIn('leader');
+    const first = render(<App />);
+    fireEvent.click(screen.getAllByRole('button', { name: /Pomoc \/ Instrukcja/i })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Logowanie' }));
+    expect(window.location.hash).toBe('#help/logowanie');
+    fireEvent.click(within(document.querySelector('.sidebar') as HTMLElement).getByRole('button', { name: 'Raporty' }));
+    expect(window.location.hash).toBe('');
+    expect(sessionStorage.getItem('current_tab')).toBe('reports');
+    expect(screen.queryByRole('region', { name: 'Instrukcja użytkownika' })).not.toBeInTheDocument();
+    first.unmount();
+    render(<App />);
+    expect(sessionStorage.getItem('current_tab')).toBe('reports');
+    expect(screen.queryByRole('region', { name: 'Instrukcja użytkownika' })).not.toBeInTheDocument();
+  });
+  it('retains a valid Help deep link across reloads', () => {
+    signIn('leader'); window.location.hash = '#help/logowanie';
+    const first = render(<App />);
+    expect(screen.getByRole('heading', { name: 'Logowanie' })).toBeInTheDocument();
+    first.unmount();
+    render(<App />);
+    expect(screen.getByRole('heading', { name: 'Logowanie' })).toBeInTheDocument();
+  });
+  it('rejects an unknown Help hash and restores the saved normal tab', () => {
+    signIn('leader'); sessionStorage.setItem('current_tab', 'reports'); window.location.hash = '#help/unknown';
+    render(<App />);
+    expect(screen.queryByRole('region', { name: 'Instrukcja użytkownika' })).not.toBeInTheDocument();
+    expect(sessionStorage.getItem('current_tab')).toBe('reports');
+  });
+  it('returns to the previous normal tab when browser history leaves Help', () => {
+    signIn('leader'); sessionStorage.setItem('current_tab', 'reports');
+    render(<App />);
+    fireEvent.click(screen.getAllByRole('button', { name: /Pomoc \/ Instrukcja/i })[0]);
+    expect(screen.getByRole('region', { name: 'Instrukcja użytkownika' })).toBeInTheDocument();
+    act(() => {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    });
+    expect(screen.queryByRole('region', { name: 'Instrukcja użytkownika' })).not.toBeInTheDocument();
+    expect(sessionStorage.getItem('current_tab')).toBe('reports');
+  });
+  it('restores an existing normal tab from sessionStorage without a Help hash', () => {
+    signIn('admin'); sessionStorage.setItem('current_tab', 'orders');
+    render(<App />);
+    expect(within(document.querySelector('.sidebar') as HTMLElement).getByRole('button', { name: 'Zlecenia' })).toHaveClass('active');
+    expect(screen.queryByRole('region', { name: 'Instrukcja użytkownika' })).not.toBeInTheDocument();
   });
 });

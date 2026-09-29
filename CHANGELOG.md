@@ -10,6 +10,10 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Dodano pierwsze rozdziały „Pierwsze kroki” i „Logowanie”, wraz z generowanym przez Playwright rzeczywistym zrzutem ekranu logowania.
 - Dodano manifestową walidację zasobów zrzutów, skrypty `docs:screenshots` i `docs:validate` oraz dokumentacyjny seed chroniony wymaganiem nazwy bazy kończącej się na `_docs`.
 
+### Fixed
+- Po przejściu z Pomocy do zwykłej zakładki jej hash jest usuwany, a odświeżenie zachowuje wybraną zakładkę; poprawne głębokie odnośniki do Pomocy pozostają obsługiwane.
+- Walidacja dokumentacyjnych zrzutów wykrywa niezgodności rozdziałów, manifestu i plików, a seed dokumentacyjny zapisuje stałe identyfikatory i daty.
+
 ## [0.5.9] - 2026-09-18
 
 ### Added

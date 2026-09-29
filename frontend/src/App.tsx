@@ -26,6 +26,7 @@ import ReportsView from './components/ReportsView';
 import ImportsView from './components/ImportsView';
 import CompanyCalendarView from './components/CompanyCalendarView';
 import HelpView from './components/HelpView';
+import { helpChapterFromHash } from './help/chapters';
 
 export interface UserSession {
   id: string;
@@ -57,10 +58,12 @@ function App() {
     (localStorage.getItem('theme') as 'dark' | 'light') || 'dark'
   );
   const [currentTab, setCurrentTab] = useState<string>(() => {
-    if (window.location.hash.startsWith('#help/')) return 'help';
-    return sessionStorage.getItem('current_tab') || 'reporting';
+    if (helpChapterFromHash(window.location.hash)) return 'help';
+    const storedTab = sessionStorage.getItem('current_tab');
+    return storedTab && storedTab !== 'help' ? storedTab : sessionStorage.getItem('last_non_help_tab') || 'reporting';
   });
-  const [helpChapter, setHelpChapter] = useState<string | null>(() => window.location.hash.match(/^#help\/([^/]+)$/)?.[1] ?? null);
+  const [helpChapter, setHelpChapter] = useState<string | null>(() => helpChapterFromHash(window.location.hash));
+  const lastNonHelpTabRef = useRef<string>(sessionStorage.getItem('last_non_help_tab') || (sessionStorage.getItem('current_tab') !== 'help' ? sessionStorage.getItem('current_tab') : null) || (user?.role === 'admin' ? 'dashboard' : 'reporting'));
   
   // Login form state
   const [loginUsername, setLoginUsername] = useState('');
@@ -84,6 +87,7 @@ function App() {
     sessionStorage.removeItem('current_tab');
     sessionStorage.removeItem('sidebar_admin_open');
     sessionStorage.removeItem('help_chapter');
+    sessionStorage.removeItem('last_non_help_tab');
   };
 
   // Fetch app version on mount
@@ -163,10 +167,15 @@ function App() {
 
   useEffect(() => {
     const syncHash = () => {
-      const chapter = window.location.hash.match(/^#help\/([^/]+)$/)?.[1] ?? null;
+      const chapter = helpChapterFromHash(window.location.hash);
       if (chapter) {
         setHelpChapter(chapter);
-        setCurrentTab('help');
+        setCurrentTab((tab) => {
+          if (tab !== 'help') lastNonHelpTabRef.current = tab;
+          return 'help';
+        });
+      } else {
+        setCurrentTab((tab) => tab === 'help' ? lastNonHelpTabRef.current : tab);
       }
     };
     window.addEventListener('hashchange', syncHash);
@@ -174,6 +183,10 @@ function App() {
   }, []);
 
   const selectHelpChapter = (chapter: string) => {
+    if (currentTab !== 'help') {
+      lastNonHelpTabRef.current = currentTab;
+      sessionStorage.setItem('last_non_help_tab', currentTab);
+    }
     setHelpChapter(chapter);
     sessionStorage.setItem('help_chapter', chapter);
     setCurrentTab('help');
@@ -181,6 +194,13 @@ function App() {
   };
 
   const openHelp = () => selectHelpChapter(helpChapter || sessionStorage.getItem('help_chapter') || 'pierwsze-kroki');
+
+  const selectTab = (tab: string) => {
+    lastNonHelpTabRef.current = tab;
+    sessionStorage.setItem('last_non_help_tab', tab);
+    if (window.location.hash) window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    setCurrentTab(tab);
+  };
 
   // Set default tab based on user role on login
   useEffect(() => {
@@ -375,21 +395,21 @@ function App() {
             {user.role === 'leader' ? (
               <>
                 <button
-                  onClick={() => setCurrentTab('orders')}
+                  onClick={() => selectTab('orders')}
                   className={`nav-item ${currentTab === 'orders' ? 'active' : ''}`}
                 >
                   <FolderGit2 size={18} />
                   <span>Zlecenia</span>
                 </button>
                 <button
-                  onClick={() => setCurrentTab('reporting')}
+                  onClick={() => selectTab('reporting')}
                   className={`nav-item ${currentTab === 'reporting' ? 'active' : ''}`}
                 >
                   <Clock size={18} />
                   <span>Raportowanie</span>
                 </button>
                 <button
-                  onClick={() => setCurrentTab('reports')}
+                  onClick={() => selectTab('reports')}
                   className={`nav-item ${currentTab === 'reports' ? 'active' : ''}`}
                 >
                   <FileDown size={18} />
@@ -401,28 +421,28 @@ function App() {
               <>
                 {/* Robocza (Workspace) Section */}
                 <button
-                  onClick={() => setCurrentTab('dashboard')}
+                  onClick={() => selectTab('dashboard')}
                   className={`nav-item ${currentTab === 'dashboard' ? 'active' : ''}`}
                 >
                   <BarChart3 size={18} />
                   <span>Dashboard</span>
                 </button>
                 <button
-                  onClick={() => setCurrentTab('orders')}
+                  onClick={() => selectTab('orders')}
                   className={`nav-item ${currentTab === 'orders' ? 'active' : ''}`}
                 >
                   <FolderGit2 size={18} />
                   <span>Zlecenia</span>
                 </button>
                 <button
-                  onClick={() => setCurrentTab('reporting')}
+                  onClick={() => selectTab('reporting')}
                   className={`nav-item ${currentTab === 'reporting' ? 'active' : ''}`}
                 >
                   <Clock size={18} />
                   <span>Raportowanie</span>
                 </button>
                 <button
-                  onClick={() => setCurrentTab('reports')}
+                  onClick={() => selectTab('reports')}
                   className={`nav-item ${currentTab === 'reports' ? 'active' : ''}`}
                 >
                   <FileDown size={18} />
@@ -435,7 +455,7 @@ function App() {
 
                 {/* Administracja Section */}
                 <button
-                  onClick={() => setCurrentTab('employees')}
+                  onClick={() => selectTab('employees')}
                   className={`nav-item ${currentTab === 'employees' ? 'active' : ''}`}
                 >
                   <Users size={18} />
@@ -467,28 +487,28 @@ function App() {
                 <div className={`sidebar-submenu-wrapper ${isAdminOpen ? 'open' : ''}`}>
                   <div className="sidebar-submenu">
                     <button
-                      onClick={() => setCurrentTab('users')}
+                      onClick={() => selectTab('users')}
                       className={`nav-submenu-item ${currentTab === 'users' ? 'active' : ''}`}
                     >
                       <span className="bullet">•</span>
                       <span>Użytkownicy</span>
                     </button>
                     <button
-                      onClick={() => setCurrentTab('dictionaries')}
+                      onClick={() => selectTab('dictionaries')}
                       className={`nav-submenu-item ${currentTab === 'dictionaries' ? 'active' : ''}`}
                     >
                       <span className="bullet">•</span>
                       <span>Słowniki</span>
                     </button>
                     <button
-                      onClick={() => setCurrentTab('calendar')}
+                      onClick={() => selectTab('calendar')}
                       className={`nav-submenu-item ${currentTab === 'calendar' ? 'active' : ''}`}
                     >
                       <CalendarDays size={15} />
                       <span>Kalendarz zakładowy</span>
                     </button>
                     <button
-                      onClick={() => setCurrentTab('imports')}
+                      onClick={() => selectTab('imports')}
                       className={`nav-submenu-item ${currentTab === 'imports' ? 'active' : ''}`}
                     >
                       <span className="bullet">•</span>
@@ -500,14 +520,14 @@ function App() {
             ) : (
               <>
                 <button
-                  onClick={() => setCurrentTab('reporting')}
+                  onClick={() => selectTab('reporting')}
                   className={`nav-item ${currentTab === 'reporting' ? 'active' : ''}`}
                 >
                   <Clock size={18} />
                   <span>Raportowanie</span>
                 </button>
                 <button
-                  onClick={() => setCurrentTab('reports')}
+                  onClick={() => selectTab('reports')}
                   className={`nav-item ${currentTab === 'reports' ? 'active' : ''}`}
                 >
                   <FileDown size={18} />

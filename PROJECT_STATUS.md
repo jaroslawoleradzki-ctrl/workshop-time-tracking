@@ -11,6 +11,8 @@
 
 Zakres v0.6.0 w toku: zaimplementowano fundament instrukcji w aplikacji, dwa początkowe rozdziały oraz deterministyczny pipeline Playwright dla rzeczywistego zrzutu logowania. Testy dokumentacyjne używają wyłącznie izolowanej bazy zakończonej `_docs`; pozostałe rozdziały i zrzuty pozostają kolejnymi incrementami.
 
+Rework fundamentu po pierwszym niezależnym przeglądzie: poprawiono odtwarzanie zwykłych zakładek po Pomocy, walidację referencji zrzutów oraz powtarzalność dokumentacyjnego seeda. Dwa świeże środowiska `_docs` i ponowne uruchomienie seeda dały identyczne migawki danych. Backend: 222/222 testów; frontend: 138/138 testów; lint, oba buildy, Prisma, `docs:validate` i Playwright 2/2 przeszły. Oczekuje na niezależny ponowny przegląd; pełna wersja v0.6.0 nie jest zakończona.
+
 Zakres wersji `0.5.9` (po uwagach z akceptacji manualnej):
 
 - Rejestracja zmian roboczych (`I`, `II` oraz `III` zmiana) w bazie danych (`WorkShift` enum z wartościami `FIRST`, `SECOND`, `THIRD`, pole `work_shift` w tabeli `work_time_reports`).

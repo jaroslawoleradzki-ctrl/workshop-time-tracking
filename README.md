@@ -102,8 +102,8 @@ Aplikacja rozróżnia dwie role użytkowników posiadające odmienne uprawnienia
    * Zarządzanie bazą pracowników, kontami użytkowników, słownikami oraz masowym importem Excel.
    * Przeglądanie statystyk w Dashboardzie oraz konfiguracja statusów aktywności zleceń.
 2. **Leader (`leader`)**:
-   * **Dostęp wyłącznie do dwóch zakładek**: 📝 **Raportowanie** oraz 📈 **Raporty**.
-   * Brak dostępu do Dashboardu, Zleceń, Pracowników oraz menu Administracja.
+   * Dostęp do **Raportowania**, **Raportów**, **Zleceń** (tylko odczyt) oraz **Pomocy / Instrukcji**.
+   * Brak dostępu do Dashboardu, Pracowników oraz menu Administracja.
    * Uproszczony pasek boczny dopasowany do urządzeń mobilnych (tabletów) na hali produkcyjnej.
 
 ---

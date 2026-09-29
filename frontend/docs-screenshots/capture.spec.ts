@@ -1,14 +1,15 @@
 import { test, expect } from '@playwright/test';
 import path from 'node:path';
 import { screenshotManifest } from './manifest';
-import { prepareStablePage } from './fixtures';
-for (const entry of screenshotManifest) test(`captures ${entry.id}`, async ({ page, baseURL }) => { await page.setViewportSize(entry.viewport); await page.goto(baseURL!, { waitUntil: 'networkidle' }); await prepareStablePage(page); await page.reload({ waitUntil: 'networkidle' }); await expect(page.getByRole('heading', { name: 'WARSZTAT' })).toBeVisible(); await expect(page.getByRole('button', { name: /zaloguj się/i })).toBeVisible(); await page.screenshot({ path: path.resolve(import.meta.dirname, `../public/help/${entry.targetFile}`), fullPage: true }); });
+import { disablePageMotion, prepareStablePage } from './fixtures';
+for (const entry of screenshotManifest) test(`captures ${entry.id}`, async ({ page, baseURL }) => { await page.setViewportSize(entry.viewport); await page.goto(baseURL!, { waitUntil: 'networkidle' }); await prepareStablePage(page); await page.reload({ waitUntil: 'networkidle' }); await disablePageMotion(page); await expect(page.locator('style[data-docs-stability]')).toHaveCount(1); await expect(page.getByRole('heading', { name: 'WARSZTAT' })).toBeVisible(); await expect(page.getByRole('button', { name: /zaloguj się/i })).toBeVisible(); await page.evaluate(() => document.fonts.ready); await page.screenshot({ path: path.resolve(import.meta.dirname, `../public/help/${entry.targetFile}`), fullPage: true, animations: 'disabled', caret: 'hide' }); });
 
 test('opens Help and renders the generated login screenshot for the docs administrator', async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(baseURL!, { waitUntil: 'networkidle' });
   await prepareStablePage(page);
   await page.reload({ waitUntil: 'networkidle' });
+  await disablePageMotion(page);
   await page.getByPlaceholder('np. admin').fill('docs-admin');
   await page.getByPlaceholder('••••••••').fill('documentation-only-password');
   await page.getByRole('button', { name: /zaloguj się/i }).click();
@@ -16,9 +17,16 @@ test('opens Help and renders the generated login screenshot for the docs adminis
   await expect(helpNavigation).toBeVisible();
   await helpNavigation.click();
   await page.getByRole('button', { name: 'Logowanie', exact: true }).click();
+  await expect(page).toHaveURL(/#help\/logowanie$/);
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(page.getByRole('heading', { name: 'Logowanie', exact: true })).toBeVisible();
   const screenshot = page.getByAltText('Ekran logowania systemu Warsztat');
   await expect(screenshot).toBeVisible();
   await expect(screenshot).toHaveAttribute('src', '/help/logowanie-01-ekran-logowania.png');
   await expect(screenshot).toHaveJSProperty('complete', true);
   expect(await screenshot.evaluate((image: HTMLImageElement) => image.naturalWidth > 0)).toBe(true);
+  await page.locator('.sidebar').getByRole('button', { name: 'Raporty' }).click();
+  await expect(page).not.toHaveURL(/#help\//);
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(page.locator('.sidebar .nav-item.active')).toHaveText('Raporty');
 });
