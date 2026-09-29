@@ -19,6 +19,7 @@ logs/
 
 # Build output
 frontend/dist/
+frontend/test-results/
 
 # Local environment files
 .env

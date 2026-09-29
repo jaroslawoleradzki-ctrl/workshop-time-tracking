@@ -268,6 +268,24 @@ h1, h2, h3, h4, h5, h6 {
   box-sizing: border-box;
 }
 
+/* In-application user guide */
+.help-header h1 { display: flex; align-items: center; gap: 0.65rem; }
+.help-header p { color: var(--text-secondary); margin-top: 0.4rem; }
+.help-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 1.5rem; align-items: start; }
+.help-chapters { display: flex; flex-direction: column; gap: 0.35rem; position: sticky; top: 0; }
+.help-chapters button { border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--text-secondary); cursor: pointer; font: inherit; padding: 0.65rem 0.8rem; text-align: left; }
+.help-chapters button:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+.help-chapters button.active { background: var(--primary-color); color: #fff; }
+.help-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
+.help-role-badge { display: inline-block; background: var(--info-bg); border: 1px solid var(--info-color); border-radius: 999px; color: var(--text-primary); font-size: 0.75rem; font-weight: 600; margin-left: 0.35rem; padding: 0.2rem 0.55rem; }
+.help-body { color: var(--text-secondary); display: grid; gap: 1rem; }
+.help-body h2 { color: var(--text-primary); font-size: 1.15rem; margin-top: 0.5rem; }
+.help-figure { margin: 0.5rem 0 0; }
+.help-figure img { border: 1px solid var(--border-color); border-radius: var(--radius-md); display: block; height: auto; max-width: 100%; }
+.help-figure figcaption { color: var(--text-muted); font-size: 0.85rem; margin-top: 0.5rem; }
+.help-pagination { display: flex; justify-content: space-between; margin-top: 2rem; }
+@media (max-width: 768px) { .help-layout { grid-template-columns: 1fr; } .help-chapters { flex-direction: row; overflow-x: auto; position: static; } .help-chapters button { flex: 0 0 auto; } .help-content { padding: 1rem; } }
+
 /* Cards & Containers */
 .card {
   background-color: var(--bg-secondary);

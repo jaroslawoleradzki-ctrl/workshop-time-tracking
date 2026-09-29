@@ -11,7 +11,8 @@ import {
   Moon, 
   Lock,
   ChevronDown,
-  CalendarDays
+  CalendarDays,
+  BookOpen
 } from 'lucide-react';
 
 // View Components (to be created)
@@ -24,6 +25,7 @@ import UsersView from './components/UsersView';
 import ReportsView from './components/ReportsView';
 import ImportsView from './components/ImportsView';
 import CompanyCalendarView from './components/CompanyCalendarView';
+import HelpView from './components/HelpView';
 
 export interface UserSession {
   id: string;
@@ -55,8 +57,10 @@ function App() {
     (localStorage.getItem('theme') as 'dark' | 'light') || 'dark'
   );
   const [currentTab, setCurrentTab] = useState<string>(() => {
+    if (window.location.hash.startsWith('#help/')) return 'help';
     return sessionStorage.getItem('current_tab') || 'reporting';
   });
+  const [helpChapter, setHelpChapter] = useState<string | null>(() => window.location.hash.match(/^#help\/([^/]+)$/)?.[1] ?? null);
   
   // Login form state
   const [loginUsername, setLoginUsername] = useState('');
@@ -79,6 +83,7 @@ function App() {
     sessionStorage.removeItem('user');
     sessionStorage.removeItem('current_tab');
     sessionStorage.removeItem('sidebar_admin_open');
+    sessionStorage.removeItem('help_chapter');
   };
 
   // Fetch app version on mount
@@ -155,6 +160,27 @@ function App() {
       setIsAdminOpen(true);
     }
   }, [currentTab]);
+
+  useEffect(() => {
+    const syncHash = () => {
+      const chapter = window.location.hash.match(/^#help\/([^/]+)$/)?.[1] ?? null;
+      if (chapter) {
+        setHelpChapter(chapter);
+        setCurrentTab('help');
+      }
+    };
+    window.addEventListener('hashchange', syncHash);
+    return () => window.removeEventListener('hashchange', syncHash);
+  }, []);
+
+  const selectHelpChapter = (chapter: string) => {
+    setHelpChapter(chapter);
+    sessionStorage.setItem('help_chapter', chapter);
+    setCurrentTab('help');
+    window.location.hash = `help/${chapter}`;
+  };
+
+  const openHelp = () => selectHelpChapter(helpChapter || sessionStorage.getItem('help_chapter') || 'pierwsze-kroki');
 
   // Set default tab based on user role on login
   useEffect(() => {
@@ -308,6 +334,8 @@ function App() {
         return user.role === 'admin' ? <CompanyCalendarView token={token} /> : <ReportingPanel token={token} user={user} />;
       case 'reports':
         return <ReportsView token={token} user={user} />;
+      case 'help':
+        return <HelpView chapterId={helpChapter} appVersion={appVersion} onSelectChapter={selectHelpChapter} />;
       default:
         return <ReportingPanel token={token} user={user} />;
     }
@@ -323,6 +351,7 @@ function App() {
         </div>
 
         <div className="navbar-actions">
+          <button className="theme-toggle" onClick={openHelp} title="Pomoc / Instrukcja" aria-label="Pomoc / Instrukcja"><BookOpen size={18} /></button>
           <button className="theme-toggle" onClick={toggleTheme} title="Przełącz motyw">
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>
@@ -366,6 +395,7 @@ function App() {
                   <FileDown size={18} />
                   <span>Raporty</span>
                 </button>
+                <button onClick={openHelp} className={`nav-item ${currentTab === 'help' ? 'active' : ''}`}><BookOpen size={18} /><span>Pomoc / Instrukcja</span></button>
               </>
             ) : user.role === 'admin' ? (
               <>
@@ -398,6 +428,7 @@ function App() {
                   <FileDown size={18} />
                   <span>Raporty</span>
                 </button>
+                <button onClick={openHelp} className={`nav-item ${currentTab === 'help' ? 'active' : ''}`}><BookOpen size={18} /><span>Pomoc / Instrukcja</span></button>
 
                 {/* Divider separating Workspace from Administration */}
                 <div className="sidebar-divider"></div>
@@ -482,6 +513,7 @@ function App() {
                   <FileDown size={18} />
                   <span>Raporty</span>
                 </button>
+                <button onClick={openHelp} className={`nav-item ${currentTab === 'help' ? 'active' : ''}`}><BookOpen size={18} /><span>Pomoc / Instrukcja</span></button>
               </>
             )}
           </nav>
@@ -499,7 +531,7 @@ function App() {
 
         {/* Content Area */}
         <main className="main-content">
-          <div className={`content-wrapper ${['orders', 'employees', 'users', 'dictionaries', 'imports', 'calendar', 'reports'].includes(currentTab) ? 'orders-tab-wrapper' : ''}`}>
+          <div className={`content-wrapper ${['orders', 'employees', 'users', 'dictionaries', 'imports', 'calendar', 'reports', 'help'].includes(currentTab) ? 'orders-tab-wrapper' : ''}`}>
             {renderActiveTab()}
           </div>
         </main>

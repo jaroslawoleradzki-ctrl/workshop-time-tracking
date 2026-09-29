@@ -9,6 +9,8 @@
 - Gałąź robocza: `development`
 - Stan prac: v0.5.8 wydane i zweryfikowane; v0.5.9 dostosowane na dedykowanej gałęzi `fix/v0.5.9-manual-acceptance-shift-report` po uwagach z akceptacji manualnej, z pełną weryfikacją automatyczną.
 
+Zakres v0.6.0 w toku: zaimplementowano fundament instrukcji w aplikacji, dwa początkowe rozdziały oraz deterministyczny pipeline Playwright dla rzeczywistego zrzutu logowania. Testy dokumentacyjne używają wyłącznie izolowanej bazy zakończonej `_docs`; pozostałe rozdziały i zrzuty pozostają kolejnymi incrementami.
+
 Zakres wersji `0.5.9` (po uwagach z akceptacji manualnej):
 
 - Rejestracja zmian roboczych (`I`, `II` oraz `III` zmiana) w bazie danych (`WorkShift` enum z wartościami `FIRST`, `SECOND`, `THIRD`, pole `work_shift` w tabeli `work_time_reports`).

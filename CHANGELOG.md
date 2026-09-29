@@ -5,6 +5,11 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- Rozpoczęto v0.6.0 od wbudowanej Instrukcji użytkownika dostępnej dla ról Administrator i Leader, z nawigacją rozdziałów, adresami `#help/<chapter-id>`, odznakami ról oraz wersją aplikacji.
+- Dodano pierwsze rozdziały „Pierwsze kroki” i „Logowanie”, wraz z generowanym przez Playwright rzeczywistym zrzutem ekranu logowania.
+- Dodano manifestową walidację zasobów zrzutów, skrypty `docs:screenshots` i `docs:validate` oraz dokumentacyjny seed chroniony wymaganiem nazwy bazy kończącej się na `_docs`.
+
 ## [0.5.9] - 2026-09-18
 
 ### Added

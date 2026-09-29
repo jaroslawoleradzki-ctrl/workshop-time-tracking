@@ -1,5 +1,9 @@
 # Instrukcja użytkownika
 
+## Instrukcja w aplikacji
+
+Od wersji 0.6.0 aplikacja udostępnia pozycję **Pomoc / Instrukcja** dla Administratora i Leadera. Pierwsze dostępne rozdziały to **Pierwsze kroki** oraz **Logowanie**. Rozdziały można otwierać także adresem `#help/<identyfikator-rozdziału>`; przykład: `#help/logowanie`.
+
 ## Lider
 
 ### Logowanie i nawigacja

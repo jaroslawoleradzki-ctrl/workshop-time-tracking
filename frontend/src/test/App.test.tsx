@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from '../App';
 
 // Mock global fetch
@@ -147,5 +147,34 @@ describe('App Component - Role Navigation & Route Access', () => {
     expect(container.querySelector('.main-layout')).toBeInTheDocument();
     expect(container.querySelector('.sidebar')).toBeInTheDocument();
     expect(container.querySelector('.content-wrapper')).toBeInTheDocument();
+  });
+});
+
+describe('Help foundation', () => {
+  beforeEach(() => {
+    vi.resetAllMocks(); localStorage.clear(); sessionStorage.clear(); window.location.hash = '';
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ version: '0.6.0' }) });
+  });
+  const signIn = (role: 'admin' | 'leader') => {
+    localStorage.setItem('token', 'test-token');
+    localStorage.setItem('user', JSON.stringify({ id: '1', username: role, role, fullName: 'Test User' }));
+  };
+  it.each(['admin', 'leader'] as const)('makes Help available to %s', (role) => {
+    signIn(role); render(<App />); fireEvent.click(screen.getAllByRole('button', { name: /Pomoc \/ Instrukcja/i })[0]);
+    expect(screen.getByRole('region', { name: 'Instrukcja użytkownika' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Pierwsze kroki' })).toBeInTheDocument();
+  });
+  it('renders chapters, role badges, version, next/previous navigation and screenshot reference', async () => {
+    signIn('admin'); render(<App />); fireEvent.click(screen.getAllByRole('button', { name: /Pomoc \/ Instrukcja/i })[0]);
+    await waitFor(() => expect(screen.getByText('Wersja aplikacji v0.6.0')).toBeInTheDocument());
+    expect(screen.getAllByText('Administrator').length).toBeGreaterThan(0); expect(screen.getAllByText('Leader').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: /Następny/i }));
+    expect(screen.getByRole('heading', { name: 'Logowanie' })).toBeInTheDocument();
+    expect(screen.getByAltText('Ekran logowania systemu Warsztat')).toHaveAttribute('src', '/help/logowanie-01-ekran-logowania.png');
+    fireEvent.click(screen.getByRole('button', { name: /Poprzedni/i })); expect(screen.getByRole('heading', { name: 'Pierwsze kroki' })).toBeInTheDocument();
+  });
+  it('uses a help hash to select a chapter', () => {
+    signIn('leader'); window.location.hash = '#help/logowanie'; render(<App />);
+    expect(screen.getByRole('heading', { name: 'Logowanie' })).toBeInTheDocument();
   });
 });

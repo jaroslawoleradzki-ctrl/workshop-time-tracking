@@ -300,7 +300,7 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 
 ### Użytkowanie
 
-* [Instrukcja użytkownika](docs/user-guide.md) – obsługa dla lidera i administratora.
+* [Instrukcja użytkownika](docs/user-guide.md) – obsługa dla lidera i administratora, w tym wbudowana Pomoc / Instrukcja.
 * [Reguły biznesowe](docs/business-rules.md) – obowiązujące walidacje, statusy, audyt i zasady raportowania.
 * [Importy i eksporty](docs/import-export-specification.md) – formaty kolumn, walidacja i raporty plikowe.
 
