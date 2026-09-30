@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CalendarDays, Edit2, Trash2 } from 'lucide-react';
+import ContextHelpButton from './ContextHelpButton';
 
 type CalendarDay = {
   date: string;
@@ -16,7 +17,7 @@ function formatDay(date: string) {
   return `${date} (${weekdayNames[day]})`;
 }
 
-export default function CompanyCalendarView({ token }: { token: string }) {
+export default function CompanyCalendarView({ token, onOpenHelp }: { token: string; onOpenHelp?: (chapter: string) => void }) {
   const today = new Date().toISOString().slice(0, 10);
   const [dateFrom, setDateFrom] = useState(today.slice(0, 8) + '01');
   const [dateTo, setDateTo] = useState(today);
@@ -72,7 +73,7 @@ export default function CompanyCalendarView({ token }: { token: string }) {
   };
 
   return <div style={{ height: '100%', overflow: 'auto' }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}><CalendarDays size={28} /><h2 style={{ margin: 0 }}>Kalendarz zakładowy</h2></div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}><CalendarDays size={28} /><h2 style={{ margin: 0 }}>Kalendarz zakładowy</h2><ContextHelpButton chapter="kalendarz" onOpenHelp={onOpenHelp} /></div>
     <div className="card" style={{ marginBottom: '1rem' }}>
       <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'end' }}>
         <div className="form-group"><label className="form-label" htmlFor="calendar-from">Od</label><input id="calendar-from" className="form-control" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></div>

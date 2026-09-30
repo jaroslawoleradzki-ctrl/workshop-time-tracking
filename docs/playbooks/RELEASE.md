@@ -51,6 +51,7 @@ Procedurę wydania można rozpocząć i uznać za zakończoną **wyłącznie wte
 5. **Analiza statyczna frontendu (Lint)**: `cd frontend && npm run lint` przechodzi z wynikiem 0 ostrzeżeń/błędów.
 6. **Kompilacja frontendu**: `cd frontend && npm run build` kończy się sukcesem.
 7. **Skrypt walidacyjny wydania**: `./scripts/verify-release.sh` (opcjonalnie z `--with-docker`) zwraca status **PASS**.
+   Skrypt uruchamia przeglądarkowo niezależne `frontend: npm run docs:validate`; przy zmianie widocznego ekranu należy też ponownie wygenerować właściwe zrzuty przez `npm run docs:screenshots` i obejrzeć wynik przed akceptacją.
 8. **Akceptacja testu ręcznego**: Użytkownik przetestował nową wersję na środowisku lokalnym/testowym i wydał pisemną akceptację.
 9. **Jawne polecenie wydania**: Użytkownik wydał wyraźną instrukcję przeprowadzenia procedury release.
 

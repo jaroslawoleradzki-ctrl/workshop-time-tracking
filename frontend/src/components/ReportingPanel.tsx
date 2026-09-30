@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import type { UserSession } from '../App';
 import AbsenceRangeModal from './AbsenceRangeModal';
+import ContextHelpButton from './ContextHelpButton';
 
 const WEEKDAY_ABBREVIATIONS = ['nd', 'pn', 'wt', 'śr', 'czw', 'pt', 'sob'];
 
@@ -140,9 +141,10 @@ interface WarningResponse {
 interface ReportingPanelProps {
   token: string;
   user: UserSession;
+  onOpenHelp?: (chapter: string) => void;
 }
 
-export default function ReportingPanel({ token }: ReportingPanelProps) {
+export default function ReportingPanel({ token, onOpenHelp }: ReportingPanelProps) {
   // Global Dictionaries
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [activeOrders, setActiveOrders] = useState<Order[]>([]);
@@ -906,6 +908,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
         <h2 style={{ fontFamily: 'var(--font-header)', fontSize: '1.8rem', margin: 0 }}>
           Raportowanie Godzin Pracy
         </h2>
+        <ContextHelpButton chapter="rejestracja-czasu" onOpenHelp={onOpenHelp} />
       </div>
 
       {/* Główna akcja (Wybór daty) */}

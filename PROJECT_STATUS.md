@@ -3,11 +3,15 @@
 ## Stan bieżący
 
 - Projekt: Workshop Time Tracking
-- Aktualna wersja produkcyjna: `0.5.7`
-- Aktualna wersja development: `0.5.9`
+- Aktualna wersja produkcyjna: `0.6.0`
+- Aktualna wersja development: `0.6.0`
 - Gałąź produkcyjna: `main`
 - Gałąź robocza: `development`
-- Stan prac: v0.5.8 wydane i zweryfikowane; v0.5.9 dostosowane na dedykowanej gałęzi `fix/v0.5.9-manual-acceptance-shift-report` po uwagach z akceptacji manualnej, z pełną weryfikacją automatyczną.
+- Stan prac: v0.6.0 zaakceptowane ręcznie i przygotowane do wydania.
+
+Zakres v0.6.0: 15 rozdziałów Pomocy, 21 rzeczywistych zrzutów Playwright, pięć odnośników kontekstowych, rozwijana lista rozdziałów na tablecie i walidacja zasobów w skrypcie wydania. Fixture obejmuje wyłącznie fikcyjne rekordy w bazie zakończonej `_docs`. Dwie świeże bazy dokumentacyjne miały identyczne migawki; ponowny seed nie zmienił danych. Akceptacja ręczna: PASSED. Wyniki automatycznej walidacji i zakres wydania opisuje raport końcowy v0.6.0.
+
+Fundament po pierwszym przeglądzie zachowuje poprawki nawigacji, walidacji referencji i powtarzalności seeda. Ponowny przegląd wskazał nieaktualny opis historii commitów w raporcie fundamentu oraz brak niezależnego uruchomienia Playwright na izolowanej infrastrukturze; oba punkty skorygowano w obecnym przyroście.
 
 Zakres wersji `0.5.9` (po uwagach z akceptacji manualnej):
 

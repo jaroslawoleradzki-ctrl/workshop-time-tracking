@@ -15,10 +15,12 @@ import {
 import { UserSession } from '../App';
 import ScrollableTable from './ScrollableTable';
 import { useReportFilters } from '../hooks/useReportFilters';
+import ContextHelpButton from './ContextHelpButton';
 
 interface ReportsViewProps {
   token: string;
   user: UserSession;
+  onOpenHelp?: (chapter: string) => void;
 }
 
 interface WorkTimeType {
@@ -88,7 +90,7 @@ const DEFAULT_REPORT_FILTERS: ReportFilters = {
   closureReport: false,
 };
 
-export default function ReportsView({ token, user }: ReportsViewProps) {
+export default function ReportsView({ token, user, onOpenHelp }: ReportsViewProps) {
   const isAdmin = user.role === 'admin';
   const [activeReportTab, setActiveReportTab] = useState<ReportTab>('by-order');
 
@@ -511,6 +513,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
         <h2 style={{ fontFamily: 'var(--font-header)', fontSize: '1.8rem', margin: 0 }}>
           Centrum Raportów
         </h2>
+        {(activeReportTab === 'by-order' || activeReportTab === 'by-employee') && <ContextHelpButton chapter={activeReportTab === 'by-order' ? 'raport-zlecen' : 'raport-hr'} onOpenHelp={onOpenHelp} />}
       </div>
 
       {/* Tabs */}
