@@ -329,7 +329,7 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 
 ## Status projektu
 
-* **Aktualna wersja**: `0.5.9`
+* **Aktualna wersja**: `0.6.0`
 * **Docelowa gałąź integracyjna**: `development`
 * **Status prac**: Aktywny rozwój (Active development)
 

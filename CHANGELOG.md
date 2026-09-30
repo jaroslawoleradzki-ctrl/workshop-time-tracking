@@ -3,7 +3,7 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [0.6.0] - 2026-09-30
 
 ### Added
 - Uzupełniono wbudowaną instrukcję o wszystkie 15 rozdziałów zatwierdzonego zakresu, pięć odnośników kontekstowych i rozwijaną nawigację na tablecie.
@@ -16,6 +16,8 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 - Po przejściu z Pomocy do zwykłej zakładki jej hash jest usuwany, a odświeżenie zachowuje wybraną zakładkę; poprawne głębokie odnośniki do Pomocy pozostają obsługiwane.
 - Walidacja dokumentacyjnych zrzutów wykrywa niezgodności rozdziałów, manifestu i plików, a seed dokumentacyjny zapisuje stałe identyfikatory i daty.
+
+## [Unreleased]
 
 ## [0.5.9] - 2026-09-18
 
