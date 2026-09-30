@@ -15,7 +15,7 @@ flowchart LR
 ## Odpowiedzialności i warstwy
 
 - React renderuje UI, przechowuje token i użytkownika w `localStorage`, stan nawigacji oraz niezależne, wersjonowane filtry raportów w `sessionStorage`, waliduje formularze i wywołuje względne `/api`. Wspólny hook `useReportFilters` odpowiada za inicjalny odczyt, natychmiastowy zapis i reset; każdy raport korzysta z osobnego klucza `report.*`.
-- Wbudowana Pomoc korzysta z istniejącej zakładki stanu SPA i adresów `#help/<chapter-id>`. Wybór zwykłej zakładki usuwa hash Pomocy. Rozdziały TSX podają identyfikatory zrzutów, a manifest przypisuje im pliki i podpisy; `docs:validate` sprawdza spójność rozdziałów, manifestu i plików PNG bez przeglądarki.
+- Wbudowana Pomoc korzysta z istniejącej zakładki stanu SPA i adresów `#help/<chapter-id>`. Wybór zwykłej zakładki usuwa hash Pomocy. Pięć przycisków kontekstowych wywołuje tę samą funkcję wyboru rozdziału. Rozdziały TSX podają identyfikatory zrzutów, a manifest przypisuje im pliki i podpisy; `docs:validate` sprawdza spójność rozdziałów, manifestu i plików PNG bez przeglądarki. Playwright generuje PNG z uruchomionego UI i fikcyjnej bazy `*_docs`; seed jest chroniony przed połączeniem z bazą o innej końcówce.
 - Nginx serwuje build SPA i przekazuje `/api` do backendu.
 - Express składa middleware CORS/JSON/logowania, uwierzytelnianie JWT, kontrolę ról i routery: auth, users, employees, orders, work-time-types, reports, analytics, imports.
 - Routery zawierają większość walidacji i logiki biznesowej oraz bezpośrednio wywołują Prisma. Krytyczna operacja kopiowania czasu ma wydzielony serwis transakcyjny; ogólnej warstwy repozytoriów nie ma.

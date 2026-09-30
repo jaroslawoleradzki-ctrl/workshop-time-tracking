@@ -284,7 +284,10 @@ h1, h2, h3, h4, h5, h6 {
 .help-figure img { border: 1px solid var(--border-color); border-radius: var(--radius-md); display: block; height: auto; max-width: 100%; }
 .help-figure figcaption { color: var(--text-muted); font-size: 0.85rem; margin-top: 0.5rem; }
 .help-pagination { display: flex; justify-content: space-between; margin-top: 2rem; }
-@media (max-width: 768px) { .help-layout { grid-template-columns: 1fr; } .help-chapters { flex-direction: row; overflow-x: auto; position: static; } .help-chapters button { flex: 0 0 auto; } .help-content { padding: 1rem; } }
+.help-chapter-drawer summary { display: none; }
+.context-help-button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-secondary); color: var(--text-secondary); width: 2rem; height: 2rem; cursor: pointer; flex: 0 0 auto; }
+.context-help-button:hover, .context-help-button:focus-visible { color: var(--text-primary); border-color: var(--primary-color); }
+@media (max-width: 1100px) { .help-layout { grid-template-columns: minmax(0, 1fr); } .help-chapter-drawer { border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.65rem; } .help-chapter-drawer summary { display: list-item; cursor: pointer; font-weight: 600; } .help-chapter-drawer .help-chapters { max-height: 38vh; overflow-y: auto; position: static; margin-top: 0.65rem; } .help-content { padding: 1rem; } }
 
 /* Cards & Containers */
 .card {

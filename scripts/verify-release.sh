@@ -76,6 +76,7 @@ BACKEND_BUILD_STATUS="PENDING"
 FRONTEND_BUILD_STATUS="PENDING"
 BACKEND_TESTS_STATUS="PENDING"
 FRONTEND_TESTS_STATUS="PENDING"
+DOCS_REFERENCES_STATUS="PENDING"
 DOCKER_STATUS="SKIPPED"
 DOCS_STATUS="PENDING"
 FINAL_GIT_STATUS="PENDING"
@@ -557,6 +558,17 @@ validate_frontend_tests() {
   return 0
 }
 
+# Browser-free manifest, chapter and screenshot reference check.
+validate_docs_references() {
+  if ! (cd frontend && npm run docs:validate >/dev/null 2>&1); then
+    log_fail "Integrated user guide references are invalid. Run 'npm run docs:validate' inside frontend/ to diagnose."
+    DOCS_REFERENCES_STATUS="FAIL"
+    return 1
+  fi
+  DOCS_REFERENCES_STATUS="PASS"
+  return 0
+}
+
 # 10. DOCKER VALIDATION
 validate_docker() {
   DOCKER_STATUS="PENDING"
@@ -628,10 +640,12 @@ if validate_required_files; then
             if validate_builds; then
               if validate_backend_tests; then
                 if validate_frontend_tests; then
-                  if [ "$WITH_DOCKER" = true ]; then
-                    validate_docker || true
+                  if validate_docs_references; then
+                    if [ "$WITH_DOCKER" = true ]; then
+                      validate_docker || true
+                    fi
+                    validate_final_git || true
                   fi
-                  validate_final_git || true
                 fi
               fi
             fi
@@ -653,6 +667,7 @@ echo "Backend Build............. $BACKEND_BUILD_STATUS"
 echo "Frontend Build............ $FRONTEND_BUILD_STATUS"
 echo "Backend Tests............ $BACKEND_TESTS_STATUS"
 echo "Frontend Tests........... $FRONTEND_TESTS_STATUS"
+echo "Guide References......... $DOCS_REFERENCES_STATUS"
 echo "Docker Compose............ $DOCKER_STATUS"
 echo "Documentation............. $DOCS_STATUS"
 echo "Final Git Cleanliness..... $FINAL_GIT_STATUS"
@@ -668,6 +683,7 @@ if [ "$REQUIRED_FILES_STATUS" = "PASS" ] && \
    [ "$FRONTEND_BUILD_STATUS" = "PASS" ] && \
    [ "$BACKEND_TESTS_STATUS" = "PASS" ] && \
    [ "$FRONTEND_TESTS_STATUS" = "PASS" ] && \
+   [ "$DOCS_REFERENCES_STATUS" = "PASS" ] && \
    ( [ "$WITH_DOCKER" = false ] || [ "$DOCKER_STATUS" = "PASS" ] ) && \
    [ "$DOCS_STATUS" = "PASS" ] && \
    [ "$FINAL_GIT_STATUS" = "PASS" ]; then

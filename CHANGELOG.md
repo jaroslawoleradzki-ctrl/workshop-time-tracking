@@ -6,6 +6,9 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- Uzupełniono wbudowaną instrukcję o wszystkie 15 rozdziałów zatwierdzonego zakresu, pięć odnośników kontekstowych i rozwijaną nawigację na tablecie.
+- Dodano 21 rzeczywistych zrzutów Playwright z fikcyjnej bazy `*_docs`, obejmujących rejestrację, zmiany I/II/III, nieobecności, raporty, kontrolę sum, eksport i administrację.
+- Rozszerzono deterministyczny seed dokumentacyjny o wpisy zmian, nieobecności, wyjątek kalendarza i historię importu; `docs:validate` uruchamia się także w skrypcie walidacji wydania.
 - Rozpoczęto v0.6.0 od wbudowanej Instrukcji użytkownika dostępnej dla ról Administrator i Leader, z nawigacją rozdziałów, adresami `#help/<chapter-id>`, odznakami ról oraz wersją aplikacji.
 - Dodano pierwsze rozdziały „Pierwsze kroki” i „Logowanie”, wraz z generowanym przez Playwright rzeczywistym zrzutem ekranu logowania.
 - Dodano manifestową walidację zasobów zrzutów, skrypty `docs:screenshots` i `docs:validate` oraz dokumentacyjny seed chroniony wymaganiem nazwy bazy kończącej się na `_docs`.

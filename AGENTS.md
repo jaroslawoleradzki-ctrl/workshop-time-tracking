@@ -83,6 +83,7 @@ Zgodnie ze skryptami w `package.json` uruchom odpowiednio:
 
 * backend: `cd backend && npm test` oraz `npm run build` (backend nie definiuje skryptu lint),
 * frontend: `cd frontend && npm test`, `npm run lint` oraz `npm run build`.
+* po zmianie widocznego ekranu: sprawdź odpowiedni rozdział Pomocy i wygeneruj jego rzeczywisty zrzut poleceniem `cd frontend && npm run docs:screenshots`; przed wydaniem uruchom też przeglądarkowo niezależne `npm run docs:validate`.
 
 ---
 

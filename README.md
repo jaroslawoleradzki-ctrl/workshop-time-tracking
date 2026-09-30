@@ -300,7 +300,7 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 
 ### Użytkowanie
 
-* [Instrukcja użytkownika](docs/user-guide.md) – obsługa dla lidera i administratora, w tym wbudowana Pomoc / Instrukcja.
+* [Instrukcja użytkownika](docs/user-guide.md) – obsługa dla lidera i administratora. Wbudowana Pomoc / Instrukcja v0.6.0 zawiera 15 rozdziałów, 21 rzeczywistych zrzutów oraz odnośniki kontekstowe przy pięciu ekranach; na tablecie rozdziały są w rozwijanym menu.
 * [Reguły biznesowe](docs/business-rules.md) – obowiązujące walidacje, statusy, audyt i zasady raportowania.
 * [Importy i eksporty](docs/import-export-specification.md) – formaty kolumn, walidacja i raporty plikowe.
 
@@ -312,6 +312,7 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 * [Architektura](docs/architecture.md) – komponenty, model danych i przepływy.
 * [Konfiguracja](docs/configuration.md) – zmienne środowiskowe i różnice środowisk.
 * [Testowanie](docs/testing.md) – istniejące testy, polecenia i checklista regresji.
+* Walidacja zasobów przewodnika: `cd frontend && npm run docs:validate`. Generowanie zrzutów z izolowanej bazy `*_docs`: `npm run docs:screenshots` przy uruchomionym backendzie dokumentacyjnym.
 * [Zasady współpracy](AGENTS.md) – standardy dla deweloperów i agentów AI.
 
 ### Wdrożenie i utrzymanie

@@ -3,15 +3,15 @@
 ## Stan bieżący
 
 - Projekt: Workshop Time Tracking
-- Aktualna wersja produkcyjna: `0.5.7`
+- Aktualna wersja produkcyjna: `0.5.9`
 - Aktualna wersja development: `0.5.9`
 - Gałąź produkcyjna: `main`
-- Gałąź robocza: `development`
-- Stan prac: v0.5.8 wydane i zweryfikowane; v0.5.9 dostosowane na dedykowanej gałęzi `fix/v0.5.9-manual-acceptance-shift-report` po uwagach z akceptacji manualnej, z pełną weryfikacją automatyczną.
+- Gałąź robocza v0.6.0: `feature/v0.6.0-user-guide` (bez scalenia do `development`)
+- Stan prac: v0.5.9 wydane; przewodnik v0.6.0 zaimplementowany na gałęzi funkcjonalnej, przed akceptacją ręczną i integracją.
 
-Zakres v0.6.0 w toku: zaimplementowano fundament instrukcji w aplikacji, dwa początkowe rozdziały oraz deterministyczny pipeline Playwright dla rzeczywistego zrzutu logowania. Testy dokumentacyjne używają wyłącznie izolowanej bazy zakończonej `_docs`; pozostałe rozdziały i zrzuty pozostają kolejnymi incrementami.
+Zakres v0.6.0 na gałęzi funkcjonalnej: 15 rozdziałów Pomocy, 21 rzeczywistych zrzutów Playwright, pięć odnośników kontekstowych, rozwijana lista rozdziałów na tablecie i walidacja zasobów w skrypcie wydania. Fixture obejmuje wyłącznie fikcyjne rekordy w bazie zakończonej `_docs`. Dwie świeże bazy dokumentacyjne miały identyczne migawki; ponowny seed nie zmienił danych. Automatyczna walidacja i akceptacja ręczna są opisane w raporcie implementacji; wydanie v0.6.0 nie zostało wykonane.
 
-Rework fundamentu po pierwszym niezależnym przeglądzie: poprawiono odtwarzanie zwykłych zakładek po Pomocy, walidację referencji zrzutów oraz powtarzalność dokumentacyjnego seeda. Dwa świeże środowiska `_docs` i ponowne uruchomienie seeda dały identyczne migawki danych. Backend: 222/222 testów; frontend: 138/138 testów; lint, oba buildy, Prisma, `docs:validate` i Playwright 2/2 przeszły. Oczekuje na niezależny ponowny przegląd; pełna wersja v0.6.0 nie jest zakończona.
+Fundament po pierwszym przeglądzie zachowuje poprawki nawigacji, walidacji referencji i powtarzalności seeda. Ponowny przegląd wskazał nieaktualny opis historii commitów w raporcie fundamentu oraz brak niezależnego uruchomienia Playwright na izolowanej infrastrukturze; oba punkty skorygowano w obecnym przyroście.
 
 Zakres wersji `0.5.9` (po uwagach z akceptacji manualnej):
 

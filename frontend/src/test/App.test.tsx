@@ -171,7 +171,7 @@ describe('Help foundation', () => {
     fireEvent.click(screen.getByRole('button', { name: /Następny/i }));
     expect(screen.getByRole('heading', { name: 'Logowanie' })).toBeInTheDocument();
     expect(screen.getByAltText('Ekran logowania systemu Warsztat')).toHaveAttribute('src', '/help/logowanie-01-ekran-logowania.png');
-    fireEvent.click(screen.getByRole('button', { name: /Poprzedni/i })); expect(screen.getByRole('heading', { name: 'Pierwsze kroki' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Poprzedni$/ })); expect(screen.getByRole('heading', { name: 'Pierwsze kroki' })).toBeInTheDocument();
   });
   it('uses a help hash to select a chapter', () => {
     signIn('leader'); window.location.hash = '#help/logowanie'; render(<App />);

@@ -15,8 +15,11 @@ Frontend używa Vitest, Happy DOM i React Testing Library. `frontend/src/test/Ap
 | Test frontendu | `cd frontend && npm test` |
 | Lint frontendu | `cd frontend && npm run lint` |
 | Build frontendu | `cd frontend && npm run build` |
+| Walidacja obrazów Pomocy bez przeglądarki | `cd frontend && npm run docs:validate` |
+| Zrzuty Pomocy na izolowanym `*_docs` | `cd frontend && npm run docs:screenshots` |
 
 Backend nie definiuje skryptu lint. Oba skrypty testowe wykonują `vitest run`.
+Testy Playwright w `frontend/docs-screenshots/` są uruchamiane tylko na żądanie przez `docs:screenshots`, przy lokalnym backendzie podłączonym wyłącznie do bazy o nazwie zakończonej `_docs`. Test wykonuje 21 ujęć prawdziwego UI, sprawdza ich renderowanie w Pomocy na desktopie i tablecie oraz pięć odnośników kontekstowych. Zwykłe `npm test` nie uruchamia przeglądarki. `docs:validate` weryfikuje manifest, pliki PNG i referencje rozdziałów bez Playwright; jest częścią `scripts/verify-release.sh`.
 
 ## Testy ręczne przed wydaniem
 
@@ -30,4 +33,4 @@ Backend nie definiuje skryptu lint. Oba skrypty testowe wykonują `vitest run`.
 
 ## Braki pokrycia
 
-Automatyczne testy nie obejmują pełnego poprawnego logowania, całego CRUD, ostrzeżeń, importów, pozostałej analityki i eksportów, migracji, Nginx/Docker ani pełnych interakcji widoków. Krytyczne kopiowanie ma testy endpointu i modelu transakcji, lecz repozytorium nadal nie ma automatycznego E2E ani testu współbieżności uruchamianego na rzeczywistym PostgreSQL. Testy healthchecka i analityki używają kontrolowanych odpowiedzi Prisma i nie wymagają działającej bazy.
+Automatyczne testy nie obejmują całego CRUD, każdego wariantu importu i eksportu, Nginx/Docker ani pełnych interakcji wszystkich widoków. Playwright sprawdza scenariusze instrukcji na izolowanej bazie, lecz nie zastępuje akceptacji ręcznej. Krytyczne kopiowanie ma testy endpointu i modelu transakcji; testy healthchecka i analityki używają też kontrolowanych odpowiedzi Prisma.

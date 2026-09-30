@@ -8,7 +8,7 @@ const file = screenshotManifest[0].targetFile;
 const validate = (
   manifest: DocsScreenshot[] = [...screenshotManifest],
   chapters: HelpChapter[] = helpChapters,
-  files: string[] = [file],
+  files: string[] = screenshotManifest.map((entry) => entry.targetFile),
 ) => validateScreenshotReferences(manifest, chapters, files);
 
 describe('docs screenshot reference validation', () => {

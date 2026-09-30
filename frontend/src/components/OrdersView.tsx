@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { UserSession } from '../App';
 import ScrollableTable from './ScrollableTable';
+import ContextHelpButton from './ContextHelpButton';
 
 interface Order {
   id: string;
@@ -37,9 +38,10 @@ interface Order {
 interface OrdersViewProps {
   token: string;
   user: UserSession;
+  onOpenHelp?: (chapter: string) => void;
 }
 
-export default function OrdersView({ token, user }: OrdersViewProps) {
+export default function OrdersView({ token, user, onOpenHelp }: OrdersViewProps) {
   const isAdmin = user.role === 'admin';
   const isLeader = user.role === 'leader';
   const canExport = isAdmin || isLeader;
@@ -618,6 +620,7 @@ export default function OrdersView({ token, user }: OrdersViewProps) {
         <h2 style={{ fontFamily: 'var(--font-header)', fontSize: '1.8rem', margin: 0 }}>
           Baza Zleceń Produkcyjnych
         </h2>
+        <ContextHelpButton chapter="baza-zlecen" onOpenHelp={onOpenHelp} />
       </div>
 
       {/* Główne akcje */}

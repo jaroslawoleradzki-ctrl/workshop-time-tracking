@@ -336,12 +336,12 @@ function App() {
       case 'dashboard':
         return <DashboardView token={token} />;
       case 'reporting':
-        return <ReportingPanel token={token} user={user} />;
+        return <ReportingPanel token={token} user={user} onOpenHelp={selectHelpChapter} />;
       case 'orders':
         if (user.role !== 'admin' && user.role !== 'leader') {
-          return <ReportingPanel token={token} user={user} />;
+          return <ReportingPanel token={token} user={user} onOpenHelp={selectHelpChapter} />;
         }
-        return <OrdersView token={token} user={user} />;
+        return <OrdersView token={token} user={user} onOpenHelp={selectHelpChapter} />;
       case 'employees':
         return <EmployeesView token={token} />;
       case 'dictionaries':
@@ -351,13 +351,13 @@ function App() {
       case 'imports':
         return <ImportsView token={token} />;
       case 'calendar':
-        return user.role === 'admin' ? <CompanyCalendarView token={token} /> : <ReportingPanel token={token} user={user} />;
+        return user.role === 'admin' ? <CompanyCalendarView token={token} onOpenHelp={selectHelpChapter} /> : <ReportingPanel token={token} user={user} onOpenHelp={selectHelpChapter} />;
       case 'reports':
-        return <ReportsView token={token} user={user} />;
+        return <ReportsView token={token} user={user} onOpenHelp={selectHelpChapter} />;
       case 'help':
         return <HelpView chapterId={helpChapter} appVersion={appVersion} onSelectChapter={selectHelpChapter} />;
       default:
-        return <ReportingPanel token={token} user={user} />;
+        return <ReportingPanel token={token} user={user} onOpenHelp={selectHelpChapter} />;
     }
   };
 
