@@ -118,7 +118,7 @@ describe('Canonical WorkTimeTypes and Hardening (v0.5.4)', () => {
         },
         workTimeReport: {
           findMany: vi.fn().mockImplementation(async (args: any) => {
-            if (args?.where?.workTimeType?.isAbsence) {
+            if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) {
               return [{ workTimeTypeCode: 'WKU', hours: 8 }];
             }
             return mockReports;
@@ -161,7 +161,7 @@ describe('Canonical WorkTimeTypes and Hardening (v0.5.4)', () => {
         },
         workTimeReport: {
           findMany: vi.fn().mockImplementation(async (args: any) => {
-            if (args?.where?.workTimeType?.isAbsence) return [];
+            if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) return [];
             return mockReports;
           }),
         },
@@ -213,7 +213,7 @@ describe('Canonical WorkTimeTypes and Hardening (v0.5.4)', () => {
         },
         workTimeReport: {
           findMany: vi.fn().mockImplementation(async (args: any) => {
-            if (args?.where?.workTimeType?.isAbsence) return [];
+            if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) return [];
             return mockReports;
           }),
         },
@@ -275,7 +275,7 @@ describe('Canonical WorkTimeTypes and Hardening (v0.5.4)', () => {
         },
         workTimeReport: {
           findMany: vi.fn().mockImplementation(async (args: any) => {
-            if (args?.where?.workTimeType?.isAbsence) return [];
+            if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) return [];
             return mockReports;
           }),
         },
@@ -317,7 +317,7 @@ describe('Canonical WorkTimeTypes and Hardening (v0.5.4)', () => {
         },
         workTimeReport: {
           findMany: vi.fn().mockImplementation(async (args: any) => {
-            if (args?.where?.workTimeType?.isAbsence) return [];
+            if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) return [];
             return mockReports;
           }),
         },
@@ -377,7 +377,7 @@ describe('Canonical WorkTimeTypes and Hardening (v0.5.4)', () => {
         },
         workTimeReport: {
           findMany: vi.fn().mockImplementation(async (args: any) => {
-            if (args?.where?.workTimeType?.isAbsence) {
+            if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) {
               return [{ workTimeTypeCode: 'WKU', hours: 8 }];
             }
             return mockReports;

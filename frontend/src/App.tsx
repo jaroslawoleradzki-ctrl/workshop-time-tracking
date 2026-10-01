@@ -551,7 +551,7 @@ function App() {
 
         {/* Content Area */}
         <main className="main-content">
-          <div className={`content-wrapper ${['orders', 'employees', 'users', 'dictionaries', 'imports', 'calendar', 'reports', 'help'].includes(currentTab) ? 'orders-tab-wrapper' : ''}`}>
+          <div className={`content-wrapper ${['orders', 'employees', 'users', 'dictionaries', 'imports', 'calendar', 'reports'].includes(currentTab) ? 'orders-tab-wrapper' : ''}`}>
             {renderActiveTab()}
           </div>
         </main>

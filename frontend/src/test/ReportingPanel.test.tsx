@@ -1532,7 +1532,7 @@ describe('ReportingPanel — Work Shift Tracking UI (v0.5.9)', () => {
     expect(screen.getByRole('option', { name: 'III' })).toBeInTheDocument();
 
     // Verify shift labels in daily reports table
-    expect(screen.getByText('I zmiana')).toBeInTheDocument();
+    expect(await screen.findByText('I zmiana')).toBeInTheDocument();
     expect(screen.getByText('II zmiana')).toBeInTheDocument();
     expect(screen.getByText('Brak danych o zmianie')).toBeInTheDocument();
   });
