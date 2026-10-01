@@ -28,6 +28,11 @@ import {
   formatGeneratedAt,
 } from '../utils/excel-report';
 
+// NN is the client-approved unpaid absence; legacy dictionary flags may be false.
+const UNPAID_ABSENCE_CODE = 'NN';
+const isReportingAbsence = (report: { workTimeTypeCode: string; workTimeType?: { isAbsence?: boolean } | null }) =>
+  report.workTimeTypeCode === UNPAID_ABSENCE_CODE || Boolean(report.workTimeType?.isAbsence);
+
 const router = Router();
 
 // Auth required
@@ -182,9 +187,7 @@ export async function getAbsencePeriodRows(
         gte: filters.dateFrom ? new Date(`${filters.dateFrom}T00:00:00.000Z`) : undefined,
         lte: filters.dateTo ? new Date(`${filters.dateTo}T00:00:00.000Z`) : undefined,
       },
-      workTimeType: {
-        isAbsence: true,
-      },
+      OR: [{ workTimeType: { isAbsence: true } }, { workTimeTypeCode: UNPAID_ABSENCE_CODE }],
     },
     include: {
       employee: true,
@@ -216,7 +219,7 @@ export async function getAbsencePeriodRows(
   };
 
   for (const report of reports) {
-    if (!report.workTimeType.isAbsence) continue;
+    if (!isReportingAbsence(report)) continue;
     const dateKey = formatDateKey(report.date);
     if (!(await getDecision(dateKey)).isWorkingDay) continue;
     const employeeName = formatEmployeeName(report.employee);
@@ -304,7 +307,7 @@ export async function getEmployeeReportRows(
   const pivot: Record<string, InternalPivotRow> = {};
 
   reports.forEach((report) => {
-    const isAbsence = report.workTimeType?.isAbsence ?? false;
+    const isAbsence = isReportingAbsence(report);
     let shiftKey: ShiftDimension;
     if (isAbsence) {
       shiftKey = 'ABSENCE';
@@ -349,9 +352,10 @@ export async function getEmployeeReportRows(
       (report.workTimeType?.name?.toLowerCase().includes('nadgodzin') ?? false);
 
     pivot[rowKey].counts[code] = (pivot[rowKey].counts[code] || 0) + hours;
-    pivot[rowKey].suma += hours;
-    if (!isOvertime) {
-      pivot[rowKey].sumaBezNadgodzin += hours;
+    // Keep absence detail, but only attendance contributes to worked hours.
+    if (!isAbsence) {
+      pivot[rowKey].suma += hours;
+      if (!isOvertime) pivot[rowKey].sumaBezNadgodzin += hours;
     }
   });
 
@@ -359,6 +363,8 @@ export async function getEmployeeReportRows(
     .sort((a, b) => {
       const cmp = a.sortKey.localeCompare(b.sortKey, 'pl');
       if (cmp !== 0) return cmp;
+      const employeeCmp = a.employeeId.localeCompare(b.employeeId);
+      if (employeeCmp !== 0) return employeeCmp;
       return a.shiftOrder - b.shiftOrder;
     })
     .map((item) => {
@@ -423,6 +429,8 @@ router.get('/dashboard', async (_req: AuthRequest, res: Response) => {
       where: {
         deletedAt: null,
         date: { gte: startOfToday, lte: endOfToday },
+        workTimeTypeCode: { not: UNPAID_ABSENCE_CODE },
+        workTimeType: { isAbsence: false },
       },
       _sum: { hours: true },
     });
@@ -431,6 +439,8 @@ router.get('/dashboard', async (_req: AuthRequest, res: Response) => {
       where: {
         deletedAt: null,
         date: { gte: startOfMonth, lte: endOfMonth },
+        workTimeTypeCode: { not: UNPAID_ABSENCE_CODE },
+        workTimeType: { isAbsence: false },
       },
       _sum: { hours: true },
     });
@@ -440,7 +450,7 @@ router.get('/dashboard', async (_req: AuthRequest, res: Response) => {
       where: { deletedAt: null, status: OrderStatus.OPEN, isActive: true },
       include: {
         reports: {
-          where: { deletedAt: null },
+          where: { deletedAt: null, workTimeTypeCode: { not: UNPAID_ABSENCE_CODE } },
           select: { hours: true },
         },
       },
@@ -554,6 +564,7 @@ export async function getOrderReportRows(
               reports: {
                 some: {
                   deletedAt: null,
+                  workTimeTypeCode: { not: UNPAID_ABSENCE_CODE },
                   date: reportDateRange,
                 },
               },
@@ -565,6 +576,7 @@ export async function getOrderReportRows(
       reports: {
         where: {
           deletedAt: null,
+          workTimeTypeCode: { not: UNPAID_ABSENCE_CODE },
           // Fetch all non-deleted reports up to the report end.  The same set
           // supplies periodActualHours and cumulativeActualHours below.
           date: { lte: reportDateRange.lte },
@@ -668,6 +680,7 @@ export async function getReconciliationDiagnostics(
           reports: {
             some: {
               deletedAt: null,
+              workTimeTypeCode: { not: UNPAID_ABSENCE_CODE },
               date: {
                 gte: new Date(`${dateFrom}T00:00:00.000Z`),
                 lte: new Date(`${dateTo}T23:59:59.999Z`),
@@ -683,7 +696,7 @@ export async function getReconciliationDiagnostics(
 
   // Compute signed contribution for each report to the difference (settledHours - employeeHours)
   // settledHours = ordersHours + absenceHours
-  // employeeHours = sum of all reports
+  // employeeHours = attendance + absences other than NN
   // For each report:
   // - absence + orderInClosure: counted in both absenceHours AND ordersHours → contribution = +hours
   // - absence + no orderInClosure: counted in absenceHours only → contribution = 0
@@ -692,7 +705,9 @@ export async function getReconciliationDiagnostics(
   const diagnostics: ReconciliationDiagnosticRecord[] = [];
 
   for (const report of allReports) {
-    const isAbsence = report.workTimeType.isAbsence;
+    // NN contributes to neither side of the reconciliation.
+    if (report.workTimeTypeCode === UNPAID_ABSENCE_CODE) continue;
+    const isAbsence = isReportingAbsence(report);
     const orderId = report.orderId;
     const orderInClosure = orderId ? orderIdsInClosure.has(orderId) : false;
     const hours = Number(report.hours);
@@ -776,7 +791,7 @@ export async function getClosureControlSummary(
     // 2. Nieobecności dynamicznie wyznaczane ze słownika WorkTimeType (isAbsence: true) przez tx
     const [absenceTypes, absenceReports] = await Promise.all([
       tx.workTimeType.findMany({
-        where: { isAbsence: true },
+        where: { OR: [{ isAbsence: true }, { code: UNPAID_ABSENCE_CODE }] },
         select: { code: true, name: true },
         orderBy: [{ createdAt: 'asc' }, { code: 'asc' }],
       }),
@@ -787,9 +802,7 @@ export async function getClosureControlSummary(
             gte: new Date(`${dateFrom}T00:00:00.000Z`),
             lte: new Date(`${dateTo}T00:00:00.000Z`),
           },
-          workTimeType: {
-            isAbsence: true,
-          },
+          OR: [{ workTimeType: { isAbsence: true } }, { workTimeTypeCode: UNPAID_ABSENCE_CODE }],
         },
         select: {
           workTimeTypeCode: true,
@@ -813,10 +826,10 @@ export async function getClosureControlSummary(
         const rounded = Math.round(hours * 100) / 100;
         absences.push({
           code: type.code,
-          name: type.name,
+          name: type.code === UNPAID_ABSENCE_CODE ? `${type.name} — niepłatne, poza sumą` : type.name,
           hours: rounded,
         });
-        totalAbsenceHours += rounded;
+        if (type.code !== UNPAID_ABSENCE_CODE) totalAbsenceHours += rounded;
       }
     }
 
@@ -826,10 +839,10 @@ export async function getClosureControlSummary(
         const rounded = Math.round(hours * 100) / 100;
         absences.push({
           code,
-          name: code,
+          name: code === UNPAID_ABSENCE_CODE ? `${code} — niepłatne, poza sumą` : code,
           hours: rounded,
         });
-        totalAbsenceHours += rounded;
+        if (code !== UNPAID_ABSENCE_CODE) totalAbsenceHours += rounded;
       }
     }
 
@@ -846,7 +859,13 @@ export async function getClosureControlSummary(
     );
     const totalEmployeeHours =
       Math.round(
-        employeeRows.reduce((sum, row) => sum + (Number(row.suma) || 0), 0) * 100,
+        employeeRows.reduce((sum, row) => {
+          if (row.workShift !== 'ABSENCE') return sum + Number(row.suma);
+          // Reconciliation includes other absences, separately from worked hours.
+          const { employeeId, employeeName, workShift, workShiftLabel, suma, sumaBezNadgodzin, ...counts } = row;
+          return sum + Object.entries(counts).reduce((hours, [code, value]) =>
+            hours + (code === UNPAID_ABSENCE_CODE ? 0 : Number(value) || 0), 0);
+        }, 0) * 100,
       ) / 100;
 
     // 4. Różnica i status

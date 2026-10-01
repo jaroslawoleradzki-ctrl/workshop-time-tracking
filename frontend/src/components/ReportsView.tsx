@@ -505,6 +505,16 @@ export default function ReportsView({ token, user, onOpenHelp }: ReportsViewProp
     activeFilters.resetFilters();
   };
 
+  const employeeTotals = new Map<string, { hours: number; rows: number }>();
+  if (activeReportTab === 'by-employee' && Array.isArray(reportData)) {
+    for (const row of reportData) {
+      const total = employeeTotals.get(row.employeeId) || { hours: 0, rows: 0 };
+      total.hours += Number(row.suma) || 0;
+      total.rows += 1;
+      employeeTotals.set(row.employeeId, total);
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
       {/* Tytuł */}
@@ -779,6 +789,7 @@ export default function ReportsView({ token, user, onOpenHelp }: ReportsViewProp
                 <thead>
                   <tr>
                     <th>Pracownik</th>
+                    <th style={{ textAlign: 'right' }}>Łącznie przepracowane w okresie</th>
                     <th>Zmiana</th>
                     <th style={{ textAlign: 'right', fontWeight: 'bold' }}>Suma godzin z nadgodzinami</th>
                     <th style={{ textAlign: 'right', fontWeight: 'bold' }}>Suma godzin bez nadgodzin</th>
@@ -793,6 +804,11 @@ export default function ReportsView({ token, user, onOpenHelp }: ReportsViewProp
                   {Array.isArray(reportData) && reportData.map((row, idx) => (
                     <tr key={idx}>
                       <td style={{ fontWeight: 'bold' }}>{row.employeeName}</td>
+                      {(idx === 0 || reportData[idx - 1].employeeId !== row.employeeId) && (
+                        <td rowSpan={employeeTotals.get(row.employeeId)?.rows} style={{ textAlign: 'right', verticalAlign: 'top', fontWeight: 'bold', color: 'var(--primary-color)' }}>
+                          {(employeeTotals.get(row.employeeId)?.hours || 0).toFixed(1)} h
+                        </td>
+                      )}
                       <td>
                         <span style={{
                           fontWeight: 600,

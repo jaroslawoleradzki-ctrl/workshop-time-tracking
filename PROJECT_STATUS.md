@@ -3,11 +3,14 @@
 ## Stan bieżący
 
 - Projekt: Workshop Time Tracking
-- Aktualna wersja produkcyjna: `0.6.0`
-- Aktualna wersja development: `0.6.0`
+- Aktualna wersja repozytorium: `0.6.1`
+- Aktualna wersja produkcyjna: `0.6.0` (deployment v0.6.1 nie został wykonany)
+- Aktualna wersja development: `0.6.1`
 - Gałąź produkcyjna: `main`
-- Gałąź robocza: `development`
-- Stan prac: v0.6.0 zaakceptowane ręcznie i przygotowane do wydania.
+- Gałąź integracyjna: `development` (`0.6.1`); poprawka z `fix/v0.6.1-client-feedback` została scalona
+- Stan prac: v0.6.1 zaakceptowana i scalona do `main`; produkcja pozostaje na `0.6.0` do ręcznego deploymentu.
+
+Poprawka v0.6.1: NN i inne nieobecności nie zwiększają czasu przepracowanego. NN pozostaje widoczne, lecz nie uczestniczy w godzinach zleceń, KPI pracy ani obu sumach kontroli rozliczenia. Raport pracowników pokazuje osobną sumę okresu ponad podziałem zmian. Pomoc przewija się w głównej treści, również przy niskim viewporcie tabletu. Nie zmieniono schematu bazy. Weryfikacja po integracji: backend 225/225 testów, frontend 138/138, build obu projektów, lint, `docs:validate` 21/21. Development stack przebudowano na istniejącym wolumenie `workshop-time-tracking-dev_pgdata`; API health i baza są zdrowe, `/api/version` zwraca `0.6.1`, frontend odpowiada HTTP 200 na porcie 8085. Ręczna akceptacja funkcjonalna została udzielona. Ryzyko: niestandardowe kody nieobecności inne niż NN zachowują dotychczasową semantykę rozliczenia. Szczegóły: `V0.6.1_CLIENT_FEEDBACK_FIX_REPORT.md`.
 
 Zakres v0.6.0: 15 rozdziałów Pomocy, 21 rzeczywistych zrzutów Playwright, pięć odnośników kontekstowych, rozwijana lista rozdziałów na tablecie i walidacja zasobów w skrypcie wydania. Fixture obejmuje wyłącznie fikcyjne rekordy w bazie zakończonej `_docs`. Dwie świeże bazy dokumentacyjne miały identyczne migawki; ponowny seed nie zmienił danych. Akceptacja ręczna: PASSED. Wyniki automatycznej walidacji i zakres wydania opisuje raport końcowy v0.6.0.
 
