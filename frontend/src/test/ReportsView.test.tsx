@@ -280,6 +280,7 @@ describe('ReportsView — miesięczny raport pracowników', () => {
 
     expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
       'Pracownik',
+      'Łącznie przepracowane w okresie',
       'Zmiana',
       'Suma godzin z nadgodzinami',
       'Suma godzin bez nadgodzin',
@@ -380,11 +381,11 @@ describe('ReportsView — miesięczny raport pracowników', () => {
           {
             employeeId: '20000000-0000-4000-8000-000000000001',
             employeeName: 'Kowalski Jan',
-            workShift: null,
+            workShift: 'ABSENCE',
             workShiftLabel: 'Nie dotyczy',
             UW: 8,
-            suma: 8,
-            sumaBezNadgodzin: 8,
+            suma: 0,
+            sumaBezNadgodzin: 0,
           },
         ]);
       }
@@ -412,6 +413,7 @@ describe('ReportsView — miesięczny raport pracowników', () => {
     expect(screen.getByText('III')).toBeInTheDocument();
     expect(screen.getByText('Brak danych')).toBeInTheDocument();
     expect(screen.getByText('Nie dotyczy')).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: '24.0 h' })).toHaveAttribute('rowspan', '4');
 
     fireEvent.click(screen.getByRole('button', { name: 'Pobierz plik CSV' }));
     expect(exportedBlob).toBeDefined();
@@ -430,7 +432,7 @@ describe('ReportsView — miesięczny raport pracowników', () => {
     expect(lines[6]).toBe('Kowalski Jan;I;8;8;8;0;0;0;0;0;0;0');
     expect(lines[7]).toBe('Kowalski Jan;III;8;8;0;0;0;0;0;0;0;8');
     expect(lines[8]).toBe('Kowalski Jan;Brak danych;8;8;8;0;0;0;0;0;0;0');
-    expect(lines[9]).toBe('Kowalski Jan;Nie dotyczy;8;8;0;0;0;8;0;0;0;0');
+    expect(lines[9]).toBe('Kowalski Jan;Nie dotyczy;0;0;0;0;0;8;0;0;0;0');
   });
 
   it('correctly escapes semicolons, quotes, newlines, and preserves Polish characters in CSV export', async () => {

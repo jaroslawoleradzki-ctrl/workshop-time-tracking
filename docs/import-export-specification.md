@@ -65,3 +65,5 @@ W eksporcie według zleceń `closureReport=true` wymaga obu dat. Arkusz zawiera 
 
 > [!NOTE]
 > Techniczne szablony importowe (`szablon_pracownicy.xlsx`, `szablon_zlecen.xlsx`) nie są raportami użytkownika i pozostały bez zmian.
+
+W v0.6.1 sumy raportu pracowników w JSON, XLSX i CSV oznaczają godziny przepracowane (bez wszystkich nieobecności). Dynamiczne kolumny nieobecności zachowują dane, w tym NN. Pliki zachowują jeden wiersz na pracownika i zmianę; suma wierszy pracownika daje łączną pracę w okresie. Kontrola rozliczenia zleceń uwzględnia pozostałe nieobecności, ale wyłącza NN z obu porównywanych sum; NN jest prezentowane z opisem „niepłatne, poza sumą”.

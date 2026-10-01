@@ -6,8 +6,10 @@
 - Aktualna wersja produkcyjna: `0.6.0`
 - Aktualna wersja development: `0.6.0`
 - Gałąź produkcyjna: `main`
-- Gałąź robocza: `development`
-- Stan prac: v0.6.0 zaakceptowane ręcznie i przygotowane do wydania.
+- Gałąź integracyjna: `development` (`0.6.0`); branch poprawki `fix/v0.6.1-client-feedback` (`0.6.1`)
+- Stan prac: v0.6.1 przygotowane na osobnym branchu do review i akceptacji użytkownika; bez merge i wdrożenia.
+
+Poprawka v0.6.1: NN i inne nieobecności nie zwiększają czasu przepracowanego. NN pozostaje widoczne, lecz nie uczestniczy w godzinach zleceń, KPI pracy ani obu sumach kontroli rozliczenia. Raport pracowników pokazuje osobną sumę okresu ponad podziałem zmian. Pomoc przewija się w głównej treści, również przy niskim viewporcie tabletu. Nie zmieniono schematu bazy. Weryfikacja: backend 225/225 testów, frontend 138/138, build obu projektów, lint, 11/11 scenariuszy poprawki Playwright (w tym 10 wariantów przewijania w dwóch motywach) i 21 zrzutów Pomocy; `docs:validate` 21/21. Ryzyko do oceny: istniejące niestandardowe kody nieobecności inne niż NN zachowują dotychczasową semantykę rozliczenia; weryfikacja ręczna na kopii danych klienta i akceptacja użytkownika oczekują na review. Pełne szczegóły: `V0.6.1_CLIENT_FEEDBACK_FIX_REPORT.md`.
 
 Zakres v0.6.0: 15 rozdziałów Pomocy, 21 rzeczywistych zrzutów Playwright, pięć odnośników kontekstowych, rozwijana lista rozdziałów na tablecie i walidacja zasobów w skrypcie wydania. Fixture obejmuje wyłącznie fikcyjne rekordy w bazie zakończonej `_docs`. Dwie świeże bazy dokumentacyjne miały identyczne migawki; ponowny seed nie zmienił danych. Akceptacja ręczna: PASSED. Wyniki automatycznej walidacji i zakres wydania opisuje raport końcowy v0.6.0.
 

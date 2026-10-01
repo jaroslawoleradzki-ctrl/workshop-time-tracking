@@ -3,6 +3,13 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.6.1] — poprawka przygotowana do review
+
+### Fixed
+- Nieobecności nie zwiększają sum przepracowanych godzin; NN pozostaje widoczne i jest wyłączone z sum rozliczenia, raportu zleceń oraz KPI pracy.
+- Raport pracowników pokazuje jedną sumę przepracowanych godzin za okres przed szczegółami zmian.
+- Pomoc / Instrukcja przewija się w głównym kontenerze treści przy różnych wysokościach viewportu.
+
 ## [0.6.0] - 2026-09-30
 
 ### Added

@@ -62,3 +62,9 @@ Administrator ma wszystkie funkcje lidera oraz poniższe ekrany.
 Rzeczywisty ekran: [Dashboard administratora](../frontend/public/help/ekran-glowny-03-pulpit.png).
 
 Rzeczywisty ekran: [Import danych](../frontend/public/help/administracja-02-importy.png).
+
+## Poprawki raportu i Pomocy v0.6.1
+
+W miesięcznym raporcie pracowników kolumna **Łącznie przepracowane w okresie** pokazuje jedną sumę godzin pracy pracownika ze wszystkich zmian, wraz z nadgodzinami. Wiersze I/II/III i „Brak danych” pokazują podział; „Nie dotyczy” prezentuje nieobecności. Nieobecności nie zwiększają sum pracy, a NN pozostaje widoczne jako czas niepłatny i jest wyłączone również z sum rozliczenia. XLSX/CSV zachowują podział zmian; zsumuj kolumnę godzin pracy dla pracownika, aby uzyskać sumę okresu.
+
+W Pomocy przewijaj główną treść, aby dotrzeć do dolnej części rozdziału i przycisków Poprzedni/Następny. Nagłówek aplikacji i sidebar zachowują własny układ. Na tablecie listę rozdziałów można zwinąć.
