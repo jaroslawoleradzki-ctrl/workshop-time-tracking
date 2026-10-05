@@ -280,8 +280,6 @@ describe('ReportsView — miesięczny raport pracowników', () => {
 
     expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
       'Pracownik',
-      'Łącznie przepracowane w okresie',
-      'Zmiana',
       'Suma godzin z nadgodzinami',
       'Suma godzin bez nadgodzin',
       'G (Standardowe godziny pracy)',
@@ -331,7 +329,6 @@ describe('ReportsView — miesięczny raport pracowników', () => {
 
     expect(lines[5]).toBe([
       'Pracownik',
-      'Zmiana',
       'Suma godzin z nadgodzinami',
       'Suma godzin bez nadgodzin',
       ...workTimeTypes
@@ -339,11 +336,11 @@ describe('ReportsView — miesięczny raport pracowników', () => {
         .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
         .map((type) => `${type.code} (${type.name})`),
     ].join(';'));
-    expect(lines[6]).toBe('Kowalski Jan;I;13.5;13.5;8;0;0;0;0;0;0;2.5');
+    expect(lines[6]).toBe('Kowalski Jan;13.5;13.5;8;0;0;0;0;0;0;2.5');
     expect(lines.join('\n')).not.toContain('LEGACY');
   });
 
-  it('renders multiple rows per employee with distinct shifts and labels in table and CSV', async () => {
+  it('renders exactly one aggregated row per employee without shift columns or rowspan workaround', async () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url === '/api/employees') return response(employees);
@@ -354,38 +351,11 @@ describe('ReportsView — miesięczny raport pracowników', () => {
           {
             employeeId: '20000000-0000-4000-8000-000000000001',
             employeeName: 'Kowalski Jan',
-            workShift: 'FIRST',
-            workShiftLabel: 'I',
-            G: 8,
-            suma: 8,
-            sumaBezNadgodzin: 8,
-          },
-          {
-            employeeId: '20000000-0000-4000-8000-000000000001',
-            employeeName: 'Kowalski Jan',
-            workShift: 'THIRD',
-            workShiftLabel: 'III',
+            G: 16,
             NOC: 8,
-            suma: 8,
-            sumaBezNadgodzin: 8,
-          },
-          {
-            employeeId: '20000000-0000-4000-8000-000000000001',
-            employeeName: 'Kowalski Jan',
-            workShift: null,
-            workShiftLabel: 'Brak danych',
-            G: 8,
-            suma: 8,
-            sumaBezNadgodzin: 8,
-          },
-          {
-            employeeId: '20000000-0000-4000-8000-000000000001',
-            employeeName: 'Kowalski Jan',
-            workShift: 'ABSENCE',
-            workShiftLabel: 'Nie dotyczy',
             UW: 8,
-            suma: 0,
-            sumaBezNadgodzin: 0,
+            suma: 24,
+            sumaBezNadgodzin: 32,
           },
         ]);
       }
@@ -397,6 +367,7 @@ describe('ReportsView — miesięczny raport pracowników', () => {
       if (blob instanceof Blob) exportedBlob = blob;
       return 'blob:test-shifts';
     });
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
 
     render(
       <ReportsView
@@ -406,14 +377,42 @@ describe('ReportsView — miesięczny raport pracowników', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Wg Pracowników (Miesięczny)' }));
-    await screen.findByRole('columnheader', { name: 'Zmiana' });
+    await screen.findByRole('columnheader', { name: 'Suma godzin z nadgodzinami' });
 
-    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toContain('Zmiana');
-    expect(screen.getByText('I')).toBeInTheDocument();
-    expect(screen.getByText('III')).toBeInTheDocument();
-    expect(screen.getByText('Brak danych')).toBeInTheDocument();
-    expect(screen.getByText('Nie dotyczy')).toBeInTheDocument();
-    expect(screen.getByRole('cell', { name: '24.0 h' })).toHaveAttribute('rowspan', '4');
+    expect(screen.queryByRole('columnheader', { name: 'Zmiana' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Łącznie przepracowane w okresie' })).not.toBeInTheDocument();
+
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual([
+      'Pracownik',
+      'Suma godzin z nadgodzinami',
+      'Suma godzin bez nadgodzin',
+      'G (Standardowe godziny pracy)',
+      'NDR (Nadgodziny)',
+      'NS (Nadgodziny sobota/niedziela)',
+      'UW (Urlop wypoczynkowy)',
+      'UOK (Urlop okolicznościowy)',
+      'UŻ (Urlop na żądanie)',
+      'L4 (Zwolnienie chorobowe)',
+      'NOC (Zmiana nocna)',
+    ]);
+
+    const table = screen.getByRole('table', { name: 'Raport według pracowników' });
+    const bodyRows = table.querySelectorAll('tbody tr');
+    expect(bodyRows).toHaveLength(1);
+    expect(table.querySelectorAll('td[rowspan]')).toHaveLength(0);
+    expect(Array.from(bodyRows[0].querySelectorAll('td')).map((cell) => cell.textContent)).toEqual([
+      'Kowalski Jan',
+      '24.0 h',
+      '32.0 h',
+      '16.0 h',
+      '0.0 h',
+      '0.0 h',
+      '8.0 h',
+      '0.0 h',
+      '0.0 h',
+      '0.0 h',
+      '8.0 h',
+    ]);
 
     fireEvent.click(screen.getByRole('button', { name: 'Pobierz plik CSV' }));
     expect(exportedBlob).toBeDefined();
@@ -421,7 +420,6 @@ describe('ReportsView — miesięczny raport pracowników', () => {
     const lines = csv.split('\n');
     expect(lines[5]).toBe([
       'Pracownik',
-      'Zmiana',
       'Suma godzin z nadgodzinami',
       'Suma godzin bez nadgodzin',
       ...workTimeTypes
@@ -429,10 +427,8 @@ describe('ReportsView — miesięczny raport pracowników', () => {
         .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
         .map((type) => `${type.code} (${type.name})`),
     ].join(';'));
-    expect(lines[6]).toBe('Kowalski Jan;I;8;8;8;0;0;0;0;0;0;0');
-    expect(lines[7]).toBe('Kowalski Jan;III;8;8;0;0;0;0;0;0;0;8');
-    expect(lines[8]).toBe('Kowalski Jan;Brak danych;8;8;8;0;0;0;0;0;0;0');
-    expect(lines[9]).toBe('Kowalski Jan;Nie dotyczy;0;0;0;0;0;8;0;0;0;0');
+    expect(lines).toHaveLength(7);
+    expect(lines[6]).toBe('Kowalski Jan;24;32;16;0;0;8;0;0;0;8');
   });
 
   it('correctly escapes semicolons, quotes, newlines, and preserves Polish characters in CSV export', async () => {

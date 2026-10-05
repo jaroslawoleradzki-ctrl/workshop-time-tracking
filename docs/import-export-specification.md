@@ -54,7 +54,7 @@ Od wersji `0.3.7` wszystkie pliki raportowe dla użytkownika (Zlecenia, Miesięc
 | Eksport | Filtry | Kolumny arkusza |
 |---|---|---|
 | Według zleceń | `dateFrom`, `dateTo`, `status`, `orderNumber`, `onlyWithHours`, `closureReport` | Numer zlecenia; Numer produktu; Nazwa produktu; Konto księgowe; Ilość; Godziny planowane (estymata); Godziny rzeczywiste; Odchylenie (plan - rzecz.); Procent realizacji (%); Status zlecenia; Rzeczywista data zakończenia |
-| Według pracowników | `dateFrom`, `dateTo`, `employeeId` | Pracownik; Zmiana; Suma godzin z nadgodzinami; Suma godzin bez nadgodzin; dynamiczne kolumny rodzajów czasu (wiersze dzielone per pracownik i zmiana: `I`, `II`, `III`, `Brak danych`, `Nie dotyczy`) |
+| Według pracowników | `dateFrom`, `dateTo`, `employeeId` | Pracownik; Suma godzin z nadgodzinami; Suma godzin bez nadgodzin; dynamiczne kolumny rodzajów czasu (jeden wiersz na pracownika, historia zmian `I`, `II`, `III` sumowana) |
 | Według kont | `dateFrom`, `dateTo`, `accountingAccount` | Data; Konto księgowe; Pracownik; Zlecenie; Produkt; Liczba godzin; Rodzaj czasu pracy |
 | Szczegółowy | `dateFrom`, `dateTo`, `employeeId`, `orderId` | Data; Pracownik; Numer zlecenia; Numer produktu; Nazwa produktu; Konto księgowe; Liczba godzin; Typ czasu pracy; Wprowadził użytkownik; Data wpisu w bazie |
 | Okresy nieobecności | `dateFrom`, `dateTo`, `employeeId`, `workTimeTypeCode` | Imię i nazwisko; Rodzaj nieobecności; Od; Do; Liczba dni nieobecności |
@@ -66,4 +66,4 @@ W eksporcie według zleceń `closureReport=true` wymaga obu dat. Arkusz zawiera 
 > [!NOTE]
 > Techniczne szablony importowe (`szablon_pracownicy.xlsx`, `szablon_zlecen.xlsx`) nie są raportami użytkownika i pozostały bez zmian.
 
-W v0.6.1 sumy raportu pracowników w JSON, XLSX i CSV oznaczają godziny przepracowane (bez wszystkich nieobecności). Dynamiczne kolumny nieobecności zachowują dane, w tym NN. Pliki zachowują jeden wiersz na pracownika i zmianę; suma wierszy pracownika daje łączną pracę w okresie. Kontrola rozliczenia zleceń uwzględnia pozostałe nieobecności, ale wyłącza NN z obu porównywanych sum; NN jest prezentowane z opisem „niepłatne, poza sumą”.
+W v0.6.2 raport pracowników w JSON, XLSX i CSV ma jeden wiersz na pracownika i nie zawiera kolumny `Zmiana` ani `Łącznie przepracowane w okresie`. **Suma godzin z nadgodzinami** obejmuje godziny przepracowane z nadgodzinami (bez nieobecności), a **Suma godzin bez nadgodzin** obejmuje godziny normatywne oraz płatne nieobecności (UW, L4, UOK, UŻ, WKU i inne typy z `isAbsence=true`), z wyłączeniem nadgodzin i NN. Dynamiczne kolumny nieobecności zachowują dane, w tym NN. Kontrola rozliczenia zleceń uwzględnia pozostałe nieobecności, ale wyłącza NN z obu porównywanych sum; NN jest prezentowane z opisem „niepłatne, poza sumą”.

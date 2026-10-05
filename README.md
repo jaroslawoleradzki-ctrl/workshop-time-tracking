@@ -75,7 +75,7 @@ Zapewnia administratorom syntetyczne spojrzenie na statusy produkcyjne:
 
 ### 4. Centrum Raportów (Raporty)
 * Generowanie okresowych zestawień i rozliczeń zleceniowych dla liderów oraz administracji.
-* **Miesięczny raport pracowników**: Pokazuje jedną sumę przepracowanych godzin pracownika za okres (bez nieobecności), zachowując pojedynczą kolumnę `Zmiana` i podziałem na wiersze per pracownik i zmiana (`I`, `II`, `III`, `Brak danych` dla wpisów historycznych, `Nie dotyczy` dla nieobecności) w widoku tabeli oraz eksportach XLSX i CSV.
+* **Miesięczny raport pracowników**: Pokazuje jeden wiersz na pracownika z kolumnami **Pracownik**, **Suma godzin z nadgodzinami** (przepracowane godziny z nadgodzinami), **Suma godzin bez nadgodzin** (godziny normatywne + płatne nieobecności: UW, L4, UOK, UŻ itp., bez nadgodzin i bez NN) oraz dynamicznymi kolumnami rodzajów czasu. Historia zmian `I`, `II`, `III` jest sumowana w jednym wierszu. NN pozostaje widoczne w swojej kolumnie, lecz jest wyłączone z obu sum. Ta sama struktura obowiązuje w widoku tabeli oraz eksportach XLSX i CSV.
 * Istniejący raport „Godziny wg zleceń” udostępnia tryb „Raport zamknięcia”, łączący otwarte zlecenia z godzinami oraz zlecenia zamknięte w wybranym okresie, także z zerową liczbą godzin.
 * Raport okresów nieobecności grupuje kolejne dni robocze tego samego pracownika i rodzaju nieobecności, mostkuje przez dni wolne (święta ustawowe, weekendy, wyjątki kalendarza), pozwala filtrować wyniki oraz eksportować je do XLSX i CSV.
 * Każdy raport zachowuje własne filtry w bieżącej sesji karty przeglądarki; wartości są odtwarzane po zmianie widoku i odświeżeniu strony, a zamknięcie karty usuwa je automatycznie.
@@ -300,7 +300,7 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 
 ### Użytkowanie
 
-* [Instrukcja użytkownika](docs/user-guide.md) – obsługa dla lidera i administratora. Wbudowana Pomoc / Instrukcja v0.6.0 zawiera 15 rozdziałów, 21 rzeczywistych zrzutów oraz odnośniki kontekstowe przy pięciu ekranach; na tablecie rozdziały są w rozwijanym menu.
+* [Instrukcja użytkownika](docs/user-guide.md) – obsługa dla lidera i administratora. Wbudowana Pomoc / Instrukcja zawiera 15 rozdziałów, 20 rzeczywistych zrzutów oraz odnośniki kontekstowe przy pięciu ekranach; na tablecie rozdziały są w rozwijanym menu.
 * [Reguły biznesowe](docs/business-rules.md) – obowiązujące walidacje, statusy, audyt i zasady raportowania.
 * [Importy i eksporty](docs/import-export-specification.md) – formaty kolumn, walidacja i raporty plikowe.
 
@@ -329,10 +329,10 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 
 ## Status projektu
 
-* **Wersja brancha poprawki**: `0.6.1` (`development` i produkcja: `0.6.0`)
-* **Docelowa gałąź integracyjna**: `development`
-* **Status prac**: Aktywny rozwój (Active development)
+* **Aktualna wersja**: `0.6.1`
+* **Gałąź release**: `main`
+* **Status wdrożenia**: v0.6.1 nie została jeszcze wdrożona na produkcję.
 
 W funkcji **Kopiuj ostatni dzień** kompletny zestaw wpisów, w tym nieobecności takie jak UW i L4, może być kopiowany pomiędzy dniami roboczymi. Jeżeli wybrany dzień docelowy jest sobotą lub niedzielą, cała operacja jest blokowana bez tworzenia rekordów.
 
-Poprawka v0.6.1 wyłącza NN z sum pracy i rozliczenia, zachowując informację o nieobecności, oraz przywraca pionowe przewijanie Pomocy. Zmiany są przygotowane na osobnym branchu do review; nie wykonano merge ani wdrożenia.
+Wersja v0.6.1 poprawia rozliczanie nieobecności NN, przywraca czytelną sumę godzin w raporcie pracowników oraz przewijanie Pomocy / Instrukcji.

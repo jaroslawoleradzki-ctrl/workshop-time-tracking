@@ -3,7 +3,20 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.6.1] — poprawka przygotowana do review
+## [0.6.2] - 2026-10-05
+
+### Changed
+- Usunięto kolumnę **Zmiana** z miesięcznego raportu pracowników – raport pokazuje teraz jeden wiersz na pracownika.
+- Usunięto kolumnę **Łącznie przepracowane w okresie** (duplikowała "Suma godzin z nadgodzinami").
+- Zmieniono semantykę **Suma godzin bez nadgodzin**: teraz obejmuje godziny normatywne ORAZ płatne nieobecności (UW, L4, UOK, UŻ, WKU itp.), z wyłączeniem nadgodzin i niepłatnego NN.
+- Zachowano: NN widoczne w dynamicznej kolumnie, wyłączone z obu sum; `suma` = przepracowane godziny z nadgodzinami (bez nieobecności).
+
+### Fixed
+- Raport pracowników nie dzieli już wierszy na zmiany (I/II/III/Brak danych/Nie dotyczy).
+- Eksporty XLSX/CSV odpowiadają nowemu układowi tabeli.
+- Zaktualizowano rozdział Pomocy „Raport HR” (bez kolumny Zmiana i osobnych wierszy zmian) oraz zrzuty HR; manifest dokumentacji liczy teraz 20 zrzutów.
+
+## [0.6.1] - 2026-10-01
 
 ### Fixed
 - Nieobecności nie zwiększają sum przepracowanych godzin; NN pozostaje widoczne i jest wyłączone z sum rozliczenia, raportu zleceń oraz KPI pracy.

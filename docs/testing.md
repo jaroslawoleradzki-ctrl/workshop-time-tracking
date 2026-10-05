@@ -19,7 +19,7 @@ Frontend używa Vitest, Happy DOM i React Testing Library. `frontend/src/test/Ap
 | Zrzuty Pomocy na izolowanym `*_docs` | `cd frontend && npm run docs:screenshots` |
 
 Backend nie definiuje skryptu lint. Oba skrypty testowe wykonują `vitest run`.
-Testy Playwright w `frontend/docs-screenshots/` są uruchamiane tylko na żądanie przez `docs:screenshots`, przy lokalnym backendzie podłączonym wyłącznie do bazy o nazwie zakończonej `_docs`. Test wykonuje 21 ujęć prawdziwego UI, sprawdza ich renderowanie w Pomocy na desktopie i tablecie oraz pięć odnośników kontekstowych. Zwykłe `npm test` nie uruchamia przeglądarki. `docs:validate` weryfikuje manifest, pliki PNG i referencje rozdziałów bez Playwright; jest częścią `scripts/verify-release.sh`.
+Testy Playwright w `frontend/docs-screenshots/` są uruchamiane tylko na żądanie przez `docs:screenshots`, przy lokalnym backendzie podłączonym wyłącznie do bazy o nazwie zakończonej `_docs`. Test wykonuje 20 ujęć prawdziwego UI, sprawdza ich renderowanie w Pomocy na desktopie i tablecie oraz pięć odnośników kontekstowych. Zwykłe `npm test` nie uruchamia przeglądarki. `docs:validate` weryfikuje manifest, pliki PNG i referencje rozdziałów bez Playwright; jest częścią `scripts/verify-release.sh`.
 
 ## Testy ręczne przed wydaniem
 
