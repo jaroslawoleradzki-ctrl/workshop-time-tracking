@@ -27,7 +27,7 @@ async function openTab(page: Page, tab: DocsScreenshot['tab']) {
 }
 
 async function fillReporting(page: Page, entry: DocsScreenshot) {
-  const dayResponse = entry.id === 'copied-day-shifts'
+  const dayResponse = entry.id === 'copied-day'
     ? page.waitForResponse((response) => response.url().includes('/api/reports/by-employee-date') && response.url().includes('date=2026-07-08'))
     : null;
   await page.locator('#dateInput').fill('2026-07-08');
@@ -43,21 +43,28 @@ async function fillReporting(page: Page, entry: DocsScreenshot) {
     await modal.getByText('Podsumowanie zakresu:').click();
     return;
   }
-  if (entry.id === 'copied-day-shifts') {
+  if (entry.id === 'copied-day') {
     if (existingDay?.length === 0) await page.getByRole('button', { name: 'Kopiuj ostatni dzień' }).click();
-    await expect(page.getByText('III zmiana')).toBeVisible();
+    await expect(page.locator('.table tbody tr').first()).toBeVisible();
+    await expect(page.getByText('I zmiana')).toHaveCount(0);
+    await expect(page.getByText('II zmiana')).toHaveCount(0);
+    await expect(page.getByText('III zmiana')).toHaveCount(0);
     await expect(page.locator('.alert-danger')).toHaveCount(0);
     await expect(page.getByText(/Skopiowano 3 wpisów/)).toHaveCount(0, { timeout: 10_000 });
+    // Remove the copied rows again through the API so the documentation fixture
+    // stays deterministic for the specs that run afterwards. The rendered DOM is
+    // left untouched, so the screenshot still shows the copied entries.
+    const token = await page.evaluate(() => localStorage.getItem('token'));
+    const headers = { Authorization: `Bearer ${token}` };
+    const copied = await (await page.request.get(
+      '/api/reports/by-employee-date?employeeId=00000000-0000-4000-8000-000000000001&date=2026-07-08',
+      { headers },
+    )).json() as Array<{ id: string }>;
+    for (const report of copied) await page.request.delete(`/api/reports/${report.id}`, { headers });
     await page.getByRole('heading', { name: 'Raportowanie Godzin Pracy' }).click();
     return;
   }
-  if (entry.id === 'absence-shift-disabled') {
-    await page.locator('#workTypeSelect').selectOption('WKU');
-    await expect(page.locator('#workShiftSelect')).toBeDisabled();
-    return;
-  }
   await page.locator('#workTypeSelect').selectOption('G');
-  await page.locator('#workShiftSelect').selectOption('FIRST');
   await page.getByPlaceholder('Wpisz numer zlecenia lub produktu...').fill('DOC-2026-001');
   await page.getByText('Zlecenie: DOC-2026-001').click();
   await page.getByPlaceholder('np. 8.00').fill(entry.id === 'hours-warning' ? '9' : '2');
@@ -68,7 +75,7 @@ async function fillReporting(page: Page, entry: DocsScreenshot) {
 }
 
 async function fillReport(page: Page, entry: DocsScreenshot) {
-  if (['hr-overview', 'hr-shifts', 'hr-tablet'].includes(entry.id)) {
+  if (['hr-overview', 'hr-tablet'].includes(entry.id)) {
     await page.getByRole('button', { name: 'Wg Pracowników (Miesięczny)' }).click();
   } else if (entry.id === 'absence-periods') {
     await page.getByRole('button', { name: 'Okresy Nieobecności' }).click();
@@ -78,9 +85,11 @@ async function fillReport(page: Page, entry: DocsScreenshot) {
   if (entry.id === 'closure-control') await page.getByRole('button', { name: 'Raport zamknięcia' }).click();
   await page.getByRole('button', { name: 'Odśwież dane' }).click();
   await expect(page.getByRole('button', { name: 'Pobierz Excel (XLSX)' })).toBeEnabled();
-  if (['hr-overview', 'hr-shifts', 'hr-tablet'].includes(entry.id)) {
-    await expect(page.getByRole('columnheader', { name: 'Zmiana' })).toHaveCount(1);
-    for (const shift of ['I', 'II', 'III']) await expect(page.getByRole('cell', { name: shift, exact: true })).toBeVisible();
+  if (['hr-overview', 'hr-tablet'].includes(entry.id)) {
+    await expect(page.getByRole('columnheader', { name: 'Suma godzin bez nadgodzin' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Zmiana' })).toHaveCount(0);
+    await expect(page.getByRole('columnheader', { name: 'Łącznie przepracowane w okresie' })).toHaveCount(0);
+    await expect(page.getByRole('table', { name: 'Raport według pracowników' }).locator('tbody tr')).toHaveCount(1);
   }
   if (entry.id === 'closure-control') await expect(page.getByText('Kontrola rozliczenia czasu')).toBeVisible();
 }
@@ -122,11 +131,7 @@ for (const entry of screenshotManifest) {
     await expect(page.locator('style[data-docs-stability]')).toHaveCount(1);
     await page.evaluate(() => document.fonts.ready);
     const target = path.resolve(import.meta.dirname, `../public/help/${entry.targetFile}`);
-    if (entry.id === 'hr-shifts') {
-      await page.getByRole('table', { name: 'Raport według pracowników' }).screenshot({ path: target, animations: 'disabled', caret: 'hide' });
-    } else {
-      await page.screenshot({ path: target, fullPage: true, animations: 'disabled', caret: 'hide' });
-    }
+    await page.screenshot({ path: target, fullPage: true, animations: 'disabled', caret: 'hide' });
   });
 }
 

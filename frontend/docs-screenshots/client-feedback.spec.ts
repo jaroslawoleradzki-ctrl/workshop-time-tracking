@@ -59,14 +59,16 @@ test('v0.6.1 real API: legacy NN preserves absence detail and reconciliation; em
     ? await page.request.put('/api/work-time-types/NN', { headers, data: { name: 'Nieobecność nieusprawiedliwiona', requiresOrder: false, isAbsence: false } })
     : await page.request.post('/api/work-time-types', { headers, data: { code: 'NN', name: 'Nieobecność nieusprawiedliwiona', requiresOrder: false, isAbsence: false } });
   expect(createdType.ok()).toBeTruthy();
-  const created = await page.request.post('/api/reports', { headers, data: { employeeId: '00000000-0000-4000-8000-000000000001', date: '2026-07-13', hours: 8, workTimeTypeCode: 'NN', workShift: 'FIRST', orderId: '00000000-0000-4000-8000-000000000201' } });
+  const created = await page.request.post('/api/reports', { headers, data: { employeeId: '00000000-0000-4000-8000-000000000001', date: '2026-07-13', hours: 8, workTimeTypeCode: 'NN', orderId: '00000000-0000-4000-8000-000000000201' } });
   expect(created.ok()).toBeTruthy();
   const { report: record } = await created.json();
   try {
     const response = await page.request.get(`/api/analytics/report-by-employee?${range}`, { headers });
     const rows = await response.json();
-    const worked = rows.reduce((sum: number, row: { suma: number }) => sum + row.suma, 0);
-    expect(rows.find((row: { workShift: string }) => row.workShift === 'ABSENCE')).toMatchObject({ NN: 8, suma: 0, sumaBezNadgodzin: 0 });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ NN: 8, suma: 6, sumaBezNadgodzin: 22 });
+    expect(rows[0]).not.toHaveProperty('workShift');
+    expect(rows[0]).not.toHaveProperty('workShiftLabel');
     const control = await (await page.request.get(`/api/analytics/closure-control-summary?${range}`, { headers })).json();
     expect(control).toMatchObject({ ordersHours: baseline.ordersHours, totalEmployeeHours: baseline.totalEmployeeHours, totalSettledHours: baseline.totalSettledHours, difference: 0, status: 'MATCHED' });
     expect(control.absences.find((row: { code: string }) => row.code === 'NN')).toMatchObject({ hours: 8 });
@@ -77,11 +79,11 @@ test('v0.6.1 real API: legacy NN preserves absence detail and reconciliation; em
     await page.locator('#report-date-from').fill('2026-07-01');
     await page.locator('#report-date-to').fill('2026-07-31');
     await page.getByRole('button', { name: 'Odśwież dane' }).click();
-    await expect(page.getByRole('columnheader', { name: 'Łącznie przepracowane w okresie' })).toBeVisible();
-    const total = page.locator('td[rowspan]');
-    await expect(total).toHaveCount(1);
-    await expect(total).toHaveText(`${worked.toFixed(1)} h`);
-    for (const shift of ['I', 'II', 'III']) await expect(page.getByRole('cell', { name: shift, exact: true })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Suma godzin bez nadgodzin' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Zmiana' })).toHaveCount(0);
+    await expect(page.getByRole('columnheader', { name: 'Łącznie przepracowane w okresie' })).toHaveCount(0);
+    await expect(page.getByRole('table', { name: 'Raport według pracowników' }).locator('tbody tr')).toHaveCount(1);
+    await expect(page.locator('td[rowspan]')).toHaveCount(0);
     await page.screenshot({ path: '/tmp/v061-employee-report.png' });
   } finally {
     const removed = await page.request.delete(`/api/reports/${record.id}`, { headers });

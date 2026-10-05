@@ -193,23 +193,9 @@ export async function copyLastDayForEmployee({
       );
       const typesByCode = new Map(sourceTypes.filter(Boolean).map((type) => [type!.code, type!]));
 
-      const invalidShiftReport = sourceReports.find((report) => {
-        const type = typesByCode.get(report.workTimeTypeCode);
-        const isAbsence = type?.isAbsence ?? false;
-        if (!isAbsence) {
-          return !report.workShift || !['FIRST', 'SECOND', 'THIRD'].includes(report.workShift);
-        }
-        return false;
-      });
-
-      if (invalidShiftReport) {
-        throw new CopyLastDayError(
-          400,
-          'WORK_SHIFT_REQUIRED',
-          'Dzień źródłowy zawiera wpisy czasu pracy bez określonej zmiany. Uzupełnij zmianę w źródłowym wpisie przed kopiowaniem.',
-          { sourceDate, sourceCount: sourceReports.length },
-        );
-      }
+      // Work shift is no longer collected for new entries, so a missing source
+      // shift is valid and is copied as null. Any historical shift value present
+      // on the source report is preserved by the copy below.
 
       if (!calendarDay.isWorkingDay) {
         const invalidReport = sourceReports.find((report) => {
