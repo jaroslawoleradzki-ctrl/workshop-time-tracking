@@ -68,7 +68,7 @@ async function fillReporting(page: Page, entry: DocsScreenshot) {
 }
 
 async function fillReport(page: Page, entry: DocsScreenshot) {
-  if (['hr-overview', 'hr-shifts', 'hr-tablet'].includes(entry.id)) {
+  if (['hr-overview', 'hr-tablet'].includes(entry.id)) {
     await page.getByRole('button', { name: 'Wg Pracowników (Miesięczny)' }).click();
   } else if (entry.id === 'absence-periods') {
     await page.getByRole('button', { name: 'Okresy Nieobecności' }).click();
@@ -78,9 +78,11 @@ async function fillReport(page: Page, entry: DocsScreenshot) {
   if (entry.id === 'closure-control') await page.getByRole('button', { name: 'Raport zamknięcia' }).click();
   await page.getByRole('button', { name: 'Odśwież dane' }).click();
   await expect(page.getByRole('button', { name: 'Pobierz Excel (XLSX)' })).toBeEnabled();
-  if (['hr-overview', 'hr-shifts', 'hr-tablet'].includes(entry.id)) {
-    await expect(page.getByRole('columnheader', { name: 'Zmiana' })).toHaveCount(1);
-    for (const shift of ['I', 'II', 'III']) await expect(page.getByRole('cell', { name: shift, exact: true })).toBeVisible();
+  if (['hr-overview', 'hr-tablet'].includes(entry.id)) {
+    await expect(page.getByRole('columnheader', { name: 'Suma godzin bez nadgodzin' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Zmiana' })).toHaveCount(0);
+    await expect(page.getByRole('columnheader', { name: 'Łącznie przepracowane w okresie' })).toHaveCount(0);
+    await expect(page.getByRole('table', { name: 'Raport według pracowników' }).locator('tbody tr')).toHaveCount(1);
   }
   if (entry.id === 'closure-control') await expect(page.getByText('Kontrola rozliczenia czasu')).toBeVisible();
 }
@@ -122,11 +124,7 @@ for (const entry of screenshotManifest) {
     await expect(page.locator('style[data-docs-stability]')).toHaveCount(1);
     await page.evaluate(() => document.fonts.ready);
     const target = path.resolve(import.meta.dirname, `../public/help/${entry.targetFile}`);
-    if (entry.id === 'hr-shifts') {
-      await page.getByRole('table', { name: 'Raport według pracowników' }).screenshot({ path: target, animations: 'disabled', caret: 'hide' });
-    } else {
-      await page.screenshot({ path: target, fullPage: true, animations: 'disabled', caret: 'hide' });
-    }
+    await page.screenshot({ path: target, fullPage: true, animations: 'disabled', caret: 'hide' });
   });
 }
 

@@ -41,7 +41,7 @@ W raporcie **Godziny wg zleceń** ustaw obie daty i wybierz **Raport zamknięcia
 
 Raport **Okresy Nieobecności** uwzględnia wyłącznie typy oznaczone w słowniku jako „Nieobecność”. Filtry obejmują zakres dat, pracownika i rodzaj nieobecności. Kolejne dni robocze są łączone w okres, dni wolne (święta ustawowe, weekendy, wyjątki kalendarza) nie przerywają okresu ani nie zwiększają liczby dni, a brakujący dzień roboczy rozpoczyna kolejny okres. Pod tabelą wyświetlane jest łączne podsumowanie liczby dni nieobecności. Wynik można pobrać w formacie XLSX oraz CSV.
 
-Rzeczywiste ekrany: [Raport HR z kolumną Zmiana](../frontend/public/help/raport-hr-01-zmiana.png), [raport zleceń](../frontend/public/help/raport-zlecen-01-tabela.png), [akcje eksportu](../frontend/public/help/eksport-01-akcje.png).
+Rzeczywiste ekrany: [Raport HR z jedną sumą na pracownika](../frontend/public/help/raport-hr-01-podsumowanie.png), [raport zleceń](../frontend/public/help/raport-zlecen-01-tabela.png), [akcje eksportu](../frontend/public/help/eksport-01-akcje.png).
 
 ## Administrator
 

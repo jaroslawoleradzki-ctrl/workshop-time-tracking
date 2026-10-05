@@ -478,6 +478,43 @@ describe('Analytics reports', () => {
     expect(worksheet?.getRow(8).values).toEqual([undefined, 'Nowak Adam', 16, 24, 16, 0, 0, 8]);
   });
 
+  describe('v0.6.2 employee monthly report acceptance matrix', () => {
+    const employee = { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' };
+    const row = (code: string, hours: number, workShift: string | null = null, isAbsence = false) => ({
+      employeeId: EMPLOYEE_ID,
+      employee,
+      hours,
+      workTimeTypeCode: code,
+      workShift,
+      workTimeType: { isAbsence, name: code },
+    });
+
+    const cases: Array<{ name: string; reports: any[]; expected: Record<string, number> }> = [
+      { name: 'G only', reports: [row('G', 40)], expected: { G: 40, suma: 40, sumaBezNadgodzin: 40 } },
+      { name: 'G + overtime', reports: [row('G', 40), row('NDR', 5)], expected: { G: 40, NDR: 5, suma: 45, sumaBezNadgodzin: 40 } },
+      { name: 'paid absence only', reports: [row('UW', 8, null, true)], expected: { UW: 8, suma: 0, sumaBezNadgodzin: 8 } },
+      { name: 'custom metadata-classified paid absence', reports: [row('CUSTOM', 8, null, true)], expected: { CUSTOM: 8, suma: 0, sumaBezNadgodzin: 8 } },
+      { name: 'NN only', reports: [row('NN', 8)], expected: { NN: 8, suma: 0, sumaBezNadgodzin: 0 } },
+      { name: 'G + paid absence', reports: [row('G', 32), row('UW', 8, null, true)], expected: { G: 32, UW: 8, suma: 32, sumaBezNadgodzin: 40 } },
+      { name: 'G + paid absence + NN', reports: [row('G', 32), row('UW', 8, null, true), row('NN', 8)], expected: { G: 32, UW: 8, NN: 8, suma: 32, sumaBezNadgodzin: 40 } },
+      { name: 'historical FIRST/SECOND shift aggregation into one row', reports: [row('G', 8, 'FIRST'), row('G', 6, 'SECOND')], expected: { G: 14, suma: 14, sumaBezNadgodzin: 14 } },
+    ];
+
+    it.each(cases)('$name', async ({ reports, expected }) => {
+      vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue(reports as any);
+      const response = await authenticatedGet('/api/analytics/report-by-employee').expect(200);
+
+      expect(response.body).toHaveLength(1);
+      expect(response.body[0]).toMatchObject({
+        employeeId: EMPLOYEE_ID,
+        employeeName: 'Kowalski Jan',
+        ...expected,
+      });
+      expect(response.body[0]).not.toHaveProperty('workShift');
+      expect(response.body[0]).not.toHaveProperty('workShiftLabel');
+    });
+  });
+
   it('presents a missing accounting account as brak', async () => {
     vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([
       {

@@ -14,6 +14,7 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 - Raport pracowników nie dzieli już wierszy na zmiany (I/II/III/Brak danych/Nie dotyczy).
 - Eksporty XLSX/CSV odpowiadają nowemu układowi tabeli.
+- Zaktualizowano rozdział Pomocy „Raport HR” (bez kolumny Zmiana i osobnych wierszy zmian) oraz zrzuty HR; manifest dokumentacji liczy teraz 20 zrzutów.
 
 ## [0.6.1] - 2026-10-01
 
