@@ -33,7 +33,7 @@ Rzeczywisty ekran: [Ostrzeżenie o godzinach](../frontend/public/help/rejestracj
 
 ### Raporty i eksport
 
-Zakładka Raporty udostępnia zestawienia według zleceń, pracowników, kont księgowych, szczegółowe oraz okresów nieobecności. Ustaw zakres dat i filtry właściwe dla zakładki, wygeneruj raport, a następnie pobierz XLSX lub CSV. Szerokie tabele można przewijać poziomo za pomocą zsynchronizowanych pasków nad i pod tabelą; układ nie rozszerza strony poza szerokość ekranu. W miesięcznym raporcie według pracowników tabela oraz oba eksporty (XLSX i CSV) zawierają ten sam zestaw rekordów, prezentując podsumowania ogólne, pojedynczą kolumnę `Zmiana` z podziałem wierszy per pracownik i zmiana (`I`, `II`, `III`, `Brak danych` dla wpisów historycznych, `Nie dotyczy` dla nieobecności) oraz kolumny poszczególnych rodzajów czasu pracy ze słownika. Szczegółowy raport umożliwia również usunięcie wpisu.
+Zakładka Raporty udostępnia zestawienia według zleceń, pracowników, kont księgowych, szczegółowe oraz okresów nieobecności. Ustaw zakres dat i filtry właściwe dla zakładki, wygeneruj raport, a następnie pobierz XLSX lub CSV. Szerokie tabele można przewijać poziomo za pomocą zsynchronizowanych pasków nad i pod tabelą; układ nie rozszerza strony poza szerokość ekranu. W miesięcznym raporcie według pracowników tabela oraz oba eksporty (XLSX i CSV) zawierają jeden wiersz na pracownika z kolumnami: **Pracownik**, **Suma godzin z nadgodzinami**, **Suma godzin bez nadgodzin** oraz dynamiczne kolumny poszczególnych rodzajów czasu pracy ze słownika. Szczegółowy raport umożliwia również usunięcie wpisu.
 
 Każda zakładka raportu zapamiętuje własny zakres dat i pozostałe filtry w bieżącej sesji karty. Filtry pozostają ustawione po przejściu do innego raportu lub modułu i po odświeżeniu strony. Przycisk **Wyczyść filtry** przywraca wartości domyślne tylko w aktywnym raporcie. Zamknięcie karty przeglądarki kończy sesję i usuwa zapamiętane filtry.
 
@@ -63,8 +63,8 @@ Rzeczywisty ekran: [Dashboard administratora](../frontend/public/help/ekran-glow
 
 Rzeczywisty ekran: [Import danych](../frontend/public/help/administracja-02-importy.png).
 
-## Poprawki raportu i Pomocy v0.6.1
+## Poprawki raportu i Pomocy v0.6.2
 
-W miesięcznym raporcie pracowników kolumna **Łącznie przepracowane w okresie** pokazuje jedną sumę godzin pracy pracownika ze wszystkich zmian, wraz z nadgodzinami. Wiersze I/II/III i „Brak danych” pokazują podział; „Nie dotyczy” prezentuje nieobecności. Nieobecności nie zwiększają sum pracy, a NN pozostaje widoczne jako czas niepłatny i jest wyłączone również z sum rozliczenia. XLSX/CSV zachowują podział zmian; zsumuj kolumnę godzin pracy dla pracownika, aby uzyskać sumę okresu.
+W miesięcznym raporcie pracników usunięto kolumnę **Zmiana** oraz **Łącznie przepracowane w okresie** (która duplikowała sumę godzin z nadgodzinami). Raport pokazuje teraz jeden wiersz na pracownika z kolumnami: **Pracownik**, **Suma godzin z nadgodzinami** (przepracowane godziny z nadgodzinami), **Suma godzin bez nadgodzin** (godziny normatywne + płatne nieobecności: UW, L4, UOK, UŻ itp., bez nadgodzin i bez NN), oraz dynamiczne kolumny poszczególnych rodzajów czasu pracy. NN pozostaje widoczne jako czas niepłatny i jest wyłączone z obu sum. Płatne nieobecności (urlopy, L4) zwiększają tylko **Sumę godzin bez nadgodzin**.
 
 W Pomocy przewijaj główną treść, aby dotrzeć do dolnej części rozdziału i przycisków Poprzedni/Następny. Nagłówek aplikacji i sidebar zachowują własny układ. Na tablecie listę rozdziałów można zwinąć.

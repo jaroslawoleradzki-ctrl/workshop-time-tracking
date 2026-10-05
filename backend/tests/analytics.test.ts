@@ -153,7 +153,7 @@ describe('Analytics reports', () => {
     vi.restoreAllMocks();
   });
 
-  it.each([true, false])('v0.6.1: NN stays visible but never increases worked or settled hours (isAbsence=%s)', async (nnFlag) => {
+  it.each([true, false])('v0.6.2: NN stays visible but never increases worked or settled hours (isAbsence=%s)', async (nnFlag) => {
     const employee = { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' };
     const reports = [
       { workTimeTypeCode: 'G', hours: 8, workShift: 'FIRST', workTimeType: { isAbsence: false, name: 'Standardowe', requiresOrder: true }, orderId: 'ord-1' },
@@ -175,9 +175,17 @@ describe('Analytics reports', () => {
       return [{ id: 'ord-1', orderNumber: 'ZL-1', productName: 'Test', plannedHours: 20, status: 'OPEN', reports: reports.filter((r) => r.orderId && r.workTimeTypeCode !== 'NN') }] as any;
     });
     const result = await authenticatedGet('/api/analytics/report-by-employee').expect(200);
-    expect(result.body.reduce((sum: number, r: any) => sum + r.suma, 0)).toBe(11.75);
-    expect(result.body.reduce((sum: number, r: any) => sum + r.sumaBezNadgodzin, 0)).toBe(9.25);
-    expect(result.body.find((r: any) => r.workShift === 'ABSENCE')).toMatchObject({ NN: 8, UW: 8, suma: 0, sumaBezNadgodzin: 0 });
+    expect(result.body).toHaveLength(1);
+    expect(result.body[0]).toMatchObject({
+      employeeId: EMPLOYEE_ID,
+      employeeName: 'Kowalski Jan',
+      G: 9.25,
+      NDR: 2.5,
+      UW: 8,
+      NN: 8,
+      suma: 11.75,
+      sumaBezNadgodzin: 17.25,
+    });
     const summary = await getClosureControlSummary({ dateFrom: '2026-08-01', dateTo: '2026-08-31' });
     expect(summary).toMatchObject({ ordersHours: 11.75, totalAbsenceHours: 8, totalEmployeeHours: 19.75, totalSettledHours: 19.75, difference: 0, status: 'MATCHED' });
     expect(summary.absences.find((a) => a.code === 'NN')?.hours).toBe(8);
@@ -187,8 +195,8 @@ describe('Analytics reports', () => {
     const exported = await authenticatedGet('/api/analytics/export/by-employee').buffer(true).parse(binaryParser).expect(200);
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(exported.body);
-    const values = workbook.getWorksheet('Czas pracy')!.getRow(10).values;
-    expect(values).toEqual([undefined, 'Kowalski Jan', 'Nie dotyczy', 0, 0, 8, 8]);
+    const values = workbook.getWorksheet('Czas pracy')!.getRow(7).values;
+    expect(values).toEqual([undefined, 'Kowalski Jan', 11.75, 17.25, 9.25, 2.5, 8, 8]);
   });
 
   it('v0.6.1: NN-only period is matched with zero worked and settled hours', async () => {
@@ -227,20 +235,9 @@ describe('Analytics reports', () => {
       {
         employeeId: EMPLOYEE_ID,
         employeeName: 'Jan Kowalski',
-        workShift: 'FIRST',
-        workShiftLabel: 'I',
-        NOC: 1.5,
-        suma: 1.5,
-        sumaBezNadgodzin: 1.5,
-      },
-      {
-        employeeId: EMPLOYEE_ID,
-        employeeName: 'Jan Kowalski',
-        workShift: 'UNSPECIFIED',
-        workShiftLabel: 'Brak danych',
-        NOC: 2.5,
-        suma: 2.5,
-        sumaBezNadgodzin: 2.5,
+        NOC: 4,
+        suma: 4,
+        sumaBezNadgodzin: 4,
       },
     ]);
   });
@@ -280,24 +277,14 @@ describe('Analytics reports', () => {
     expect(reportSpy).toHaveBeenCalledTimes(2);
     expect(reportSpy.mock.calls[0][0]).toEqual(reportSpy.mock.calls[1][0]);
 
-    expect(jsonResponse.body).toHaveLength(2);
+    expect(jsonResponse.body).toHaveLength(1);
     expect(jsonResponse.body[0]).toEqual({
       employeeId: EMPLOYEE_ID,
       employeeName: 'Kowalski Jan',
-      workShift: 'FIRST',
-      workShiftLabel: 'I',
       G: 8,
-      suma: 8,
-      sumaBezNadgodzin: 8,
-    });
-    expect(jsonResponse.body[1]).toEqual({
-      employeeId: EMPLOYEE_ID,
-      employeeName: 'Kowalski Jan',
-      workShift: 'SECOND',
-      workShiftLabel: 'II',
       NOC: 2.5,
-      suma: 2.5,
-      sumaBezNadgodzin: 2.5,
+      suma: 10.5,
+      sumaBezNadgodzin: 10.5,
     });
 
     const workbook = new ExcelJS.Workbook();
@@ -311,45 +298,32 @@ describe('Analytics reports', () => {
     expect(worksheet?.getRow(4).getCell(1).value).toMatch(/^Wygenerowano: \d{2}\.\d{2}\.\d{4}, \d{2}:\d{2}$/);
     expect(worksheet?.getRow(5).values).toEqual([]);
 
-    // Wiersz 6: Nagłówek tabeli z jedną kolumną "Zmiana"
+    // Wiersz 6: Nagłówek tabeli bez kolumny "Zmiana"
     expect(worksheet?.getRow(6).values).toEqual([
       undefined,
       'Pracownik',
-      'Zmiana',
       'Suma godzin z nadgodzinami',
       'Suma godzin bez nadgodzin',
       'G (Standardowe godziny pracy)',
       'NOC (Zmiana nocna)',
     ]);
 
-    // Wiersz 7: Dane dla I zmiany
+    // Wiersz 7: Dane pracownika
     expect(worksheet?.getRow(7).values).toEqual([
       undefined,
       'Kowalski Jan',
-      'I',
+      10.5,
+      10.5,
       8,
-      8,
-      8,
-      0,
-    ]);
-
-    // Wiersz 8: Dane dla II zmiany
-    expect(worksheet?.getRow(8).values).toEqual([
-      undefined,
-      'Kowalski Jan',
-      'II',
-      2.5,
-      2.5,
-      0,
       2.5,
     ]);
 
     // Weryfikacja zamrożenia widoku (ySplit) i filtra tabeli
     expect(worksheet?.views[0]).toEqual(expect.objectContaining({ state: 'frozen', ySplit: 6 }));
-    expect(worksheet?.autoFilter).toBe('A6:F8');
+    expect(worksheet?.autoFilter).toBe('A6:E7');
   });
 
-  it('v0.5.9 manual acceptance rework: correctly supports I, II, III shifts, historical NULL as Brak danych, and absences as Nie dotyczy without duplication in JSON and XLSX', async () => {
+  it('v0.6.2: correctly aggregates across shifts and includes paid absences in sumaBezNadgodzin', async () => {
     const employee1 = { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' };
     const employee2 = { fullName: 'Adam Nowak', firstName: 'Adam', lastName: 'Nowak' };
 
@@ -357,7 +331,7 @@ describe('Analytics reports', () => {
       { code: 'G', name: 'Godziny standardowe', isAbsence: false },
       { code: 'NDR', name: 'Nadgodziny', isAbsence: false },
       { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true },
-      { code: 'L4', name: 'Zwolnienie lekarskie', isAbsence: true },
+      { code: 'L4', name: 'Zwolnienie chorobowe', isAbsence: true },
     ] as any);
 
     vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([
@@ -429,96 +403,38 @@ describe('Analytics reports', () => {
       },
     ] as any);
 
-    // 1. JSON endpoint
+    // 1. JSON endpoint - single row per employee
     const jsonRes = await authenticatedGet('/api/analytics/report-by-employee').expect(200);
 
-    // Sorted by lastName then shift order:
-    // Kowalski Jan (I, II, III, Brak danych, Nie dotyczy) -> 5 rows
-    // Nowak Adam (I, II, Nie dotyczy) -> 3 rows
-    // Total rows: 8
-    expect(jsonRes.body).toHaveLength(8);
+    // Now 2 rows total (one per employee)
+    expect(jsonRes.body).toHaveLength(2);
 
-    // Kowalski Jan rows
+    // Kowalski Jan - aggregated across shifts
     expect(jsonRes.body[0]).toEqual({
       employeeId: EMPLOYEE_ID,
       employeeName: 'Kowalski Jan',
-      workShift: 'FIRST',
-      workShiftLabel: 'I',
-      G: 8,
-      suma: 8,
-      sumaBezNadgodzin: 8,
-    });
-    expect(jsonRes.body[1]).toEqual({
-      employeeId: EMPLOYEE_ID,
-      employeeName: 'Kowalski Jan',
-      workShift: 'SECOND',
-      workShiftLabel: 'II',
+      G: 22,
       NDR: 4,
-      suma: 4,
-      sumaBezNadgodzin: 0,
-    });
-    expect(jsonRes.body[2]).toEqual({
-      employeeId: EMPLOYEE_ID,
-      employeeName: 'Kowalski Jan',
-      workShift: 'THIRD',
-      workShiftLabel: 'III',
-      G: 6,
-      suma: 6,
-      sumaBezNadgodzin: 6,
-    });
-    expect(jsonRes.body[3]).toEqual({
-      employeeId: EMPLOYEE_ID,
-      employeeName: 'Kowalski Jan',
-      workShift: 'UNSPECIFIED',
-      workShiftLabel: 'Brak danych',
-      G: 8,
-      suma: 8,
-      sumaBezNadgodzin: 8,
-    });
-    expect(jsonRes.body[4]).toEqual({
-      employeeId: EMPLOYEE_ID,
-      employeeName: 'Kowalski Jan',
-      workShift: 'ABSENCE',
-      workShiftLabel: 'Nie dotyczy',
       UW: 8,
-      suma: 0,
-      sumaBezNadgodzin: 0,
+      suma: 26,
+      sumaBezNadgodzin: 30,
     });
 
-    // Nowak Adam rows
-    expect(jsonRes.body[5]).toEqual({
+    // Nowak Adam - aggregated across shifts
+    expect(jsonRes.body[1]).toEqual({
       employeeId: 'emp-2',
       employeeName: 'Nowak Adam',
-      workShift: 'FIRST',
-      workShiftLabel: 'I',
-      G: 8,
-      suma: 8,
-      sumaBezNadgodzin: 8,
-    });
-    expect(jsonRes.body[6]).toEqual({
-      employeeId: 'emp-2',
-      employeeName: 'Nowak Adam',
-      workShift: 'SECOND',
-      workShiftLabel: 'II',
-      G: 8,
-      suma: 8,
-      sumaBezNadgodzin: 8,
-    });
-    expect(jsonRes.body[7]).toEqual({
-      employeeId: 'emp-2',
-      employeeName: 'Nowak Adam',
-      workShift: 'ABSENCE',
-      workShiftLabel: 'Nie dotyczy',
+      G: 16,
       L4: 8,
-      suma: 0,
-      sumaBezNadgodzin: 0,
+      suma: 16,
+      sumaBezNadgodzin: 24,
     });
 
-    // Worked sum excludes 16h of absences; their detail remains in UW/L4 columns.
+    // Worked sum excludes absences; paid absences included in sumaBezNadgodzin.
     const totalSuma = jsonRes.body.reduce((sum: number, r: any) => sum + r.suma, 0);
     expect(totalSuma).toBe(42);
 
-    // 2. XLSX Export with single 'Zmiana' column
+    // 2. XLSX Export without 'Zmiana' column
     const xlsxRes = await authenticatedGet('/api/analytics/export/by-employee')
       .buffer(true)
       .parse(binaryParser)
@@ -529,30 +445,23 @@ describe('Analytics reports', () => {
     await workbook.xlsx.load(xlsxRes.body);
     const worksheet = workbook.getWorksheet('Czas pracy');
 
-    // Row 6 headers MUST have single 'Zmiana' column, NO 'I zmiana' or 'II zmiana' columns
+    // Row 6 headers MUST NOT have 'Zmiana' column
     expect(worksheet?.getRow(6).values).toEqual([
       undefined,
       'Pracownik',
-      'Zmiana',
       'Suma godzin z nadgodzinami',
       'Suma godzin bez nadgodzin',
       'G (Godziny standardowe)',
       'NDR (Nadgodziny)',
       'UW (Urlop wypoczynkowy)',
-      'L4 (Zwolnienie lekarskie)',
+      'L4 (Zwolnienie chorobowe)',
     ]);
 
-    // Kowalski Jan rows in XLSX
-    expect(worksheet?.getRow(7).values).toEqual([undefined, 'Kowalski Jan', 'I', 8, 8, 8, 0, 0, 0]);
-    expect(worksheet?.getRow(8).values).toEqual([undefined, 'Kowalski Jan', 'II', 4, 0, 0, 4, 0, 0]);
-    expect(worksheet?.getRow(9).values).toEqual([undefined, 'Kowalski Jan', 'III', 6, 6, 6, 0, 0, 0]);
-    expect(worksheet?.getRow(10).values).toEqual([undefined, 'Kowalski Jan', 'Brak danych', 8, 8, 8, 0, 0, 0]);
-    expect(worksheet?.getRow(11).values).toEqual([undefined, 'Kowalski Jan', 'Nie dotyczy', 0, 0, 0, 0, 8, 0]);
+    // Kowalski Jan row in XLSX
+    expect(worksheet?.getRow(7).values).toEqual([undefined, 'Kowalski Jan', 26, 30, 22, 4, 8, 0]);
 
-    // Nowak Adam rows in XLSX
-    expect(worksheet?.getRow(12).values).toEqual([undefined, 'Nowak Adam', 'I', 8, 8, 8, 0, 0, 0]);
-    expect(worksheet?.getRow(13).values).toEqual([undefined, 'Nowak Adam', 'II', 8, 8, 8, 0, 0, 0]);
-    expect(worksheet?.getRow(14).values).toEqual([undefined, 'Nowak Adam', 'Nie dotyczy', 0, 0, 0, 0, 0, 8]);
+    // Nowak Adam row in XLSX
+    expect(worksheet?.getRow(8).values).toEqual([undefined, 'Nowak Adam', 16, 24, 16, 0, 0, 8]);
   });
 
   it('presents a missing accounting account as brak', async () => {

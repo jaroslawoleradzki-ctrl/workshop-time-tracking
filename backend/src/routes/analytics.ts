@@ -44,29 +44,9 @@ type EmployeeReportFilters = {
   employeeId?: string;
 };
 
-export type ShiftDimension = 'FIRST' | 'SECOND' | 'THIRD' | 'UNSPECIFIED' | 'ABSENCE';
-
-export const SHIFT_LABELS: Record<ShiftDimension, string> = {
-  FIRST: 'I',
-  SECOND: 'II',
-  THIRD: 'III',
-  UNSPECIFIED: 'Brak danych',
-  ABSENCE: 'Nie dotyczy',
-};
-
-export const SHIFT_ORDER: Record<ShiftDimension, number> = {
-  FIRST: 1,
-  SECOND: 2,
-  THIRD: 3,
-  UNSPECIFIED: 4,
-  ABSENCE: 5,
-};
-
 export type EmployeeReportRow = {
   employeeId: string;
   employeeName: string;
-  workShift: ShiftDimension;
-  workShiftLabel: string;
   suma: number;
   sumaBezNadgodzin: number;
   [workTimeTypeCode: string]: string | number;
@@ -123,10 +103,7 @@ export const OVERTIME_CODES = ['NDR', 'NS'];
 type InternalPivotRow = {
   employeeId: string;
   employeeName: string;
-  workShift: ShiftDimension;
-  workShiftLabel: string;
   sortKey: string;
-  shiftOrder: number;
   suma: number;
   sumaBezNadgodzin: number;
   counts: Record<string, number>;
@@ -307,36 +284,19 @@ export async function getEmployeeReportRows(
   const pivot: Record<string, InternalPivotRow> = {};
 
   reports.forEach((report) => {
-    const isAbsence = isReportingAbsence(report);
-    let shiftKey: ShiftDimension;
-    if (isAbsence) {
-      shiftKey = 'ABSENCE';
-    } else if (report.workShift === 'FIRST') {
-      shiftKey = 'FIRST';
-    } else if (report.workShift === 'SECOND') {
-      shiftKey = 'SECOND';
-    } else if (report.workShift === 'THIRD') {
-      shiftKey = 'THIRD';
-    } else {
-      shiftKey = 'UNSPECIFIED';
-    }
+    const employeeId = report.employeeId;
 
-    const rowKey = `${report.employeeId}\u0000${shiftKey}`;
-
-    if (!pivot[rowKey]) {
+    if (!pivot[employeeId]) {
       const emp = report.employee;
       const lastNameForSort = (emp.lastName || (emp.fullName ? emp.fullName.trim().split(' ').slice(-1)[0] : '') || '').trim();
       const firstNameForSort = (emp.firstName || (emp.fullName ? emp.fullName.trim().split(' ').slice(0, -1).join(' ') : '') || '').trim();
       const sortKey = `${lastNameForSort} ${firstNameForSort}`.trim().toLowerCase();
       const employeeName = formatEmployeeName(emp);
 
-      pivot[rowKey] = {
-        employeeId: report.employeeId,
+      pivot[employeeId] = {
+        employeeId,
         employeeName,
-        workShift: shiftKey,
-        workShiftLabel: SHIFT_LABELS[shiftKey],
         sortKey,
-        shiftOrder: SHIFT_ORDER[shiftKey],
         suma: 0,
         sumaBezNadgodzin: 0,
         counts: {},
@@ -345,30 +305,26 @@ export async function getEmployeeReportRows(
 
     const hours = Number(report.hours);
     const code = report.workTimeTypeCode;
+    const isAbsence = isReportingAbsence(report);
     const isOvertime =
       OVERTIME_CODES.includes(code) ||
       code.startsWith('ND') ||
       code.startsWith('NS') ||
       (report.workTimeType?.name?.toLowerCase().includes('nadgodzin') ?? false);
 
-    pivot[rowKey].counts[code] = (pivot[rowKey].counts[code] || 0) + hours;
-    // Keep absence detail, but only attendance contributes to worked hours.
+    pivot[employeeId].counts[code] = (pivot[employeeId].counts[code] || 0) + hours;
     if (!isAbsence) {
-      pivot[rowKey].suma += hours;
-      if (!isOvertime) pivot[rowKey].sumaBezNadgodzin += hours;
+      pivot[employeeId].suma += hours;
+      if (!isOvertime) pivot[employeeId].sumaBezNadgodzin += hours;
+    } else if (code !== UNPAID_ABSENCE_CODE) {
+      pivot[employeeId].sumaBezNadgodzin += hours;
     }
   });
 
   return Object.values(pivot)
-    .sort((a, b) => {
-      const cmp = a.sortKey.localeCompare(b.sortKey, 'pl');
-      if (cmp !== 0) return cmp;
-      const employeeCmp = a.employeeId.localeCompare(b.employeeId);
-      if (employeeCmp !== 0) return employeeCmp;
-      return a.shiftOrder - b.shiftOrder;
-    })
+    .sort((a, b) => a.sortKey.localeCompare(b.sortKey, 'pl'))
     .map((item) => {
-      const { sortKey, shiftOrder, counts, ...rest } = item;
+      const { sortKey, counts, ...rest } = item;
       return {
         ...rest,
         ...counts,
@@ -860,11 +816,13 @@ export async function getClosureControlSummary(
     const totalEmployeeHours =
       Math.round(
         employeeRows.reduce((sum, row) => {
-          if (row.workShift !== 'ABSENCE') return sum + Number(row.suma);
-          // Reconciliation includes other absences, separately from worked hours.
-          const { employeeId, employeeName, workShift, workShiftLabel, suma, sumaBezNadgodzin, ...counts } = row;
-          return sum + Object.entries(counts).reduce((hours, [code, value]) =>
+          // Each row is one employee (no shift breakdown).
+          // suma = worked hours with overtime.
+          // Absence hours are in dynamic columns (counts).
+          const { employeeId, employeeName, suma, sumaBezNadgodzin, ...counts } = row;
+          const absenceHours = Object.entries(counts).reduce((hours, [code, value]) =>
             hours + (code === UNPAID_ABSENCE_CODE ? 0 : Number(value) || 0), 0);
+          return sum + Number(suma) + absenceHours;
         }, 0) * 100,
       ) / 100;
 
@@ -1209,7 +1167,6 @@ router.get('/export/by-employee', async (req: AuthRequest, res: Response) => {
 
     const headers = [
       'Pracownik',
-      'Zmiana',
       'Suma godzin z nadgodzinami',
       'Suma godzin bez nadgodzin',
       ...workTimeTypes.map((type) => `${type.code} (${type.name})`),
@@ -1217,14 +1174,13 @@ router.get('/export/by-employee', async (req: AuthRequest, res: Response) => {
 
     const data = rows.map((row) => [
       row.employeeName,
-      row.workShiftLabel,
       row.suma,
       row.sumaBezNadgodzin,
       ...workTimeTypes.map((type) => Number(row[type.code]) || 0),
     ]);
     const numberColumns = Array.from(
-      { length: headers.length - 2 },
-      (_, index) => index + 3,
+      { length: workTimeTypes.length + 2 },
+      (_, index) => index + 2,
     );
 
     let empNameVal = 'Wszyscy pracownicy';
