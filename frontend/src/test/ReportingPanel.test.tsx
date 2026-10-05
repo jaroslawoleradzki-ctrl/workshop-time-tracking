@@ -338,10 +338,6 @@ describe('ReportingPanel — Brak karty (missingCard) form interaction', () => {
     const checkbox = screen.getByLabelText('Brak karty') as HTMLInputElement;
     expect(checkbox.checked).toBe(false);
 
-    // Wybierz zmianę
-    const shiftSelect = screen.getByLabelText('Zmiana') as HTMLSelectElement;
-    fireEvent.change(shiftSelect, { target: { value: 'FIRST' } });
-
     // Zaznacz checkbox
     fireEvent.click(checkbox);
     expect(checkbox.checked).toBe(true);
@@ -353,7 +349,7 @@ describe('ReportingPanel — Brak karty (missingCard) form interaction', () => {
     await waitFor(() => {
       expect(savedRequestBody).not.toBeNull();
       expect(savedRequestBody.missingCard).toBe(true);
-      expect(savedRequestBody.workShift).toBe('FIRST');
+      expect(savedRequestBody.workShift).toBeUndefined();
     });
   });
 
@@ -385,7 +381,9 @@ describe('ReportingPanel — Brak karty (missingCard) form interaction', () => {
     await waitFor(() => {
       expect(savedRequestBody).not.toBeNull();
       expect(savedRequestBody.missingCard).toBe(false);
-      expect(savedRequestBody.workShift).toBe('FIRST');
+      // The edit no longer sends workShift; the backend preserves the
+      // historical value on the stored record.
+      expect(savedRequestBody.workShift).toBeUndefined();
     });
   });
 });
@@ -811,18 +809,15 @@ describe('ReportingPanel — default work type and NS/G save & load interaction'
     const orderOption = await screen.findByText('Zlecenie: ZL-001');
     fireEvent.click(orderOption);
 
-    // 3. Enter hours and shift
+    // 3. Enter hours (no shift selection exists any more)
     const hoursInput = screen.getByPlaceholderText('np. 8.00');
     fireEvent.change(hoursInput, { target: { value: '8.00' } });
-
-    const shiftSelect = screen.getByLabelText('Zmiana') as HTMLSelectElement;
-    fireEvent.change(shiftSelect, { target: { value: 'FIRST' } });
 
     // 4. Click save
     const saveButton = screen.getByRole('button', { name: /Zapisz wpis/ });
     fireEvent.click(saveButton);
 
-    // 5. Assert POST payload
+    // 5. Assert POST payload carries no workShift
     await waitFor(() => {
       expect(capturedRequestBody).not.toBeNull();
       expect(capturedRequestBody).toEqual({
@@ -831,9 +826,9 @@ describe('ReportingPanel — default work type and NS/G save & load interaction'
         orderId: 'order-1',
         hours: 8,
         workTimeTypeCode: 'NS',
-        workShift: 'FIRST',
         missingCard: false,
       });
+      expect(capturedRequestBody.workShift).toBeUndefined();
     });
 
     // 6. Assert saved entry appears in the table
@@ -903,12 +898,9 @@ describe('ReportingPanel — default work type and NS/G save & load interaction'
     const orderOption = await screen.findByText('Zlecenie: ZL-001');
     fireEvent.click(orderOption);
 
-    // Enter hours and shift
+    // Enter hours
     const hoursInput = screen.getByPlaceholderText('np. 8.00');
     fireEvent.change(hoursInput, { target: { value: '8.00' } });
-
-    const shiftSelect = screen.getByLabelText('Zmiana') as HTMLSelectElement;
-    fireEvent.change(shiftSelect, { target: { value: 'FIRST' } });
 
     // Save
     const saveButton = screen.getByRole('button', { name: /Zapisz wpis/ });
@@ -954,10 +946,6 @@ describe('ReportingPanel — default work type and NS/G save & load interaction'
     const workTypeSelect = screen.getByLabelText('Rodzaj czasu pracy');
     fireEvent.change(workTypeSelect, { target: { value: 'NS' } });
     expect(workTypeSelect).toHaveValue('NS');
-
-    // Select shift
-    const shiftSelect = screen.getByLabelText('Zmiana') as HTMLSelectElement;
-    fireEvent.change(shiftSelect, { target: { value: 'FIRST' } });
 
     // Enter hours but no order
     const hoursInput = screen.getByPlaceholderText('np. 8.00');
@@ -1514,7 +1502,7 @@ describe('ReportingPanel — Work Shift Tracking UI (v0.5.9)', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders shift select with I, II and III options for worked time, and renders shift badges in table', async () => {
+  it('does not render any work shift selector for worked time', async () => {
     render(
       <ReportingPanel
         token="test-token"
@@ -1524,50 +1512,33 @@ describe('ReportingPanel — Work Shift Tracking UI (v0.5.9)', () => {
 
     await screen.findByDisplayValue('Jan Kowalski');
 
-    const shiftSelect = screen.getByLabelText('Zmiana') as HTMLSelectElement;
-    expect(shiftSelect).toBeEnabled();
-    expect(screen.getByRole('option', { name: '-- Wybierz zmianę --' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'I' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'II' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'III' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Zmiana')).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'I' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'II' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'III' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: '-- Wybierz zmianę --' })).not.toBeInTheDocument();
+  });
 
-    // Verify shift labels in daily reports table
+  it('renders historical shift labels for old records and null-shift entries safely', async () => {
+    render(
+      <ReportingPanel
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    await screen.findByDisplayValue('Jan Kowalski');
+
+    // Historical shift values remain visible for old records.
     expect(await screen.findByText('I zmiana')).toBeInTheDocument();
     expect(screen.getByText('II zmiana')).toBeInTheDocument();
-    expect(screen.getByText('Brak danych o zmianie')).toBeInTheDocument();
+    // The historical null-shift entry must render safely without a misleading warning.
+    expect(screen.queryByText('Brak danych o zmianie')).not.toBeInTheDocument();
+    // All three historical entries remain readable/editable.
+    expect(await screen.findAllByRole('button', { name: 'Edytuj' })).toHaveLength(3);
   });
 
-  it('disables shift select and displays "Nie dotyczy (nieobecność)" when an absence type is selected', async () => {
-    render(
-      <ReportingPanel
-        token="test-token"
-        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
-      />,
-    );
-
-    await screen.findByDisplayValue('Jan Kowalski');
-
-    const workTypeSelect = screen.getByLabelText('Rodzaj czasu pracy') as HTMLSelectElement;
-    const shiftSelect = screen.getByLabelText('Zmiana') as HTMLSelectElement;
-
-    // Initially worked time 'G' is selected -> shift select enabled
-    expect(shiftSelect).toBeEnabled();
-
-    // Select absence 'UW'
-    fireEvent.change(workTypeSelect, { target: { value: 'UW' } });
-
-    // Shift select should become disabled with "Nie dotyczy (nieobecność)"
-    expect(shiftSelect).toBeDisabled();
-    expect(shiftSelect.value).toBe('');
-    expect(screen.getByRole('option', { name: 'Nie dotyczy (nieobecność)' })).toBeInTheDocument();
-
-    // Switch back to 'G' -> shift select re-enabled
-    fireEvent.change(workTypeSelect, { target: { value: 'G' } });
-    expect(shiftSelect).toBeEnabled();
-    expect(shiftSelect.value).toBe('');
-  });
-
-  it('displays client-side validation error if shift is not selected for worked time', async () => {
+  it('saves a worked-time entry without workShift and does not invent a shift', async () => {
     render(
       <ReportingPanel
         token="test-token"
@@ -1579,44 +1550,19 @@ describe('ReportingPanel — Work Shift Tracking UI (v0.5.9)', () => {
 
     const hoursInput = screen.getByPlaceholderText('np. 8.00');
     fireEvent.change(hoursInput, { target: { value: '8.00' } });
-
-    // Submit without selecting shift
-    const saveButton = screen.getByRole('button', { name: /Zapisz wpis/ });
-    fireEvent.click(saveButton);
-
-    await waitFor(() => {
-      expect(screen.getByText('Wybór zmiany (I, II lub III zmiana) jest wymagany dla czasu pracy.')).toBeInTheDocument();
-    });
-    expect(capturedRequestBody).toBeNull();
-  });
-
-  it('allows saving worked time when THIRD shift is chosen, sending workShift in POST payload', async () => {
-    render(
-      <ReportingPanel
-        token="test-token"
-        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
-      />,
-    );
-
-    await screen.findByDisplayValue('Jan Kowalski');
-
-    const hoursInput = screen.getByPlaceholderText('np. 8.00');
-    fireEvent.change(hoursInput, { target: { value: '8.00' } });
-
-    const shiftSelect = screen.getByLabelText('Zmiana') as HTMLSelectElement;
-    fireEvent.change(shiftSelect, { target: { value: 'THIRD' } });
 
     const saveButton = screen.getByRole('button', { name: /Zapisz wpis/ });
     fireEvent.click(saveButton);
 
     await waitFor(() => {
       expect(capturedRequestBody).not.toBeNull();
-      expect(capturedRequestBody.workShift).toBe('THIRD');
+      expect(capturedRequestBody.workTimeTypeCode).toBe('G');
       expect(capturedRequestBody.hours).toBe(8);
+      expect(capturedRequestBody.workShift).toBeUndefined();
     });
   });
 
-  it('editing historical record without shift requires explicit shift selection before saving', async () => {
+  it('edits a historical entry with shift without sending workShift (backend preserves it)', async () => {
     render(
       <ReportingPanel
         token="test-token"
@@ -1626,28 +1572,68 @@ describe('ReportingPanel — Work Shift Tracking UI (v0.5.9)', () => {
 
     await screen.findByDisplayValue('Jan Kowalski');
 
-    // Click Edit on the 3rd entry (historical without shift)
+    // Edit the FIRST-shift historical entry.
     const editButtons = await screen.findAllByRole('button', { name: 'Edytuj' });
-    fireEvent.click(editButtons[2]);
+    fireEvent.click(editButtons[0]);
 
-    const shiftSelect = screen.getByLabelText('Zmiana') as HTMLSelectElement;
-    expect(shiftSelect.value).toBe('');
+    const hoursInput = screen.getByPlaceholderText('np. 8.00');
+    fireEvent.change(hoursInput, { target: { value: '7.50' } });
 
-    // Attempt to save without choosing shift
     const saveButton = screen.getByRole('button', { name: /Zapisz zmiany/ });
     fireEvent.click(saveButton);
 
     await waitFor(() => {
-      expect(screen.getByText('Wybór zmiany (I, II lub III zmiana) jest wymagany dla czasu pracy.')).toBeInTheDocument();
+      expect(capturedRequestBody).not.toBeNull();
+      expect(capturedRequestBody.hours).toBe(7.5);
+      expect(capturedRequestBody.workShift).toBeUndefined();
     });
+  });
 
-    // Now select 'THIRD' and save
-    fireEvent.change(shiftSelect, { target: { value: 'THIRD' } });
+  it('edits a historical entry without shift and saves successfully', async () => {
+    render(
+      <ReportingPanel
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    await screen.findByDisplayValue('Jan Kowalski');
+
+    // Edit the 3rd entry (historical without shift).
+    const editButtons = await screen.findAllByRole('button', { name: 'Edytuj' });
+    fireEvent.click(editButtons[2]);
+
+    const saveButton = screen.getByRole('button', { name: /Zapisz zmiany/ });
     fireEvent.click(saveButton);
 
     await waitFor(() => {
       expect(capturedRequestBody).not.toBeNull();
-      expect(capturedRequestBody.workShift).toBe('THIRD');
+      expect(capturedRequestBody.workShift).toBeUndefined();
+    });
+  });
+
+  it('saves an absence entry without any shift interaction', async () => {
+    render(
+      <ReportingPanel
+        token="test-token"
+        user={{ id: '1', username: 'leader', role: 'leader', fullName: 'Lider Testowy' }}
+      />,
+    );
+
+    await screen.findByDisplayValue('Jan Kowalski');
+
+    fireEvent.change(screen.getByLabelText('Rodzaj czasu pracy'), { target: { value: 'UW' } });
+
+    const hoursInput = screen.getByPlaceholderText('np. 8.00');
+    fireEvent.change(hoursInput, { target: { value: '8.00' } });
+
+    const saveButton = screen.getByRole('button', { name: /Zapisz wpis/ });
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(capturedRequestBody).not.toBeNull();
+      expect(capturedRequestBody.workTimeTypeCode).toBe('UW');
+      expect(capturedRequestBody.workShift).toBeUndefined();
     });
   });
 });

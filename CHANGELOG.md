@@ -6,6 +6,7 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.6.2] - 2026-10-05
 
 ### Changed
+- Usunięto wybór zmiany roboczej z formularza Raportowania. Nowe wpisy czasu pracy zapisują się bez zmiany (`workShift = null`); historyczne wartości `I`/`II`/`III` pozostają czytelne i są zachowywane przy edycji. Kopiowanie dnia nie jest już blokowane brakiem zmiany w źródle.
 - Usunięto kolumnę **Zmiana** z miesięcznego raportu pracowników – raport pokazuje teraz jeden wiersz na pracownika.
 - Usunięto kolumnę **Łącznie przepracowane w okresie** (duplikowała "Suma godzin z nadgodzinami").
 - Zmieniono semantykę **Suma godzin bez nadgodzin**: teraz obejmuje godziny normatywne ORAZ płatne nieobecności (UW, L4, UOK, UŻ, WKU itp.), z wyłączeniem nadgodzin i niepłatnego NN.

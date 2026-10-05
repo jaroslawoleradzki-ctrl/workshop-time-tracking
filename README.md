@@ -67,10 +67,10 @@ Zapewnia administratorom syntetyczne spojrzenie na statusy produkcyjne:
 
 ### 3. Panel Szybkiego Raportowania (Raportowanie)
 * **Wyszukiwarka pracowników**: Panel wyboru filtrujący na żywo po imieniu, nazwisku i numerze ewidencyjnym pracownika.
-* **Ewidencja zmian roboczych**: Każdy wpis obecności (czasu przepracowanego) rejestruje przypisaną zmianę (`I`, `II` lub `III` zmiana). Dla nieobecności pole jest automatycznie blokowane i zapisywane jako null.
+* **Ewidencja czasu pracy**: Nowe wpisy obecności (czasu przepracowanego) nie wymagają już wyboru zmiany i są zapisywane bez przypisanej zmiany. Historyczne wpisy mogą nadal przechowywać zmianę `I`, `II` lub `III`, która pozostaje widoczna na liście dnia i jest zachowywana przy edycji. Dla nieobecności zmiana pozostaje pusta.
 * **Optymalizacja pod kątem szybkiego pisania**: Cały formularz obsługuje się bez użycia myszy – wciśnięcie klawisza `Enter` zatwierdza wybór zlecenia, pozwala wpisać godziny i zapisuje wpis, po czym kursor automatycznie wraca do wyboru kolejnego zlecenia.
 * **Przycisk "Dzisiaj"**: Jedno kliknięcie ustawia datę raportu na dzisiejszy dzień w lokalnej strefie czasowej, automatycznie odświeżając widoczne wpisy.
-* **Kopiowanie poprzedniego dnia**: Automatyczne powielenie struktury wpisów z ostatniego dnia roboczego wybranego pracownika (z zachowaniem przypisanych zmian `I`, `II`, `III` dla obecności) w celu przyspieszenia ewidencji powtarzalnych prac.
+* **Kopiowanie poprzedniego dnia**: Automatyczne powielenie struktury wpisów z ostatniego dnia roboczego wybranego pracownika (z zachowaniem ewentualnej historycznej zmiany `I`, `II`, `III` przy wpisach obecności) w celu przyspieszenia ewidencji powtarzalnych prac.
 * **Ostrzeżenia dobowe (Soft Validation)**: Wyświetlanie ostrzeżeń w kolorach żółtym (Standard > 8h), pomarańczowym (Suma > 12h) lub czerwonym (Suma > 24h) bez blokowania możliwości zapisu.
 
 ### 4. Centrum Raportów (Raporty)

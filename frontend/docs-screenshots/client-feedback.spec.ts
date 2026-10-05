@@ -59,7 +59,7 @@ test('v0.6.1 real API: legacy NN preserves absence detail and reconciliation; em
     ? await page.request.put('/api/work-time-types/NN', { headers, data: { name: 'Nieobecność nieusprawiedliwiona', requiresOrder: false, isAbsence: false } })
     : await page.request.post('/api/work-time-types', { headers, data: { code: 'NN', name: 'Nieobecność nieusprawiedliwiona', requiresOrder: false, isAbsence: false } });
   expect(createdType.ok()).toBeTruthy();
-  const created = await page.request.post('/api/reports', { headers, data: { employeeId: '00000000-0000-4000-8000-000000000001', date: '2026-07-13', hours: 8, workTimeTypeCode: 'NN', workShift: 'FIRST', orderId: '00000000-0000-4000-8000-000000000201' } });
+  const created = await page.request.post('/api/reports', { headers, data: { employeeId: '00000000-0000-4000-8000-000000000001', date: '2026-07-13', hours: 8, workTimeTypeCode: 'NN', orderId: '00000000-0000-4000-8000-000000000201' } });
   expect(created.ok()).toBeTruthy();
   const { report: record } = await created.json();
   try {

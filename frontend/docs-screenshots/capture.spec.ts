@@ -53,11 +53,10 @@ async function fillReporting(page: Page, entry: DocsScreenshot) {
   }
   if (entry.id === 'absence-shift-disabled') {
     await page.locator('#workTypeSelect').selectOption('WKU');
-    await expect(page.locator('#workShiftSelect')).toBeDisabled();
+    await expect(page.locator('#workShiftSelect')).toHaveCount(0);
     return;
   }
   await page.locator('#workTypeSelect').selectOption('G');
-  await page.locator('#workShiftSelect').selectOption('FIRST');
   await page.getByPlaceholder('Wpisz numer zlecenia lub produktu...').fill('DOC-2026-001');
   await page.getByText('Zlecenie: DOC-2026-001').click();
   await page.getByPlaceholder('np. 8.00').fill(entry.id === 'hours-warning' ? '9' : '2');

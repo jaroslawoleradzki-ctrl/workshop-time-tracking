@@ -277,7 +277,9 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // 2c. Validate shift according to work time type semantics
+    // 2c. Resolve shift. Work shift is no longer collected for new entries, so a
+    // missing value is accepted and stored as null. A valid historical value
+    // supplied by an API client is still accepted; invalid values are rejected.
     let validatedShift: 'FIRST' | 'SECOND' | 'THIRD' | null = null;
     if (type.isAbsence) {
       if (workShift !== null && workShift !== undefined && workShift !== '') {
@@ -287,13 +289,14 @@ router.post('/', async (req: AuthRequest, res: Response) => {
         });
       }
       validatedShift = null;
+    } else if (workShift === null || workShift === undefined || workShift === '') {
+      validatedShift = null;
+    } else if (!['FIRST', 'SECOND', 'THIRD'].includes(workShift)) {
+      return res.status(400).json({
+        message: 'Nieprawidłowa wartość zmiany.',
+        code: 'INVALID_WORK_SHIFT',
+      });
     } else {
-      if (!workShift || !['FIRST', 'SECOND', 'THIRD'].includes(workShift)) {
-        return res.status(400).json({
-          message: 'Wybór zmiany (I, II lub III zmiana) jest wymagany dla czasu pracy.',
-          code: 'WORK_SHIFT_REQUIRED',
-        });
-      }
       validatedShift = workShift;
     }
 
@@ -419,8 +422,10 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Validate shift according to work time type semantics
-    let validatedShift: 'FIRST' | 'SECOND' | 'THIRD' | null = null;
+    // Resolve shift. Work shift is no longer collected for new entries, so a
+    // missing value preserves the entry's existing shift; historical shift data
+    // must not be silently destroyed. A valid value is applied; invalid rejected.
+    let validatedShift: 'FIRST' | 'SECOND' | 'THIRD' | null = oldReport.workShift;
     if (type.isAbsence) {
       if (workShift !== null && workShift !== undefined && workShift !== '') {
         return res.status(400).json({
@@ -429,13 +434,14 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
         });
       }
       validatedShift = null;
+    } else if (workShift === null || workShift === undefined || workShift === '') {
+      validatedShift = oldReport.workShift;
+    } else if (!['FIRST', 'SECOND', 'THIRD'].includes(workShift)) {
+      return res.status(400).json({
+        message: 'Nieprawidłowa wartość zmiany.',
+        code: 'INVALID_WORK_SHIFT',
+      });
     } else {
-      if (!workShift || !['FIRST', 'SECOND', 'THIRD'].includes(workShift)) {
-        return res.status(400).json({
-          message: 'Wybór zmiany (I, II lub III zmiana) jest wymagany dla czasu pracy.',
-          code: 'WORK_SHIFT_REQUIRED',
-        });
-      }
       validatedShift = workShift;
     }
 
