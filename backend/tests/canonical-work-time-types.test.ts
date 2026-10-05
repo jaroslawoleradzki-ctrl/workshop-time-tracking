@@ -152,13 +152,19 @@ describe('Canonical WorkTimeTypes and Hardening (v0.5.4)', () => {
         },
       ];
 
+      const workTimeTypeMock = vi.fn().mockImplementation(async (args: any) => {
+        // absenceTypes query: where OR [{ isAbsence: true }, { code: 'NN' }]
+        const where = args?.where;
+        const isAbsenceQuery = where?.OR?.some((o: any) => o.isAbsence === true || o.code === 'NN');
+        if (isAbsenceQuery) {
+          return []; // No absence types in this test case
+        }
+        return [{ code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false }];
+      });
+
       const mockDb: any = {
         order: { findMany: vi.fn().mockResolvedValue([]) },
-        workTimeType: {
-          findMany: vi.fn().mockResolvedValue([
-            { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
-          ]),
-        },
+        workTimeType: { findMany: workTimeTypeMock },
         workTimeReport: {
           findMany: vi.fn().mockImplementation(async (args: any) => {
             if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) return [];
@@ -204,13 +210,16 @@ describe('Canonical WorkTimeTypes and Hardening (v0.5.4)', () => {
         },
       ];
 
+      const workTimeTypeMock = vi.fn().mockImplementation(async (args: any) => {
+        const where = args?.where;
+        const isAbsenceQuery = where?.OR?.some((o: any) => o.isAbsence === true || o.code === 'NN');
+        if (isAbsenceQuery) return [];
+        return [{ code: 'G', name: 'Standardowe godziny pracy', isAbsence: false, requiresOrder: true }];
+      });
+
       const mockDb: any = {
         order: { findMany: vi.fn().mockResolvedValue([]) },
-        workTimeType: {
-          findMany: vi.fn().mockResolvedValue([
-            { code: 'G', name: 'Standardowe godziny pracy', isAbsence: false, requiresOrder: true },
-          ]),
-        },
+        workTimeType: { findMany: workTimeTypeMock },
         workTimeReport: {
           findMany: vi.fn().mockImplementation(async (args: any) => {
             if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) return [];
@@ -250,6 +259,13 @@ describe('Canonical WorkTimeTypes and Hardening (v0.5.4)', () => {
         },
       ];
 
+      const workTimeTypeMock = vi.fn().mockImplementation(async (args: any) => {
+        const where = args?.where;
+        const isAbsenceQuery = where?.OR?.some((o: any) => o.isAbsence === true || o.code === 'NN');
+        if (isAbsenceQuery) return [];
+        return [{ code: 'G', name: 'Standardowe godziny pracy', isAbsence: false, requiresOrder: true }];
+      });
+
       const mockDb: any = {
         order: {
           findMany: vi.fn().mockImplementation(async (args: any) => {
@@ -268,11 +284,7 @@ describe('Canonical WorkTimeTypes and Hardening (v0.5.4)', () => {
             ];
           }),
         },
-        workTimeType: {
-          findMany: vi.fn().mockResolvedValue([
-            { code: 'G', name: 'Standardowe godziny pracy', isAbsence: false, requiresOrder: true },
-          ]),
-        },
+        workTimeType: { findMany: workTimeTypeMock },
         workTimeReport: {
           findMany: vi.fn().mockImplementation(async (args: any) => {
             if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) return [];
@@ -308,13 +320,16 @@ describe('Canonical WorkTimeTypes and Hardening (v0.5.4)', () => {
         },
       ];
 
+      const workTimeTypeMock = vi.fn().mockImplementation(async (args: any) => {
+        const where = args?.where;
+        const isAbsenceQuery = where?.OR?.some((o: any) => o.isAbsence === true || o.code === 'NN');
+        if (isAbsenceQuery) return [];
+        return [{ code: 'G', name: 'Standardowe godziny pracy', isAbsence: false, requiresOrder: true }];
+      });
+
       const mockDb: any = {
         order: { findMany: vi.fn().mockResolvedValue([]) },
-        workTimeType: {
-          findMany: vi.fn().mockResolvedValue([
-            { code: 'G', name: 'Standardowe godziny pracy', isAbsence: false, requiresOrder: true },
-          ]),
-        },
+        workTimeType: { findMany: workTimeTypeMock },
         workTimeReport: {
           findMany: vi.fn().mockImplementation(async (args: any) => {
             if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) return [];
@@ -371,9 +386,14 @@ describe('Canonical WorkTimeTypes and Hardening (v0.5.4)', () => {
           }),
         },
         workTimeType: {
-          findMany: vi.fn().mockResolvedValue([
-            { code: 'WKU', name: 'Wojsko', isAbsence: true, requiresOrder: false },
-          ]),
+          findMany: vi.fn().mockImplementation(async (args: any) => {
+            const where = args?.where;
+            const isAbsenceQuery = where?.OR?.some((o: any) => o.isAbsence === true || o.code === 'NN');
+            if (isAbsenceQuery) {
+              return [{ code: 'WKU', name: 'Wojsko', isAbsence: true, requiresOrder: false }];
+            }
+            return [{ code: 'WKU', name: 'Wojsko', isAbsence: true, requiresOrder: false }];
+          }),
         },
         workTimeReport: {
           findMany: vi.fn().mockImplementation(async (args: any) => {

@@ -699,12 +699,13 @@ export async function getReconciliationDiagnostics(
 
     // Only include records with non-zero contribution or explicit reason
     if (contribution !== 0 || reason) {
+      const reportDate = report.date instanceof Date ? report.date : new Date(report.date || Date.now());
       diagnostics.push({
         employeeId: report.employeeId,
         employeeName: report.employee?.lastName && report.employee?.firstName
           ? `${report.employee.lastName} ${report.employee.firstName}`
           : report.employee?.fullName || 'Nieznany pracownik',
-        date: formatDateString(report.date),
+        date: formatDateString(reportDate),
         workTimeTypeCode: report.workTimeTypeCode,
         workTimeTypeName: report.workTimeType?.name || report.workTimeTypeCode,
         hours,
@@ -813,15 +814,30 @@ export async function getClosureControlSummary(
       },
       tx,
     );
+    // Build a set of absence codes for filtering (from absenceTypes already fetched above)
+    const absenceCodes = new Set(absenceTypes.map((t) => t.code));
+    console.log('[DEBUG] absenceCodes:', Array.from(absenceCodes));
+    console.log('[DEBUG] employeeRows:', JSON.stringify(employeeRows.map(r => ({
+      employeeId: r.employeeId,
+      employeeName: r.employeeName,
+      suma: r.suma,
+      sumaBezNadgodzin: r.sumaBezNadgodzin,
+      counts: Object.fromEntries(Object.entries(r).filter(([k,v]) => !['employeeId','employeeName','suma','sumaBezNadgodzin','sortKey'].includes(k)))
+    }))));
     const totalEmployeeHours =
       Math.round(
         employeeRows.reduce((sum, row) => {
           // Each row is one employee (no shift breakdown).
           // suma = worked hours with overtime.
-          // Absence hours are in dynamic columns (counts).
+          // Dynamic columns contain both work and absence hours.
+          // We need: worked hours (suma) + paid absence hours from dynamic columns (excluding NN).
           const { employeeId, employeeName, suma, sumaBezNadgodzin, ...counts } = row;
-          const absenceHours = Object.entries(counts).reduce((hours, [code, value]) =>
-            hours + (code === UNPAID_ABSENCE_CODE ? 0 : Number(value) || 0), 0);
+          const absenceHours = Object.entries(counts).reduce((hours, [code, value]) => {
+            if (code === UNPAID_ABSENCE_CODE) return hours;
+            if (!absenceCodes.has(code)) return hours;
+            return hours + (Number(value) || 0);
+          }, 0);
+          console.log('[DEBUG] row:', row.employeeName, 'suma:', suma, 'absenceHours:', Object.entries(counts).reduce((h, [c,v]) => c==='NN' || !absenceCodes.has(c) ? h : h+Number(v||0), 0), 'total:', Number(suma) + Object.entries(counts).reduce((h, [c,v]) => c==='NN' || !absenceCodes.has(c) ? h : h+Number(v||0), 0));
           return sum + Number(suma) + absenceHours;
         }, 0) * 100,
       ) / 100;
