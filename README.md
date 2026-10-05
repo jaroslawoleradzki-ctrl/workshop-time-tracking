@@ -67,15 +67,15 @@ Zapewnia administratorom syntetyczne spojrzenie na statusy produkcyjne:
 
 ### 3. Panel Szybkiego Raportowania (Raportowanie)
 * **Wyszukiwarka pracowników**: Panel wyboru filtrujący na żywo po imieniu, nazwisku i numerze ewidencyjnym pracownika.
-* **Ewidencja czasu pracy**: Nowe wpisy obecności (czasu przepracowanego) nie wymagają już wyboru zmiany i są zapisywane bez przypisanej zmiany. Historyczne wpisy mogą nadal przechowywać zmianę `I`, `II` lub `III`, która pozostaje widoczna na liście dnia i jest zachowywana przy edycji. Dla nieobecności zmiana pozostaje pusta.
+* **Ewidencja czasu pracy**: Wpis obecności (czasu przepracowanego) obejmuje rodzaj czasu, opcjonalne zlecenie, liczbę godzin i oznaczenie braku karty. Formularz rejestracji nie zawiera dodatkowych pól, a zapis jest zoptymalizowany pod szybkie wprowadzanie.
 * **Optymalizacja pod kątem szybkiego pisania**: Cały formularz obsługuje się bez użycia myszy – wciśnięcie klawisza `Enter` zatwierdza wybór zlecenia, pozwala wpisać godziny i zapisuje wpis, po czym kursor automatycznie wraca do wyboru kolejnego zlecenia.
 * **Przycisk "Dzisiaj"**: Jedno kliknięcie ustawia datę raportu na dzisiejszy dzień w lokalnej strefie czasowej, automatycznie odświeżając widoczne wpisy.
-* **Kopiowanie poprzedniego dnia**: Automatyczne powielenie struktury wpisów z ostatniego dnia roboczego wybranego pracownika (z zachowaniem ewentualnej historycznej zmiany `I`, `II`, `III` przy wpisach obecności) w celu przyspieszenia ewidencji powtarzalnych prac.
+* **Kopiowanie poprzedniego dnia**: Automatyczne powielenie struktury wpisów z ostatniego dnia roboczego wybranego pracownika w celu przyspieszenia ewidencji powtarzalnych prac.
 * **Ostrzeżenia dobowe (Soft Validation)**: Wyświetlanie ostrzeżeń w kolorach żółtym (Standard > 8h), pomarańczowym (Suma > 12h) lub czerwonym (Suma > 24h) bez blokowania możliwości zapisu.
 
 ### 4. Centrum Raportów (Raporty)
 * Generowanie okresowych zestawień i rozliczeń zleceniowych dla liderów oraz administracji.
-* **Miesięczny raport pracowników**: Pokazuje jeden wiersz na pracownika z kolumnami **Pracownik**, **Suma godzin z nadgodzinami** (przepracowane godziny z nadgodzinami), **Suma godzin bez nadgodzin** (godziny normatywne + płatne nieobecności: UW, L4, UOK, UŻ itp., bez nadgodzin i bez NN) oraz dynamicznymi kolumnami rodzajów czasu. Historia zmian `I`, `II`, `III` jest sumowana w jednym wierszu. NN pozostaje widoczne w swojej kolumnie, lecz jest wyłączone z obu sum. Ta sama struktura obowiązuje w widoku tabeli oraz eksportach XLSX i CSV.
+* **Miesięczny raport pracowników**: Pokazuje jeden wiersz na pracownika z kolumnami **Pracownik**, **Suma godzin z nadgodzinami** (przepracowane godziny z nadgodzinami), **Suma godzin bez nadgodzin** (godziny normatywne + płatne nieobecności: UW, L4, UOK, UŻ itp., bez nadgodzin i bez NN) oraz dynamicznymi kolumnami rodzajów czasu. NN pozostaje widoczne w swojej kolumnie, lecz jest wyłączone z obu sum. Ta sama struktura obowiązuje w widoku tabeli oraz eksportach XLSX i CSV.
 * Istniejący raport „Godziny wg zleceń” udostępnia tryb „Raport zamknięcia”, łączący otwarte zlecenia z godzinami oraz zlecenia zamknięte w wybranym okresie, także z zerową liczbą godzin.
 * Raport okresów nieobecności grupuje kolejne dni robocze tego samego pracownika i rodzaju nieobecności, mostkuje przez dni wolne (święta ustawowe, weekendy, wyjątki kalendarza), pozwala filtrować wyniki oraz eksportować je do XLSX i CSV.
 * Każdy raport zachowuje własne filtry w bieżącej sesji karty przeglądarki; wartości są odtwarzane po zmianie widoku i odświeżeniu strony, a zamknięcie karty usuwa je automatycznie.
@@ -300,7 +300,7 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 
 ### Użytkowanie
 
-* [Instrukcja użytkownika](docs/user-guide.md) – obsługa dla lidera i administratora. Wbudowana Pomoc / Instrukcja zawiera 15 rozdziałów, 20 rzeczywistych zrzutów oraz odnośniki kontekstowe przy pięciu ekranach; na tablecie rozdziały są w rozwijanym menu.
+* [Instrukcja użytkownika](docs/user-guide.md) – obsługa dla lidera i administratora. Wbudowana Pomoc / Instrukcja zawiera 14 rozdziałów, 19 rzeczywistych zrzutów oraz odnośniki kontekstowe przy pięciu ekranach; na tablecie rozdziały są w rozwijanym menu.
 * [Reguły biznesowe](docs/business-rules.md) – obowiązujące walidacje, statusy, audyt i zasady raportowania.
 * [Importy i eksporty](docs/import-export-specification.md) – formaty kolumn, walidacja i raporty plikowe.
 

@@ -2,7 +2,7 @@
 
 ## Instrukcja w aplikacji
 
-W implementacji v0.6.0 aplikacja udostępnia pozycję **Pomoc / Instrukcja** dla Administratora i Leadera. Wbudowany przewodnik zawiera 15 rozdziałów: od logowania i rejestracji pracy po raporty, eksport, kalendarz, administrację i FAQ. Każdy rozdział ma oznaczenie roli i rzeczywiste zrzuty odpowiednich ekranów. Rozdziały można otwierać także adresem `#help/<identyfikator-rozdziału>`; przykład: `#help/logowanie`.
+W implementacji v0.6.0 aplikacja udostępnia pozycję **Pomoc / Instrukcja** dla Administratora i Leadera. Wbudowany przewodnik zawiera 14 rozdziałów: od logowania i rejestracji pracy po raporty, eksport, kalendarz, administrację i FAQ. Każdy rozdział ma oznaczenie roli i rzeczywiste zrzuty odpowiednich ekranów. Rozdziały można otwierać także adresem `#help/<identyfikator-rozdziału>`; przykład: `#help/logowanie`.
 Po wybraniu zwykłej zakładki aplikacja usuwa adres rozdziału Pomocy i po odświeżeniu przywraca wybraną zakładkę.
 Przyciski pomocy przy Raportowaniu, raporcie pracowników, raporcie zleceń, Bazie zleceń i Kalendarzu zakładowym otwierają właściwy rozdział. Na tablecie lista rozdziałów jest rozwijana nad treścią. Zrzuty pochodzą z fikcyjnej bazy dokumentacyjnej `*_docs`.
 
@@ -20,12 +20,12 @@ Rzeczywisty ekran: [Logowanie](../frontend/public/help/logowanie-01-ekran-logowa
 2. Formularz automatycznie podpowiada domyślny rodzaj czasu pracy zgodnie z Kalendarzem zakładowym: zwykły dzień roboczy to `G` (Godziny standardowe), a zwykła sobota lub niedziela to `NS` (Nadgodziny sobota/niedziela), jeżeli dany kod istnieje w słowniku. Święto ustawowe lub firmowy dzień wolny pozostawia typ pusty. Firma może oznaczyć sobotę albo niedzielę jako dzień roboczy — wtedy formularz podpowiada `G`. Jeśli wymagany typ (`G` lub `NS`) nie istnieje w słowniku, formularz pozostawia typ pusty.
 3. Wyszukaj pracownika po nazwie lub identyfikatorze; możesz użyć przycisków poprzedni/następny.
 4. Wybierz rodzaj czasu. Jeśli wymaga zlecenia (np. `NS`), wyszukaj aktywne zlecenie po numerze, produkcie lub koncie. W dni wolne praca jest dopuszczalna wyłącznie ze zleceniem.
-5. Wprowadź dodatnią liczbę godzin i zapisz. Wybór zmiany roboczej nie jest już wymagany — formularz nie zawiera pola **Zmiana**.
+5. Wprowadź dodatnią liczbę godzin i zapisz.
 6. Klawisze strzałek i Enter obsługują listy i przejście do pola godzin.
 
 Rzeczywisty ekran: [Wypełniony formularz Raportowania](../frontend/public/help/rejestracja-czasu-01-wypelniony-formularz.png).
 
-Wpisy wybranego pracownika i dnia są widoczne obok formularza. Historyczne wpisy mogą pokazywać etykietę przypisanej zmiany (`I zmiana`, `II zmiana`, `III zmiana`); nowe wpisy nie mają zmiany, więc etykieta się nie pojawia. Możesz ręcznie wybrać inny dozwolony rodzaj czasu pracy niż podpowiedź. **Edytuj** ładuje wpis do formularza, zachowując jego zapisany typ czasu, zlecenie, liczbę godzin i oznaczenie braku karty; historyczna zmiana pozostaje zachowana, ale nie jest już wybierana w formularzu. **Usuń** wymaga potwierdzenia i wykonuje soft delete. **Kopiuj ostatni dzień** kopiuje wyłącznie wpisy aktualnie wybranego pracownika z jego najnowszej wcześniejszej daty wraz z ewentualną przypisaną zmianą `I`, `II`, `III` dla wpisów obecności (dla nieobecności zmiana wynosi null). Brak zmiany w źródle nie blokuje kopiowania. Wybranie soboty lub niedzieli jako dnia docelowego blokuje całą operację bez utworzenia wpisów, niezależnie od ich rodzaju. Podczas operacji przycisk jest zablokowany. Jeśli wybrany dzień zawiera już wpis tego pracownika, aplikacja nie dopisze danych i wyświetli komunikat o konflikcie.
+Wpisy wybranego pracownika i dnia są widoczne obok formularza. Możesz ręcznie wybrać inny dozwolony rodzaj czasu pracy niż podpowiedź. **Edytuj** ładuje wpis do formularza, zachowując jego zapisany typ czasu, zlecenie, liczbę godzin i oznaczenie braku karty. **Usuń** wymaga potwierdzenia i wykonuje soft delete. **Kopiuj ostatni dzień** kopiuje wyłącznie wpisy aktualnie wybranego pracownika z jego najnowszej wcześniejszej daty. Wybranie soboty lub niedzieli jako dnia docelowego blokuje całą operację bez utworzenia wpisów, niezależnie od ich rodzaju. Podczas operacji przycisk jest zablokowany. Jeśli wybrany dzień zawiera już wpis tego pracownika, aplikacja nie dopisze danych i wyświetli komunikat o konflikcie.
 
 Jeśli kod `G` przekroczy 8 godzin lub suma przekroczy 12/24 godziny, pojawi się ostrzeżenie. Można anulować albo wybrać **Ignoruj i zapisz**.
 
@@ -65,6 +65,6 @@ Rzeczywisty ekran: [Import danych](../frontend/public/help/administracja-02-impo
 
 ## Poprawki raportu i Pomocy v0.6.2
 
-W miesięcznym raporcie pracników usunięto kolumnę **Zmiana** oraz **Łącznie przepracowane w okresie** (która duplikowała sumę godzin z nadgodzinami). Raport pokazuje teraz jeden wiersz na pracownika z kolumnami: **Pracownik**, **Suma godzin z nadgodzinami** (przepracowane godziny z nadgodzinami), **Suma godzin bez nadgodzin** (godziny normatywne + płatne nieobecności: UW, L4, UOK, UŻ itp., bez nadgodzin i bez NN), oraz dynamiczne kolumny poszczególnych rodzajów czasu pracy. NN pozostaje widoczne jako czas niepłatny i jest wyłączone z obu sum. Płatne nieobecności (urlopy, L4) zwiększają tylko **Sumę godzin bez nadgodzin**.
+W miesięcznym raporcie pracowników usunięto kolumnę **Łącznie przepracowane w okresie** (duplikowała sumę godzin z nadgodzinami). Raport pokazuje teraz jeden wiersz na pracownika z kolumnami: **Pracownik**, **Suma godzin z nadgodzinami** (przepracowane godziny z nadgodzinami), **Suma godzin bez nadgodzin** (godziny normatywne + płatne nieobecności: UW, L4, UOK, UŻ itp., bez nadgodzin i bez NN), oraz dynamiczne kolumny poszczególnych rodzajów czasu pracy. NN pozostaje widoczne jako czas niepłatny i jest wyłączone z obu sum. Płatne nieobecności (urlopy, L4) zwiększają tylko **Sumę godzin bez nadgodzin**.
 
 W Pomocy przewijaj główną treść, aby dotrzeć do dolnej części rozdziału i przycisków Poprzedni/Następny. Nagłówek aplikacji i sidebar zachowują własny układ. Na tablecie listę rozdziałów można zwinąć.

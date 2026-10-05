@@ -27,7 +27,7 @@ async function openTab(page: Page, tab: DocsScreenshot['tab']) {
 }
 
 async function fillReporting(page: Page, entry: DocsScreenshot) {
-  const dayResponse = entry.id === 'copied-day-shifts'
+  const dayResponse = entry.id === 'copied-day'
     ? page.waitForResponse((response) => response.url().includes('/api/reports/by-employee-date') && response.url().includes('date=2026-07-08'))
     : null;
   await page.locator('#dateInput').fill('2026-07-08');
@@ -43,17 +43,25 @@ async function fillReporting(page: Page, entry: DocsScreenshot) {
     await modal.getByText('Podsumowanie zakresu:').click();
     return;
   }
-  if (entry.id === 'copied-day-shifts') {
+  if (entry.id === 'copied-day') {
     if (existingDay?.length === 0) await page.getByRole('button', { name: 'Kopiuj ostatni dzień' }).click();
-    await expect(page.getByText('III zmiana')).toBeVisible();
+    await expect(page.locator('.table tbody tr').first()).toBeVisible();
+    await expect(page.getByText('I zmiana')).toHaveCount(0);
+    await expect(page.getByText('II zmiana')).toHaveCount(0);
+    await expect(page.getByText('III zmiana')).toHaveCount(0);
     await expect(page.locator('.alert-danger')).toHaveCount(0);
     await expect(page.getByText(/Skopiowano 3 wpisów/)).toHaveCount(0, { timeout: 10_000 });
+    // Remove the copied rows again through the API so the documentation fixture
+    // stays deterministic for the specs that run afterwards. The rendered DOM is
+    // left untouched, so the screenshot still shows the copied entries.
+    const token = await page.evaluate(() => localStorage.getItem('token'));
+    const headers = { Authorization: `Bearer ${token}` };
+    const copied = await (await page.request.get(
+      '/api/reports/by-employee-date?employeeId=00000000-0000-4000-8000-000000000001&date=2026-07-08',
+      { headers },
+    )).json() as Array<{ id: string }>;
+    for (const report of copied) await page.request.delete(`/api/reports/${report.id}`, { headers });
     await page.getByRole('heading', { name: 'Raportowanie Godzin Pracy' }).click();
-    return;
-  }
-  if (entry.id === 'absence-shift-disabled') {
-    await page.locator('#workTypeSelect').selectOption('WKU');
-    await expect(page.locator('#workShiftSelect')).toHaveCount(0);
     return;
   }
   await page.locator('#workTypeSelect').selectOption('G');

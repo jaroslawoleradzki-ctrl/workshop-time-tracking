@@ -29,9 +29,9 @@ export async function seedDocs(prisma: PrismaClient, databaseUrl: string | undef
   await prisma.order.upsert({ where: { orderNumber: order.orderNumber }, update: order, create: order });
 
   const reports = [
-    { id: '00000000-0000-4000-8000-000000000301', date: new Date('2026-07-07T00:00:00.000Z'), hours: 2, workTimeTypeCode: 'G', workShift: 'FIRST' as const, orderId: order.id },
-    { id: '00000000-0000-4000-8000-000000000302', date: new Date('2026-07-07T00:00:00.000Z'), hours: 2, workTimeTypeCode: 'G', workShift: 'SECOND' as const, orderId: order.id },
-    { id: '00000000-0000-4000-8000-000000000303', date: new Date('2026-07-07T00:00:00.000Z'), hours: 2, workTimeTypeCode: 'G', workShift: 'THIRD' as const, orderId: order.id },
+    { id: '00000000-0000-4000-8000-000000000301', date: new Date('2026-07-07T00:00:00.000Z'), hours: 2, workTimeTypeCode: 'G', workShift: null, orderId: order.id },
+    { id: '00000000-0000-4000-8000-000000000302', date: new Date('2026-07-07T00:00:00.000Z'), hours: 2, workTimeTypeCode: 'G', workShift: null, orderId: order.id },
+    { id: '00000000-0000-4000-8000-000000000303', date: new Date('2026-07-07T00:00:00.000Z'), hours: 2, workTimeTypeCode: 'G', workShift: null, orderId: order.id },
     { id: '00000000-0000-4000-8000-000000000304', date: new Date('2026-07-09T00:00:00.000Z'), hours: 8, workTimeTypeCode: 'WKU', workShift: null, orderId: null },
     { id: '00000000-0000-4000-8000-000000000305', date: new Date('2026-07-10T00:00:00.000Z'), hours: 8, workTimeTypeCode: 'WKU', workShift: null, orderId: null },
   ];
