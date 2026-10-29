@@ -15,10 +15,12 @@ import {
 import { UserSession } from '../App';
 import ScrollableTable from './ScrollableTable';
 import { useReportFilters } from '../hooks/useReportFilters';
+import ContextHelpButton from './ContextHelpButton';
 
 interface ReportsViewProps {
   token: string;
   user: UserSession;
+  onOpenHelp?: (chapter: string) => void;
 }
 
 interface WorkTimeType {
@@ -88,7 +90,7 @@ const DEFAULT_REPORT_FILTERS: ReportFilters = {
   closureReport: false,
 };
 
-export default function ReportsView({ token, user }: ReportsViewProps) {
+export default function ReportsView({ token, user, onOpenHelp }: ReportsViewProps) {
   const isAdmin = user.role === 'admin';
   const [activeReportTab, setActiveReportTab] = useState<ReportTab>('by-order');
 
@@ -385,14 +387,12 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
         ];
         headers = [
           'Pracownik',
-          'Zmiana',
           'Suma godzin z nadgodzinami',
           'Suma godzin bez nadgodzin',
           ...workTimeTypes.map(type => `${type.code} (${type.name})`)
         ];
         rows = safeReportData.map(r => [
           r.employeeName,
-          r.workShiftLabel || r.workShift || '-',
           r.suma,
           r.sumaBezNadgodzin,
           ...workTimeTypes.map(type => Number(r[type.code]) || 0),
@@ -511,6 +511,7 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
         <h2 style={{ fontFamily: 'var(--font-header)', fontSize: '1.8rem', margin: 0 }}>
           Centrum Raportów
         </h2>
+        {(activeReportTab === 'by-order' || activeReportTab === 'by-employee') && <ContextHelpButton chapter={activeReportTab === 'by-order' ? 'raport-zlecen' : 'raport-hr'} onOpenHelp={onOpenHelp} />}
       </div>
 
       {/* Tabs */}
@@ -776,7 +777,6 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                 <thead>
                   <tr>
                     <th>Pracownik</th>
-                    <th>Zmiana</th>
                     <th style={{ textAlign: 'right', fontWeight: 'bold' }}>Suma godzin z nadgodzinami</th>
                     <th style={{ textAlign: 'right', fontWeight: 'bold' }}>Suma godzin bez nadgodzin</th>
                     {workTimeTypes.map((type) => (
@@ -790,16 +790,6 @@ export default function ReportsView({ token, user }: ReportsViewProps) {
                   {Array.isArray(reportData) && reportData.map((row, idx) => (
                     <tr key={idx}>
                       <td style={{ fontWeight: 'bold' }}>{row.employeeName}</td>
-                      <td>
-                        <span style={{
-                          fontWeight: 600,
-                          color: row.workShift === 'ABSENCE' ? 'var(--text-muted)' :
-                                 row.workShift === 'UNSPECIFIED' ? 'var(--warning-color)' :
-                                 'var(--text-primary)',
-                        }}>
-                          {row.workShiftLabel || row.workShift || '-'}
-                        </span>
-                      </td>
                       <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--primary-color)' }}>
                         {(Number(row.suma) || 0).toFixed(1)} h
                       </td>

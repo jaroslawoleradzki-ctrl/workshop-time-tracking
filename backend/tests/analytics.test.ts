@@ -153,6 +153,76 @@ describe('Analytics reports', () => {
     vi.restoreAllMocks();
   });
 
+  it.each([true, false])('v0.6.2: NN stays visible but never increases worked or settled hours (isAbsence=%s)', async (nnFlag) => {
+    const employee = { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' };
+    const reports = [
+      { workTimeTypeCode: 'G', hours: 8, workShift: 'FIRST', workTimeType: { isAbsence: false, name: 'Standardowe', requiresOrder: true }, orderId: 'ord-1' },
+      { workTimeTypeCode: 'NDR', hours: 2.5, workShift: 'SECOND', workTimeType: { isAbsence: false, name: 'Nadgodziny', requiresOrder: true }, orderId: 'ord-1' },
+      { workTimeTypeCode: 'G', hours: 1.25, workShift: null, workTimeType: { isAbsence: false, name: 'Standardowe', requiresOrder: true }, orderId: 'ord-1' },
+      { workTimeTypeCode: 'UW', hours: 8, workShift: null, workTimeType: { isAbsence: true, name: 'Urlop', requiresOrder: false }, orderId: null },
+      // Even a legacy NN with an order and a false flag must be classified as absence.
+      { workTimeTypeCode: 'NN', hours: 8, workShift: 'THIRD', workTimeType: { isAbsence: nnFlag, name: 'Nieobecność nieusprawiedliwiona', requiresOrder: false }, orderId: 'ord-1' },
+    ].map((row) => ({ ...row, employeeId: EMPLOYEE_ID, employee, date: new Date('2026-08-10T00:00:00Z'), order: { orderNumber: 'ZL-1' } }));
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) =>
+      (args?.where?.OR ? reports.filter((r) => r.workTimeType.isAbsence || r.workTimeTypeCode === 'NN') : reports) as any);
+    const workTimeTypeMock = vi.fn().mockImplementation(async (args: any) => {
+      const where = args?.where;
+      const isAbsenceQuery = where?.OR?.some((o: any) => o.isAbsence === true || o.code === 'NN');
+      if (isAbsenceQuery) {
+        return [{ code: 'UW', name: 'Urlop', isAbsence: true }, { code: 'NN', name: 'Nieobecność nieusprawiedliwiona', isAbsence: true }];
+      }
+      // getEmployeeReportTypes for export - return all work time types
+      return [
+        { code: 'G', name: 'Standardowe godziny pracy', isAbsence: false, requiresOrder: true, createdAt: new Date('2026-01-01') },
+        { code: 'NDR', name: 'Nadgodziny', isAbsence: false, requiresOrder: true, createdAt: new Date('2026-01-02') },
+        { code: 'UW', name: 'Urlop', isAbsence: true, requiresOrder: false, createdAt: new Date('2026-01-03') },
+        { code: 'NN', name: 'Nieobecność nieusprawiedliwiona', isAbsence: true, requiresOrder: false, createdAt: new Date('2026-01-04') },
+      ];
+    });
+    vi.spyOn(prisma.workTimeType, 'findMany').mockImplementation(workTimeTypeMock);
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) =>
+      (args?.where?.OR ? reports.filter((r) => r.workTimeType.isAbsence || r.workTimeTypeCode === 'NN') : reports) as any);
+    const orderSpy = vi.spyOn(prisma.order, 'findMany').mockImplementation(async (args: any) => {
+      if (args?.select?.id) return [{ id: 'ord-1' }] as any;
+      expect(args.include.reports.where.workTimeTypeCode).toEqual({ not: 'NN' });
+      expect(args.where.OR[2].reports.some.workTimeTypeCode).toEqual({ not: 'NN' });
+      return [{ id: 'ord-1', orderNumber: 'ZL-1', productName: 'Test', plannedHours: 20, status: 'OPEN', reports: reports.filter((r) => r.orderId && r.workTimeTypeCode !== 'NN') }] as any;
+    });
+    const result = await authenticatedGet('/api/analytics/report-by-employee').expect(200);
+    expect(result.body).toHaveLength(1);
+    expect(result.body[0]).toMatchObject({
+      employeeId: EMPLOYEE_ID,
+      employeeName: 'Kowalski Jan',
+      G: 9.25,
+      NDR: 2.5,
+      UW: 8,
+      NN: 8,
+      suma: 11.75,
+      sumaBezNadgodzin: 17.25,
+    });
+    const summary = await getClosureControlSummary({ dateFrom: '2026-08-01', dateTo: '2026-08-31' });
+    expect(summary).toMatchObject({ ordersHours: 11.75, totalAbsenceHours: 8, totalEmployeeHours: 19.75, totalSettledHours: 19.75, difference: 0, status: 'MATCHED' });
+    expect(summary.absences.find((a) => a.code === 'NN')?.hours).toBe(8);
+    expect(orderSpy).toHaveBeenCalled();
+    const periods = await authenticatedGet('/api/analytics/report-absence-periods').expect(200);
+    expect(periods.body.find((r: any) => r.workTimeTypeCode === 'NN')).toMatchObject({ workingDays: 1 });
+    const exported = await authenticatedGet('/api/analytics/export/by-employee').buffer(true).parse(binaryParser).expect(200);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(exported.body);
+    const values = workbook.getWorksheet('Czas pracy')!.getRow(7).values;
+    expect(values).toEqual([undefined, 'Kowalski Jan', 11.75, 17.25, 9.25, 2.5, 8, 8]);
+  });
+
+  it('v0.6.1: NN-only period is matched with zero worked and settled hours', async () => {
+    vi.spyOn(prisma.order, 'findMany').mockResolvedValue([]);
+    vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([{ code: 'NN', name: 'Nieobecność nieusprawiedliwiona' }] as any);
+    vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([{ employeeId: EMPLOYEE_ID, employee: { fullName: 'Test' }, workTimeTypeCode: 'NN', workTimeType: { isAbsence: false }, hours: 8 }] as any);
+    const summary = await getClosureControlSummary({ dateFrom: '2026-08-01', dateTo: '2026-08-31' });
+    expect(summary).toMatchObject({ totalEmployeeHours: 0, totalSettledHours: 0, totalAbsenceHours: 0, status: 'MATCHED' });
+    expect(summary.absences).toHaveLength(1);
+    expect(summary.absences[0].hours).toBe(8);
+  });
+
   it('aggregates every work time type without a hardcoded code list', async () => {
     vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([
       {
@@ -179,20 +249,9 @@ describe('Analytics reports', () => {
       {
         employeeId: EMPLOYEE_ID,
         employeeName: 'Jan Kowalski',
-        workShift: 'FIRST',
-        workShiftLabel: 'I',
-        NOC: 1.5,
-        suma: 1.5,
-        sumaBezNadgodzin: 1.5,
-      },
-      {
-        employeeId: EMPLOYEE_ID,
-        employeeName: 'Jan Kowalski',
-        workShift: 'UNSPECIFIED',
-        workShiftLabel: 'Brak danych',
-        NOC: 2.5,
-        suma: 2.5,
-        sumaBezNadgodzin: 2.5,
+        NOC: 4,
+        suma: 4,
+        sumaBezNadgodzin: 4,
       },
     ]);
   });
@@ -232,24 +291,14 @@ describe('Analytics reports', () => {
     expect(reportSpy).toHaveBeenCalledTimes(2);
     expect(reportSpy.mock.calls[0][0]).toEqual(reportSpy.mock.calls[1][0]);
 
-    expect(jsonResponse.body).toHaveLength(2);
+    expect(jsonResponse.body).toHaveLength(1);
     expect(jsonResponse.body[0]).toEqual({
       employeeId: EMPLOYEE_ID,
       employeeName: 'Kowalski Jan',
-      workShift: 'FIRST',
-      workShiftLabel: 'I',
       G: 8,
-      suma: 8,
-      sumaBezNadgodzin: 8,
-    });
-    expect(jsonResponse.body[1]).toEqual({
-      employeeId: EMPLOYEE_ID,
-      employeeName: 'Kowalski Jan',
-      workShift: 'SECOND',
-      workShiftLabel: 'II',
       NOC: 2.5,
-      suma: 2.5,
-      sumaBezNadgodzin: 2.5,
+      suma: 10.5,
+      sumaBezNadgodzin: 10.5,
     });
 
     const workbook = new ExcelJS.Workbook();
@@ -263,45 +312,32 @@ describe('Analytics reports', () => {
     expect(worksheet?.getRow(4).getCell(1).value).toMatch(/^Wygenerowano: \d{2}\.\d{2}\.\d{4}, \d{2}:\d{2}$/);
     expect(worksheet?.getRow(5).values).toEqual([]);
 
-    // Wiersz 6: Nagłówek tabeli z jedną kolumną "Zmiana"
+    // Wiersz 6: Nagłówek tabeli bez kolumny "Zmiana"
     expect(worksheet?.getRow(6).values).toEqual([
       undefined,
       'Pracownik',
-      'Zmiana',
       'Suma godzin z nadgodzinami',
       'Suma godzin bez nadgodzin',
       'G (Standardowe godziny pracy)',
       'NOC (Zmiana nocna)',
     ]);
 
-    // Wiersz 7: Dane dla I zmiany
+    // Wiersz 7: Dane pracownika
     expect(worksheet?.getRow(7).values).toEqual([
       undefined,
       'Kowalski Jan',
-      'I',
+      10.5,
+      10.5,
       8,
-      8,
-      8,
-      0,
-    ]);
-
-    // Wiersz 8: Dane dla II zmiany
-    expect(worksheet?.getRow(8).values).toEqual([
-      undefined,
-      'Kowalski Jan',
-      'II',
-      2.5,
-      2.5,
-      0,
       2.5,
     ]);
 
     // Weryfikacja zamrożenia widoku (ySplit) i filtra tabeli
     expect(worksheet?.views[0]).toEqual(expect.objectContaining({ state: 'frozen', ySplit: 6 }));
-    expect(worksheet?.autoFilter).toBe('A6:F8');
+    expect(worksheet?.autoFilter).toBe('A6:E7');
   });
 
-  it('v0.5.9 manual acceptance rework: correctly supports I, II, III shifts, historical NULL as Brak danych, and absences as Nie dotyczy without duplication in JSON and XLSX', async () => {
+  it('v0.6.2: correctly aggregates across shifts and includes paid absences in sumaBezNadgodzin', async () => {
     const employee1 = { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' };
     const employee2 = { fullName: 'Adam Nowak', firstName: 'Adam', lastName: 'Nowak' };
 
@@ -309,7 +345,7 @@ describe('Analytics reports', () => {
       { code: 'G', name: 'Godziny standardowe', isAbsence: false },
       { code: 'NDR', name: 'Nadgodziny', isAbsence: false },
       { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true },
-      { code: 'L4', name: 'Zwolnienie lekarskie', isAbsence: true },
+      { code: 'L4', name: 'Zwolnienie chorobowe', isAbsence: true },
     ] as any);
 
     vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue([
@@ -381,96 +417,38 @@ describe('Analytics reports', () => {
       },
     ] as any);
 
-    // 1. JSON endpoint
+    // 1. JSON endpoint - single row per employee
     const jsonRes = await authenticatedGet('/api/analytics/report-by-employee').expect(200);
 
-    // Sorted by lastName then shift order:
-    // Kowalski Jan (I, II, III, Brak danych, Nie dotyczy) -> 5 rows
-    // Nowak Adam (I, II, Nie dotyczy) -> 3 rows
-    // Total rows: 8
-    expect(jsonRes.body).toHaveLength(8);
+    // Now 2 rows total (one per employee)
+    expect(jsonRes.body).toHaveLength(2);
 
-    // Kowalski Jan rows
+    // Kowalski Jan - aggregated across shifts
     expect(jsonRes.body[0]).toEqual({
       employeeId: EMPLOYEE_ID,
       employeeName: 'Kowalski Jan',
-      workShift: 'FIRST',
-      workShiftLabel: 'I',
-      G: 8,
-      suma: 8,
-      sumaBezNadgodzin: 8,
-    });
-    expect(jsonRes.body[1]).toEqual({
-      employeeId: EMPLOYEE_ID,
-      employeeName: 'Kowalski Jan',
-      workShift: 'SECOND',
-      workShiftLabel: 'II',
+      G: 22,
       NDR: 4,
-      suma: 4,
-      sumaBezNadgodzin: 0,
-    });
-    expect(jsonRes.body[2]).toEqual({
-      employeeId: EMPLOYEE_ID,
-      employeeName: 'Kowalski Jan',
-      workShift: 'THIRD',
-      workShiftLabel: 'III',
-      G: 6,
-      suma: 6,
-      sumaBezNadgodzin: 6,
-    });
-    expect(jsonRes.body[3]).toEqual({
-      employeeId: EMPLOYEE_ID,
-      employeeName: 'Kowalski Jan',
-      workShift: 'UNSPECIFIED',
-      workShiftLabel: 'Brak danych',
-      G: 8,
-      suma: 8,
-      sumaBezNadgodzin: 8,
-    });
-    expect(jsonRes.body[4]).toEqual({
-      employeeId: EMPLOYEE_ID,
-      employeeName: 'Kowalski Jan',
-      workShift: 'ABSENCE',
-      workShiftLabel: 'Nie dotyczy',
       UW: 8,
-      suma: 8,
-      sumaBezNadgodzin: 8,
+      suma: 26,
+      sumaBezNadgodzin: 30,
     });
 
-    // Nowak Adam rows
-    expect(jsonRes.body[5]).toEqual({
+    // Nowak Adam - aggregated across shifts
+    expect(jsonRes.body[1]).toEqual({
       employeeId: 'emp-2',
       employeeName: 'Nowak Adam',
-      workShift: 'FIRST',
-      workShiftLabel: 'I',
-      G: 8,
-      suma: 8,
-      sumaBezNadgodzin: 8,
-    });
-    expect(jsonRes.body[6]).toEqual({
-      employeeId: 'emp-2',
-      employeeName: 'Nowak Adam',
-      workShift: 'SECOND',
-      workShiftLabel: 'II',
-      G: 8,
-      suma: 8,
-      sumaBezNadgodzin: 8,
-    });
-    expect(jsonRes.body[7]).toEqual({
-      employeeId: 'emp-2',
-      employeeName: 'Nowak Adam',
-      workShift: 'ABSENCE',
-      workShiftLabel: 'Nie dotyczy',
+      G: 16,
       L4: 8,
-      suma: 8,
-      sumaBezNadgodzin: 8,
+      suma: 16,
+      sumaBezNadgodzin: 24,
     });
 
-    // Control sum: sum of suma across all rows equals total input hours (34 + 24 = 58h)
+    // Worked sum excludes absences; paid absences included in sumaBezNadgodzin.
     const totalSuma = jsonRes.body.reduce((sum: number, r: any) => sum + r.suma, 0);
-    expect(totalSuma).toBe(58);
+    expect(totalSuma).toBe(42);
 
-    // 2. XLSX Export with single 'Zmiana' column
+    // 2. XLSX Export without 'Zmiana' column
     const xlsxRes = await authenticatedGet('/api/analytics/export/by-employee')
       .buffer(true)
       .parse(binaryParser)
@@ -481,30 +459,60 @@ describe('Analytics reports', () => {
     await workbook.xlsx.load(xlsxRes.body);
     const worksheet = workbook.getWorksheet('Czas pracy');
 
-    // Row 6 headers MUST have single 'Zmiana' column, NO 'I zmiana' or 'II zmiana' columns
+    // Row 6 headers MUST NOT have 'Zmiana' column
     expect(worksheet?.getRow(6).values).toEqual([
       undefined,
       'Pracownik',
-      'Zmiana',
       'Suma godzin z nadgodzinami',
       'Suma godzin bez nadgodzin',
       'G (Godziny standardowe)',
       'NDR (Nadgodziny)',
       'UW (Urlop wypoczynkowy)',
-      'L4 (Zwolnienie lekarskie)',
+      'L4 (Zwolnienie chorobowe)',
     ]);
 
-    // Kowalski Jan rows in XLSX
-    expect(worksheet?.getRow(7).values).toEqual([undefined, 'Kowalski Jan', 'I', 8, 8, 8, 0, 0, 0]);
-    expect(worksheet?.getRow(8).values).toEqual([undefined, 'Kowalski Jan', 'II', 4, 0, 0, 4, 0, 0]);
-    expect(worksheet?.getRow(9).values).toEqual([undefined, 'Kowalski Jan', 'III', 6, 6, 6, 0, 0, 0]);
-    expect(worksheet?.getRow(10).values).toEqual([undefined, 'Kowalski Jan', 'Brak danych', 8, 8, 8, 0, 0, 0]);
-    expect(worksheet?.getRow(11).values).toEqual([undefined, 'Kowalski Jan', 'Nie dotyczy', 8, 8, 0, 0, 8, 0]);
+    // Kowalski Jan row in XLSX
+    expect(worksheet?.getRow(7).values).toEqual([undefined, 'Kowalski Jan', 26, 30, 22, 4, 8, 0]);
 
-    // Nowak Adam rows in XLSX
-    expect(worksheet?.getRow(12).values).toEqual([undefined, 'Nowak Adam', 'I', 8, 8, 8, 0, 0, 0]);
-    expect(worksheet?.getRow(13).values).toEqual([undefined, 'Nowak Adam', 'II', 8, 8, 8, 0, 0, 0]);
-    expect(worksheet?.getRow(14).values).toEqual([undefined, 'Nowak Adam', 'Nie dotyczy', 8, 8, 0, 0, 0, 8]);
+    // Nowak Adam row in XLSX
+    expect(worksheet?.getRow(8).values).toEqual([undefined, 'Nowak Adam', 16, 24, 16, 0, 0, 8]);
+  });
+
+  describe('v0.6.2 employee monthly report acceptance matrix', () => {
+    const employee = { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' };
+    const row = (code: string, hours: number, workShift: string | null = null, isAbsence = false) => ({
+      employeeId: EMPLOYEE_ID,
+      employee,
+      hours,
+      workTimeTypeCode: code,
+      workShift,
+      workTimeType: { isAbsence, name: code },
+    });
+
+    const cases: Array<{ name: string; reports: any[]; expected: Record<string, number> }> = [
+      { name: 'G only', reports: [row('G', 40)], expected: { G: 40, suma: 40, sumaBezNadgodzin: 40 } },
+      { name: 'G + overtime', reports: [row('G', 40), row('NDR', 5)], expected: { G: 40, NDR: 5, suma: 45, sumaBezNadgodzin: 40 } },
+      { name: 'paid absence only', reports: [row('UW', 8, null, true)], expected: { UW: 8, suma: 0, sumaBezNadgodzin: 8 } },
+      { name: 'custom metadata-classified paid absence', reports: [row('CUSTOM', 8, null, true)], expected: { CUSTOM: 8, suma: 0, sumaBezNadgodzin: 8 } },
+      { name: 'NN only', reports: [row('NN', 8)], expected: { NN: 8, suma: 0, sumaBezNadgodzin: 0 } },
+      { name: 'G + paid absence', reports: [row('G', 32), row('UW', 8, null, true)], expected: { G: 32, UW: 8, suma: 32, sumaBezNadgodzin: 40 } },
+      { name: 'G + paid absence + NN', reports: [row('G', 32), row('UW', 8, null, true), row('NN', 8)], expected: { G: 32, UW: 8, NN: 8, suma: 32, sumaBezNadgodzin: 40 } },
+      { name: 'historical FIRST/SECOND shift aggregation into one row', reports: [row('G', 8, 'FIRST'), row('G', 6, 'SECOND')], expected: { G: 14, suma: 14, sumaBezNadgodzin: 14 } },
+    ];
+
+    it.each(cases)('$name', async ({ reports, expected }) => {
+      vi.spyOn(prisma.workTimeReport, 'findMany').mockResolvedValue(reports as any);
+      const response = await authenticatedGet('/api/analytics/report-by-employee').expect(200);
+
+      expect(response.body).toHaveLength(1);
+      expect(response.body[0]).toMatchObject({
+        employeeId: EMPLOYEE_ID,
+        employeeName: 'Kowalski Jan',
+        ...expected,
+      });
+      expect(response.body[0]).not.toHaveProperty('workShift');
+      expect(response.body[0]).not.toHaveProperty('workShiftLabel');
+    });
   });
 
   it('presents a missing accounting account as brak', async () => {
@@ -561,7 +569,7 @@ describe('Analytics reports', () => {
         deletedAt: null,
         employeeId: EMPLOYEE_ID,
         workTimeTypeCode: 'NIEST',
-        workTimeType: { isAbsence: true },
+        OR: [{ workTimeType: { isAbsence: true } }, { workTimeTypeCode: 'NN' }],
         date: {
           gte: new Date('2026-07-03T00:00:00.000Z'),
           lte: new Date('2026-07-08T00:00:00.000Z'),
@@ -650,7 +658,7 @@ describe('Analytics reports', () => {
       where: expect.objectContaining({
         deletedAt: null,
         employeeId: EMPLOYEE_ID,
-        workTimeType: { isAbsence: true },
+        OR: [{ workTimeType: { isAbsence: true } }, { workTimeTypeCode: 'NN' }],
         date: {
           gte: new Date('2026-08-01T00:00:00.000Z'),
           lte: new Date('2026-08-31T00:00:00.000Z'),
@@ -1287,7 +1295,7 @@ describe('Analytics reports', () => {
     it('exports exactly the JSON rows, including zero-hour closed orders', async () => {
       mockOrderReportQuery();
       vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
-        if (args?.where?.workTimeType?.isAbsence) {
+        if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) {
           return [];
         }
         if (args?.include?.employee && args?.include?.order && args?.include?.workTimeType) {
@@ -1343,7 +1351,7 @@ describe('Analytics reports', () => {
             employee: { fullName: 'Jan Kowalski' },
             hours: 44, // 5 + 4 + 20 + 15
             workTimeTypeCode: 'G',
-            workTimeType: { name: 'Standardowe' },
+            workTimeType: { name: 'Standardowe', isAbsence: false },
           },
         ] as any;
       });
@@ -1393,21 +1401,21 @@ describe('Analytics reports', () => {
         employee: { fullName: 'Adam Adamowski', firstName: 'Adam', lastName: 'Adamowski' },
         hours: 8,
         workTimeTypeCode: 'G',
-        workTimeType: { name: 'Standardowe' },
+        workTimeType: { name: 'Standardowe', isAbsence: false },
       },
       {
         employeeId: '1',
         employee: { fullName: 'Adam Adamowski', firstName: 'Adam', lastName: 'Adamowski' },
         hours: 2,
         workTimeTypeCode: 'NDR',
-        workTimeType: { name: 'Nadgodziny' },
+        workTimeType: { name: 'Nadgodziny', isAbsence: false },
       },
       {
         employeeId: '2',
         employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
         hours: 8,
         workTimeTypeCode: 'G',
-        workTimeType: { name: 'Standardowe' },
+        workTimeType: { name: 'Standardowe', isAbsence: false },
       },
     ] as any);
 
@@ -1578,7 +1586,7 @@ describe('Analytics reports', () => {
       expect(approachingNumbers).not.toContain('ZL-101');
     });
 
-    it('calculates hoursToday and hoursMonth summing ALL active work time entries (order work, L4, urlop, entries without orderId) without filtering by orderId or requiresOrder', async () => {
+    it('calculates worked-hour KPIs excluding absences and NN without filtering by orderId or requiresOrder', async () => {
       vi.spyOn(prisma.order, 'count').mockResolvedValue(0 as any);
       vi.spyOn(prisma.order, 'findMany').mockResolvedValue([]);
 
@@ -1599,13 +1607,15 @@ describe('Analytics reports', () => {
       expect(todayWhere).toHaveProperty('deletedAt', null);
       expect(todayWhere).toHaveProperty('date');
       expect(todayWhere).not.toHaveProperty('orderId');
-      expect(todayWhere).not.toHaveProperty('workTimeType');
+      expect(todayWhere).toHaveProperty('workTimeType', { isAbsence: false });
+      expect(todayWhere).toHaveProperty('workTimeTypeCode', { not: 'NN' });
 
       const monthWhere = aggregateCalls[1][0].where;
       expect(monthWhere).toHaveProperty('deletedAt', null);
       expect(monthWhere).toHaveProperty('date');
       expect(monthWhere).not.toHaveProperty('orderId');
-      expect(monthWhere).not.toHaveProperty('workTimeType');
+      expect(monthWhere).toHaveProperty('workTimeType', { isAbsence: false });
+      expect(monthWhere).toHaveProperty('workTimeTypeCode', { not: 'NN' });
     });
   });
 
@@ -1797,18 +1807,33 @@ describe('Analytics reports', () => {
       ] as any);
 
       // 2. Mock workTimeTypes with isAbsence=true (including standard and custom OP type)
-      vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
-        { code: 'L4', name: 'Zwolnienie lekarskie', isAbsence: true, requiresOrder: false },
-        { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
-        { code: 'UŻ', name: 'Urlop na żądanie', isAbsence: true, requiresOrder: false },
-        { code: 'OP', name: 'Opieka nad dzieckiem art. 188', isAbsence: true, requiresOrder: false },
-        { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
-      ] as any);
+      const workTimeTypeMock = vi.fn().mockImplementation(async (args: any) => {
+        const where = args?.where;
+        const isAbsenceQuery = where?.OR?.some((o: any) => o.isAbsence === true || o.code === 'NN');
+        if (isAbsenceQuery) {
+          // absenceTypes query: return only absence types
+          return [
+            { code: 'L4', name: 'Zwolnienie lekarskie', isAbsence: true, requiresOrder: false },
+            { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+            { code: 'UŻ', name: 'Urlop na żądanie', isAbsence: true, requiresOrder: false },
+            { code: 'OP', name: 'Opieka nad dzieckiem art. 188', isAbsence: true, requiresOrder: false },
+          ];
+        }
+        // getEmployeeReportTypes for export - return all work time types
+        return [
+          { code: 'L4', name: 'Zwolnienie lekarskie', isAbsence: true, requiresOrder: false },
+          { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+          { code: 'UŻ', name: 'Urlop na żądanie', isAbsence: true, requiresOrder: false },
+          { code: 'OP', name: 'Opieka nad dzieckiem art. 188', isAbsence: true, requiresOrder: false },
+          { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+        ];
+      });
+      vi.spyOn(prisma.workTimeType, 'findMany').mockImplementation(workTimeTypeMock);
 
       // 3. Mock workTimeReport entries: 232 L4 + 832 UW + 8 UŻ + 16 OP, plus orders and employee pivot
       vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
         // Query for absence reports
-        if (args?.where?.workTimeType?.isAbsence) {
+        if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) {
           return [
             { workTimeTypeCode: 'L4', hours: 232 },
             { workTimeTypeCode: 'UW', hours: 832 },
@@ -1824,35 +1849,35 @@ describe('Analytics reports', () => {
             employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' },
             hours: 3168,
             workTimeTypeCode: 'G',
-            workTimeType: { name: 'Standardowe' },
+            workTimeType: { name: 'Standardowe', isAbsence: false },
           },
           {
             employeeId: 'emp-2',
             employee: { fullName: 'Adam Nowak', firstName: 'Adam', lastName: 'Nowak' },
             hours: 232,
             workTimeTypeCode: 'L4',
-            workTimeType: { name: 'Zwolnienie lekarskie' },
+            workTimeType: { name: 'Zwolnienie lekarskie', isAbsence: true },
           },
           {
             employeeId: 'emp-3',
             employee: { fullName: 'Ewa Wiśniewska', firstName: 'Ewa', lastName: 'Wiśniewska' },
             hours: 832,
             workTimeTypeCode: 'UW',
-            workTimeType: { name: 'Urlop wypoczynkowy' },
+            workTimeType: { name: 'Urlop wypoczynkowy', isAbsence: true },
           },
           {
             employeeId: 'emp-4',
             employee: { fullName: 'Piotr Zieliński', firstName: 'Piotr', lastName: 'Zieliński' },
             hours: 8,
             workTimeTypeCode: 'UŻ',
-            workTimeType: { name: 'Urlop na żądanie' },
+            workTimeType: { name: 'Urlop na żądanie', isAbsence: true },
           },
           {
             employeeId: 'emp-5',
             employee: { fullName: 'Marek Kozłowski', firstName: 'Marek', lastName: 'Kozłowski' },
             hours: 16,
             workTimeTypeCode: 'OP',
-            workTimeType: { name: 'Opieka nad dzieckiem art. 188' },
+            workTimeType: { name: 'Opieka nad dzieckiem art. 188', isAbsence: true },
           },
         ] as any;
       });
@@ -1896,14 +1921,24 @@ describe('Analytics reports', () => {
       ] as any);
 
       // WorkTimeTypes: L4 (absence), SZK (non-absence, no order)
-      vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
-        { code: 'L4', name: 'Zwolnienie', isAbsence: true, requiresOrder: false },
-        { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
-      ] as any);
+      const workTimeTypeMock = vi.fn().mockImplementation(async (args: any) => {
+        const where = args?.where;
+        const isAbsenceQuery = where?.OR?.some((o: any) => o.isAbsence === true || o.code === 'NN');
+        if (isAbsenceQuery) {
+          return [
+            { code: 'L4', name: 'Zwolnienie', isAbsence: true, requiresOrder: false },
+          ];
+        }
+        return [
+          { code: 'L4', name: 'Zwolnienie', isAbsence: true, requiresOrder: false },
+          { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+        ];
+      });
+      vi.spyOn(prisma.workTimeType, 'findMany').mockImplementation(workTimeTypeMock);
 
       // Reports: 16h L4, but employee also has 8h SZK (unsettled non-absence without order)
       vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
-        if (args?.where?.workTimeType?.isAbsence) {
+        if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) {
           return [{ workTimeTypeCode: 'L4', hours: 16 }] as any;
         }
 
@@ -1929,21 +1964,21 @@ describe('Analytics reports', () => {
             employee: { fullName: 'Jan Kowalski' },
             hours: 100,
             workTimeTypeCode: 'G',
-            workTimeType: { name: 'Standardowe' },
+            workTimeType: { name: 'Standardowe', isAbsence: false },
           },
           {
             employeeId: 'emp-1',
             employee: { fullName: 'Jan Kowalski' },
             hours: 16,
             workTimeTypeCode: 'L4',
-            workTimeType: { name: 'Zwolnienie' },
+            workTimeType: { name: 'Zwolnienie', isAbsence: true },
           },
           {
             employeeId: 'emp-1',
             employee: { fullName: 'Jan Kowalski' },
             hours: 8,
             workTimeTypeCode: 'SZK',
-            workTimeType: { name: 'Szkolenie' },
+            workTimeType: { name: 'Szkolenie', isAbsence: false },
           },
         ] as any;
       });
@@ -2003,13 +2038,23 @@ describe('Analytics reports', () => {
       });
 
       // WorkTimeTypes: UW (absence)
-      vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
-        { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
-      ] as any);
+      const workTimeTypeMock = vi.fn().mockImplementation(async (args: any) => {
+        const where = args?.where;
+        const isAbsenceQuery = where?.OR?.some((o: any) => o.isAbsence === true || o.code === 'NN');
+        if (isAbsenceQuery) {
+          return [
+            { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+          ];
+        }
+        return [
+          { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+        ];
+      });
+      vi.spyOn(prisma.workTimeType, 'findMany').mockImplementation(workTimeTypeMock);
 
       // Reports: 16h UW tied to ord-1 (counted in orders AND in absence -> double counted)
       vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
-        if (args?.where?.workTimeType?.isAbsence) {
+        if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) {
           return [{ workTimeTypeCode: 'UW', hours: 16 }] as any;
         }
 
@@ -2035,7 +2080,7 @@ describe('Analytics reports', () => {
             employee: { fullName: 'Jan Kowalski' },
             hours: 100,
             workTimeTypeCode: 'G',
-            workTimeType: { name: 'Standardowe' },
+            workTimeType: { name: 'Standardowe', isAbsence: false },
           },
         ] as any;
       });
@@ -2086,13 +2131,24 @@ describe('Analytics reports', () => {
         return [] as any;
       });
 
-      vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
-        { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
-        { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
-      ] as any);
+      // WorkTimeTypes: UW (absence), SZK (non-absence, no order)
+      const workTimeTypeMock = vi.fn().mockImplementation(async (args: any) => {
+        const where = args?.where;
+        const isAbsenceQuery = where?.OR?.some((o: any) => o.isAbsence === true || o.code === 'NN');
+        if (isAbsenceQuery) {
+          return [
+            { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+          ];
+        }
+        return [
+          { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+          { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+        ];
+      });
+      vi.spyOn(prisma.workTimeType, 'findMany').mockImplementation(workTimeTypeMock);
 
       vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
-        if (args?.where?.workTimeType?.isAbsence) {
+        if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) {
           return [{ workTimeTypeCode: 'UW', hours: 16 }] as any;
         }
 
@@ -2127,14 +2183,14 @@ describe('Analytics reports', () => {
             employee: { fullName: 'Jan Kowalski' },
             hours: 100,
             workTimeTypeCode: 'G',
-            workTimeType: { name: 'Standardowe' },
+            workTimeType: { name: 'Standardowe', isAbsence: false },
           },
           {
             employeeId: 'emp-1',
             employee: { fullName: 'Jan Kowalski' },
             hours: 8,
             workTimeTypeCode: 'SZK',
-            workTimeType: { name: 'Szkolenie' },
+            workTimeType: { name: 'Szkolenie', isAbsence: false },
           },
         ] as any;
       });
@@ -2162,13 +2218,23 @@ describe('Analytics reports', () => {
     it('dynamically includes custom absence type with isAbsence=true and excludes isAbsence=false', async () => {
       vi.spyOn(prisma.order, 'findMany').mockResolvedValue([]);
 
-      vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
-        { code: 'DELEGACJA_URLOP', name: 'Urlop delegacyjny', isAbsence: true, requiresOrder: false },
-        { code: 'PRZESTOJ', name: 'Przestój płatny', isAbsence: false, requiresOrder: false },
-      ] as any);
+      const workTimeTypeMock = vi.fn().mockImplementation(async (args: any) => {
+        const where = args?.where;
+        const isAbsenceQuery = where?.OR?.some((o: any) => o.isAbsence === true || o.code === 'NN');
+        if (isAbsenceQuery) {
+          return [
+            { code: 'DELEGACJA_URLOP', name: 'Urlop delegacyjny', isAbsence: true, requiresOrder: false },
+          ];
+        }
+        return [
+          { code: 'DELEGACJA_URLOP', name: 'Urlop delegacyjny', isAbsence: true, requiresOrder: false },
+          { code: 'PRZESTOJ', name: 'Przestój płatny', isAbsence: false, requiresOrder: false },
+        ];
+      });
+      vi.spyOn(prisma.workTimeType, 'findMany').mockImplementation(workTimeTypeMock);
 
       vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
-        if (args?.where?.workTimeType?.isAbsence) {
+        if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) {
           return [{ workTimeTypeCode: 'DELEGACJA_URLOP', hours: 24 }] as any;
         }
 
@@ -2183,7 +2249,7 @@ describe('Analytics reports', () => {
             employee: { fullName: 'Jan Kowalski' },
             hours: 24,
             workTimeTypeCode: 'DELEGACJA_URLOP',
-            workTimeType: { name: 'Urlop delegacyjny' },
+            workTimeType: { name: 'Urlop delegacyjny', isAbsence: true },
           },
         ] as any;
       });
@@ -2230,12 +2296,22 @@ describe('Analytics reports', () => {
         },
       ] as any);
 
-      vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
-        { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
-      ] as any);
+      const workTimeTypeMock = vi.fn().mockImplementation(async (args: any) => {
+        const where = args?.where;
+        const isAbsenceQuery = where?.OR?.some((o: any) => o.isAbsence === true || o.code === 'NN');
+        if (isAbsenceQuery) {
+          return [
+            { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+          ];
+        }
+        return [
+          { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+        ];
+      });
+      vi.spyOn(prisma.workTimeType, 'findMany').mockImplementation(workTimeTypeMock);
 
       vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
-        if (args?.where?.workTimeType?.isAbsence) {
+        if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) {
           return [{ workTimeTypeCode: 'UW', hours: 16 }] as any;
         }
         return [
@@ -2244,14 +2320,14 @@ describe('Analytics reports', () => {
             employee: { fullName: 'Jan Kowalski' },
             hours: 40,
             workTimeTypeCode: 'G',
-            workTimeType: { name: 'Standardowe' },
+            workTimeType: { name: 'Standardowe', isAbsence: false },
           },
           {
             employeeId: 'emp-1',
             employee: { fullName: 'Jan Kowalski' },
             hours: 16,
             workTimeTypeCode: 'UW',
-            workTimeType: { name: 'Urlop wypoczynkowy' },
+            workTimeType: { name: 'Urlop wypoczynkowy', isAbsence: true },
           },
         ] as any;
       });
@@ -2317,13 +2393,24 @@ describe('Analytics reports', () => {
         return [] as any;
       });
 
-      vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
-        { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
-        { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
-      ] as any);
+      // WorkTimeTypes: UW (absence), SZK (non-absence, no order)
+      const workTimeTypeMock = vi.fn().mockImplementation(async (args: any) => {
+        const where = args?.where;
+        const isAbsenceQuery = where?.OR?.some((o: any) => o.isAbsence === true || o.code === 'NN');
+        if (isAbsenceQuery) {
+          return [
+            { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+          ];
+        }
+        return [
+          { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+          { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+        ];
+      });
+      vi.spyOn(prisma.workTimeType, 'findMany').mockImplementation(workTimeTypeMock);
 
       vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
-        if (args?.where?.workTimeType?.isAbsence) {
+        if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) {
           return [{ workTimeTypeCode: 'UW', hours: 16 }] as any;
         }
 
@@ -2358,14 +2445,14 @@ describe('Analytics reports', () => {
             employee: { fullName: 'Jan Kowalski' },
             hours: 40,
             workTimeTypeCode: 'G',
-            workTimeType: { name: 'Standardowe' },
+            workTimeType: { name: 'Standardowe', isAbsence: false },
           },
           {
             employeeId: 'emp-1',
             employee: { fullName: 'Jan Kowalski' },
             hours: 8,
             workTimeTypeCode: 'SZK',
-            workTimeType: { name: 'Szkolenie' },
+            workTimeType: { name: 'Szkolenie', isAbsence: false },
           },
         ] as any;
       });
@@ -2518,12 +2605,20 @@ describe('Analytics reports', () => {
         return [] as any;
       });
 
-      vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
-        { code: 'G', name: 'Standardowe godziny pracy', isAbsence: false, requiresOrder: true },
-      ] as any);
+      const workTimeTypeMock = vi.fn().mockImplementation(async (args) => {
+        const where = args?.where;
+        const isAbsenceQuery = where?.OR?.some((o) => o.isAbsence === true || o.code === 'NN');
+        if (isAbsenceQuery) {
+          return []; // No absence types
+        }
+        return [
+          { code: 'G', name: 'Standardowe godziny pracy', isAbsence: false, requiresOrder: true },
+        ];
+      });
+      vi.spyOn(prisma.workTimeType, 'findMany').mockImplementation(workTimeTypeMock);
 
       vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
-        if (args?.where?.workTimeType?.isAbsence) {
+        if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) {
           return [] as any;
         }
         if (args?.include?.employee && args?.include?.order && args?.include?.workTimeType) {
@@ -2558,7 +2653,7 @@ describe('Analytics reports', () => {
             employee: { fullName: 'Test Employee', firstName: 'Test', lastName: 'Employee' },
             hours: 35,
             workTimeTypeCode: 'G',
-            workTimeType: { name: 'Standardowe godziny pracy' },
+            workTimeType: { name: 'Standardowe godziny pracy', isAbsence: false },
           },
         ] as any;
       });
@@ -2632,7 +2727,7 @@ describe('Analytics reports', () => {
       ] as any);
 
       vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
-        if (args?.where?.workTimeType?.isAbsence) return [] as any;
+        if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) return [] as any;
         if (args?.include?.employee && args?.include?.order && args?.include?.workTimeType) {
           return [] as any;
         }
@@ -2691,15 +2786,25 @@ describe('getReconciliationDiagnostics — math verification', () => {
       return [] as any;
     });
 
-    // Mock absence types
-    vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
-      { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false },
-      { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
-    ] as any);
+// Mock absence types
+      const workTimeTypeMock = vi.fn().mockImplementation(async (args: any) => {
+        const where = args?.where;
+        const isAbsenceQuery = where?.OR?.some((o: any) => o.isAbsence === true || o.code === 'NN');
+        if (isAbsenceQuery) {
+          return [
+            { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+          ];
+        }
+        return [
+          { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false },
+          { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+        ];
+      });
+      vi.spyOn(prisma.workTimeType, 'findMany').mockImplementation(workTimeTypeMock);
 
-    // Mock workTimeReports
-    const allReports = [
-      { employeeId: 'emp-1', employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' }, date: new Date('2026-08-15T00:00:00.000Z'), hours: 40, workTimeTypeCode: 'G', workTimeType: { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false }, orderId: 'ord-1', order: { orderNumber: 'ZL-1' } },
+      // Mock workTimeReports
+      const allReports = [
+        { employeeId: 'emp-1', employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' }, date: new Date('2026-08-15T00:00:00.000Z'), hours: 40, workTimeTypeCode: 'G', workTimeType: { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false }, orderId: 'ord-1', order: { orderNumber: 'ZL-1' } },
       { employeeId: 'emp-1', employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' }, date: new Date('2026-08-15T00:00:00.000Z'), hours: 16, workTimeTypeCode: 'UW', workTimeType: { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false }, orderId: 'ord-1', order: { orderNumber: 'ZL-1' } },
       { employeeId: 'emp-1', employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' }, date: new Date('2026-08-20T00:00:00.000Z'), hours: 10, workTimeTypeCode: 'G', workTimeType: { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false }, orderId: 'ord-2', order: { orderNumber: 'ZL-2' } },
       { employeeId: 'emp-1', employee: { fullName: 'Jan Kowalski', firstName: 'Jan', lastName: 'Kowalski' }, date: new Date('2026-08-22T00:00:00.000Z'), hours: 8, workTimeTypeCode: 'G', workTimeType: { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false }, orderId: null, order: null },
@@ -2707,7 +2812,7 @@ describe('getReconciliationDiagnostics — math verification', () => {
     ];
 
     vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
-      if (args?.where?.workTimeType?.isAbsence) {
+      if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) {
         // absenceReports for absenceHours calculation
         return [
           { workTimeTypeCode: 'UW', hours: 16 },
@@ -2753,7 +2858,7 @@ describe('getReconciliationDiagnostics — math verification', () => {
 
     // Mock workTimeReports - all matched (no double-counted absences)
     vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
-      if (args?.where?.workTimeType?.isAbsence) {
+      if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) {
         return [{ workTimeTypeCode: 'UW', hours: 10 }] as any;
       }
       if (args?.where?.date?.gte && args?.where?.date?.lte) {
@@ -2786,14 +2891,23 @@ describe('getReconciliationDiagnostics — math verification', () => {
     });
 
     // Mock absence types
-    vi.spyOn(prisma.workTimeType, 'findMany').mockResolvedValue([
-      { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false },
-      { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
-    ] as any);
-
+      const workTimeTypeMock = vi.fn().mockImplementation(async (args) => {
+        const where = args?.where;
+        const isAbsenceQuery = where?.OR?.some((o) => o.isAbsence === true || o.code === 'NN');
+        if (isAbsenceQuery) {
+          return [
+            { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+          ];
+        }
+        return [
+          { code: 'G', name: 'Godziny standardowe', isAbsence: false, requiresOrder: false },
+          { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+        ];
+      });
+      vi.spyOn(prisma.workTimeType, 'findMany').mockImplementation(workTimeTypeMock);
     // Mock workTimeReports - absence WITH order in closure (Direction B: double counted)
     vi.spyOn(prisma.workTimeReport, 'findMany').mockImplementation(async (args: any) => {
-      if (args?.where?.workTimeType?.isAbsence) {
+      if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) {
         return [{ workTimeTypeCode: 'UW', hours: 10 }] as any;
       }
       if (args?.where?.date?.gte && args?.where?.date?.lte) {
@@ -2860,14 +2974,25 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
         }),
       },
       workTimeType: {
-        findMany: vi.fn().mockResolvedValue([
-          { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
-          { code: 'UW', name: 'Urlop', isAbsence: true, requiresOrder: false },
-        ]),
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          const where = args?.where;
+          const isAbsenceQuery = where?.OR?.some((o: any) => o.isAbsence === true || o.code === 'NN');
+          if (isAbsenceQuery) {
+            // absenceTypes query: return only absence types
+            return [
+              { code: 'UW', name: 'Urlop', isAbsence: true, requiresOrder: false },
+            ];
+          }
+          // getEmployeeReportTypes or other queries: return all types
+          return [
+            { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
+            { code: 'UW', name: 'Urlop', isAbsence: true, requiresOrder: false },
+          ];
+        }),
       },
       workTimeReport: {
         findMany: vi.fn().mockImplementation(async (args: any) => {
-          if (args?.where?.workTimeType?.isAbsence) {
+          if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) {
             return [];
           }
           if (args?.include?.employee && args?.include?.order) {
@@ -2879,7 +3004,7 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
               employee: { fullName: 'Jan Kowalski' },
               hours: 40,
               workTimeTypeCode: 'G',
-              workTimeType: { name: 'Standardowe' },
+              workTimeType: { name: 'Standardowe', isAbsence: false },
             },
           ];
         }),
@@ -2909,13 +3034,20 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
         findMany: vi.fn().mockResolvedValue([]), // 0 order hours
       },
       workTimeType: {
-        findMany: vi.fn().mockResolvedValue([
-          { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
-        ]),
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          const where = args?.where;
+          const isAbsenceQuery = where?.OR?.some((o: any) => o.isAbsence === true || o.code === 'NN');
+          if (isAbsenceQuery) {
+            return []; // No absence types in this test
+          }
+          return [
+            { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
+          ];
+        }),
       },
       workTimeReport: {
         findMany: vi.fn().mockImplementation(async (args: any) => {
-          if (args?.where?.workTimeType?.isAbsence) {
+          if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) {
             return []; // 0 absence hours
           }
           if (args?.include?.employee && args?.include?.order) {
@@ -2930,7 +3062,7 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
               employee: { fullName: 'Jan Kowalski' },
               hours: 8,
               workTimeTypeCode: 'G',
-              workTimeType: { name: 'Standardowe' },
+              workTimeType: { name: 'Standardowe', isAbsence: false },
             },
           ];
         }),
@@ -3035,14 +3167,21 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
         }),
       },
       workTimeType: {
-        findMany: vi.fn().mockResolvedValue([
-          { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
-          { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
-        ]),
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          const where = args?.where;
+          const isAbsenceQuery = where?.OR?.some((o: any) => o.isAbsence === true || o.code === 'NN');
+          if (isAbsenceQuery) {
+            return []; // No absence types in this test
+          }
+          return [
+            { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+            { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+          ];
+        }),
       },
       workTimeReport: {
         findMany: vi.fn().mockImplementation(async (args: any) => {
-          if (args?.where?.workTimeType?.isAbsence) return [];
+          if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) return [];
           if (args?.include?.employee && args?.include?.order) return stateAReports;
           return stateAReports;
         }),
@@ -3118,13 +3257,20 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
         }),
       },
       workTimeType: {
-        findMany: vi.fn().mockResolvedValue([
-          { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
-        ]),
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          const where = args?.where;
+          const isAbsenceQuery = where?.OR?.some((o: any) => o.isAbsence === true || o.code === 'NN');
+          if (isAbsenceQuery) {
+            return [];
+          }
+          return [
+            { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+          ];
+        }),
       },
       workTimeReport: {
         findMany: vi.fn().mockImplementation(async (args: any) => {
-          if (args?.where?.workTimeType?.isAbsence) return [];
+          if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) return [];
           if (args?.include?.employee && args?.include?.order) return stateAReports;
           return stateAReports;
         }),
@@ -3222,13 +3368,20 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
         }),
       },
       workTimeType: {
-        findMany: vi.fn().mockResolvedValue([
-          { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
-        ]),
+        findMany: vi.fn().mockImplementation(async (args) => {
+          const where = args?.where;
+          const isAbsenceQuery = where?.OR?.some((o) => o.isAbsence === true || o.code === "NN");
+          if (isAbsenceQuery) {
+            return [];
+          }
+          return [
+            { code: "G", name: "Standardowe", isAbsence: false, requiresOrder: true },
+          ];
+        }),
       },
       workTimeReport: {
         findMany: vi.fn().mockImplementation(async (args: any) => {
-          if (args?.where?.workTimeType?.isAbsence) return [];
+          if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) return [];
           if (args?.include?.employee && args?.include?.order) return stateAReports;
           return stateAReports;
         }),
@@ -3311,13 +3464,20 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
         }),
       },
       workTimeType: {
-        findMany: vi.fn().mockResolvedValue([
-          { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
-        ]),
+        findMany: vi.fn().mockImplementation(async (args) => {
+          const where = args?.where;
+          const isAbsenceQuery = where?.OR?.some((o) => o.isAbsence === true || o.code === "NN");
+          if (isAbsenceQuery) {
+            return [];
+          }
+          return [
+            { code: "G", name: "Standardowe", isAbsence: false, requiresOrder: true },
+          ];
+        }),
       },
       workTimeReport: {
         findMany: vi.fn().mockImplementation(async (args: any) => {
-          if (args?.where?.workTimeType?.isAbsence) return [];
+          if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) return [];
           if (args?.include?.employee && args?.include?.order) return stateAReports;
           return stateAReports;
         }),
@@ -3416,14 +3576,21 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
         }),
       },
       workTimeType: {
-        findMany: vi.fn().mockResolvedValue([
-          { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
-          { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
-        ]),
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          const where = args?.where;
+          const isAbsenceQuery = where?.OR?.some((o: any) => o.isAbsence === true || o.code === 'NN');
+          if (isAbsenceQuery) {
+            return [];
+          }
+          return [
+            { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: true },
+            { code: 'SZK', name: 'Szkolenie', isAbsence: false, requiresOrder: false },
+          ];
+        }),
       },
       workTimeReport: {
         findMany: vi.fn().mockImplementation(async (args: any) => {
-          if (args?.where?.workTimeType?.isAbsence) return [];
+          if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) return [];
           if (args?.include?.employee && args?.include?.order) return stateAReports;
           return stateAReports;
         }),
@@ -3490,14 +3657,23 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
         }),
       },
       workTimeType: {
-        findMany: vi.fn().mockResolvedValue([
-          { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
-          { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
-        ]),
+        findMany: vi.fn().mockImplementation(async (args: any) => {
+          const where = args?.where;
+          const isAbsenceQuery = where?.OR?.some((o: any) => o.isAbsence === true || o.code === 'NN');
+          if (isAbsenceQuery) {
+            return [
+              { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+            ];
+          }
+          return [
+            { code: 'G', name: 'Standardowe', isAbsence: false, requiresOrder: false },
+            { code: 'UW', name: 'Urlop wypoczynkowy', isAbsence: true, requiresOrder: false },
+          ];
+        }),
       },
       workTimeReport: {
         findMany: vi.fn().mockImplementation(async (args: any) => {
-          if (args?.where?.workTimeType?.isAbsence) {
+          if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) {
             return [{ workTimeTypeCode: 'UW', hours: 16 }];
           }
           if (args?.include?.employee && args?.include?.order) {
@@ -3540,21 +3716,21 @@ describe('BLOCKER-2 — Consistent Snapshot & Server-Side Invariant Guard', () =
               employee: { fullName: 'Jan Kowalski' },
               hours: 40,
               workTimeTypeCode: 'G',
-              workTimeType: { name: 'Standardowe' },
+              workTimeType: { name: 'Standardowe', isAbsence: false },
             },
             {
               employeeId: 'emp-1',
               employee: { fullName: 'Jan Kowalski' },
               hours: 16,
               workTimeTypeCode: 'UW',
-              workTimeType: { name: 'Urlop wypoczynkowy' },
+              workTimeType: { name: 'Urlop wypoczynkowy', isAbsence: true },
             },
             {
               employeeId: 'emp-1',
               employee: { fullName: 'Jan Kowalski' },
               hours: 8,
               workTimeTypeCode: 'G',
-              workTimeType: { name: 'Standardowe' },
+              workTimeType: { name: 'Standardowe', isAbsence: false },
             },
           ];
         }),

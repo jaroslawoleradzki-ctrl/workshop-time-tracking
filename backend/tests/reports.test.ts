@@ -514,7 +514,7 @@ describe('Work shift tracking validations and endpoints (v0.5.9)', () => {
     expect(res.body.report.workShift).toBe('THIRD');
   });
 
-  it('rejects worked-time entry without shift with 400 WORK_SHIFT_REQUIRED', async () => {
+  it('accepts worked-time entry without shift and stores null (shift no longer collected)', async () => {
     vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue({
       code: 'G',
       name: 'Godziny standardowe',
@@ -522,18 +522,42 @@ describe('Work shift tracking validations and endpoints (v0.5.9)', () => {
       isAbsence: false,
     } as any);
 
+    let createdData: any = null;
+    vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => {
+      const tx = {
+        $executeRaw: vi.fn(),
+        workTimeReport: {
+          create: vi.fn().mockImplementation(async ({ data }: any) => {
+            createdData = data;
+            return {
+              id: 'r-noshift-1',
+              date: new Date('2026-08-03T00:00:00.000Z'),
+              employeeId: EMPLOYEE_ID,
+              orderId: null,
+              hours: 8,
+              workTimeTypeCode: 'G',
+              workShift: data.workShift,
+              missingCard: false,
+              createdByUserId: USER_ID,
+            };
+          }),
+        },
+      };
+      return callback(tx);
+    });
+
     const res = await authenticatedPost('/api/reports', {
       date: '2026-08-03',
       employeeId: EMPLOYEE_ID,
       hours: 8,
       workTimeTypeCode: 'G',
-    }).expect(400);
+    }).expect(201);
 
-    expect(res.body.code).toBe('WORK_SHIFT_REQUIRED');
-    expect(res.body.message).toMatch(/Wybór zmiany/i);
+    expect(createdData.workShift).toBeNull();
+    expect(res.body.report.workShift).toBeNull();
   });
 
-  it('rejects worked-time entry with invalid shift with 400 WORK_SHIFT_REQUIRED', async () => {
+  it('rejects worked-time entry with invalid shift with 400 INVALID_WORK_SHIFT', async () => {
     vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue({
       code: 'G',
       name: 'Godziny standardowe',
@@ -549,7 +573,7 @@ describe('Work shift tracking validations and endpoints (v0.5.9)', () => {
       workShift: 'FOURTH',
     }).expect(400);
 
-    expect(res.body.code).toBe('WORK_SHIFT_REQUIRED');
+    expect(res.body.code).toBe('INVALID_WORK_SHIFT');
   });
 
   it('allows absence entry with NULL shift on a working day', async () => {
@@ -780,7 +804,7 @@ describe('Work shift tracking validations and endpoints (v0.5.9)', () => {
     expect(res.body[0].workTimeTypeCode).toBe('G');
   });
 
-  it('requires selecting a shift when modifying a historical record without shift', async () => {
+  it('preserves historical shift when editing a worked entry without supplying workShift', async () => {
     vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue({
       code: 'G',
       name: 'Godziny standardowe',
@@ -795,9 +819,25 @@ describe('Work shift tracking validations and endpoints (v0.5.9)', () => {
       orderId: null,
       hours: 8,
       workTimeTypeCode: 'G',
-      workShift: null,
+      workShift: 'FIRST',
       deletedAt: null,
     } as any);
+
+    let updateData: any = null;
+    vi.spyOn(prisma.workTimeReport, 'update').mockImplementation(async ({ data }: any) => {
+      updateData = data;
+      return {
+        id: 'r-hist-1',
+        date: new Date('2026-08-03T00:00:00.000Z'),
+        employeeId: EMPLOYEE_ID,
+        orderId: null,
+        hours: 8,
+        workTimeTypeCode: 'G',
+        workShift: data.workShift,
+        missingCard: false,
+        modifiedByUserId: USER_ID,
+      };
+    });
 
     const res = await request(app)
       .put('/api/reports/r-hist-1')
@@ -809,8 +849,60 @@ describe('Work shift tracking validations and endpoints (v0.5.9)', () => {
         workTimeTypeCode: 'G',
         // workShift omitted
       })
-      .expect(400);
+      .expect(200);
 
-    expect(res.body.code).toBe('WORK_SHIFT_REQUIRED');
+    expect(updateData.workShift).toBe('FIRST');
+    expect(res.body.report.workShift).toBe('FIRST');
+  });
+
+  it('keeps null shift when editing a historical entry that has no shift', async () => {
+    vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue({
+      code: 'G',
+      name: 'Godziny standardowe',
+      requiresOrder: false,
+      isAbsence: false,
+    } as any);
+
+    vi.spyOn(prisma.workTimeReport, 'findUnique').mockResolvedValue({
+      id: 'r-hist-null',
+      date: new Date('2026-08-03T00:00:00.000Z'),
+      employeeId: EMPLOYEE_ID,
+      orderId: null,
+      hours: 8,
+      workTimeTypeCode: 'G',
+      workShift: null,
+      deletedAt: null,
+    } as any);
+
+    let updateData: any = null;
+    vi.spyOn(prisma.workTimeReport, 'update').mockImplementation(async ({ data }: any) => {
+      updateData = data;
+      return {
+        id: 'r-hist-null',
+        date: new Date('2026-08-03T00:00:00.000Z'),
+        employeeId: EMPLOYEE_ID,
+        orderId: null,
+        hours: 8,
+        workTimeTypeCode: 'G',
+        workShift: data.workShift,
+        missingCard: false,
+        modifiedByUserId: USER_ID,
+      };
+    });
+
+    const res = await request(app)
+      .put('/api/reports/r-hist-null')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        date: '2026-08-03',
+        employeeId: EMPLOYEE_ID,
+        hours: 8,
+        workTimeTypeCode: 'G',
+        // workShift omitted
+      })
+      .expect(200);
+
+    expect(updateData.workShift).toBeNull();
+    expect(res.body.report.workShift).toBeNull();
   });
 });

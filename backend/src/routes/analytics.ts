@@ -28,6 +28,11 @@ import {
   formatGeneratedAt,
 } from '../utils/excel-report';
 
+// NN is the client-approved unpaid absence; legacy dictionary flags may be false.
+const UNPAID_ABSENCE_CODE = 'NN';
+const isReportingAbsence = (report: { workTimeTypeCode: string; workTimeType?: { isAbsence?: boolean } | null }) =>
+  report.workTimeTypeCode === UNPAID_ABSENCE_CODE || Boolean(report.workTimeType?.isAbsence);
+
 const router = Router();
 
 // Auth required
@@ -39,29 +44,9 @@ type EmployeeReportFilters = {
   employeeId?: string;
 };
 
-export type ShiftDimension = 'FIRST' | 'SECOND' | 'THIRD' | 'UNSPECIFIED' | 'ABSENCE';
-
-export const SHIFT_LABELS: Record<ShiftDimension, string> = {
-  FIRST: 'I',
-  SECOND: 'II',
-  THIRD: 'III',
-  UNSPECIFIED: 'Brak danych',
-  ABSENCE: 'Nie dotyczy',
-};
-
-export const SHIFT_ORDER: Record<ShiftDimension, number> = {
-  FIRST: 1,
-  SECOND: 2,
-  THIRD: 3,
-  UNSPECIFIED: 4,
-  ABSENCE: 5,
-};
-
 export type EmployeeReportRow = {
   employeeId: string;
   employeeName: string;
-  workShift: ShiftDimension;
-  workShiftLabel: string;
   suma: number;
   sumaBezNadgodzin: number;
   [workTimeTypeCode: string]: string | number;
@@ -118,10 +103,7 @@ export const OVERTIME_CODES = ['NDR', 'NS'];
 type InternalPivotRow = {
   employeeId: string;
   employeeName: string;
-  workShift: ShiftDimension;
-  workShiftLabel: string;
   sortKey: string;
-  shiftOrder: number;
   suma: number;
   sumaBezNadgodzin: number;
   counts: Record<string, number>;
@@ -182,9 +164,7 @@ export async function getAbsencePeriodRows(
         gte: filters.dateFrom ? new Date(`${filters.dateFrom}T00:00:00.000Z`) : undefined,
         lte: filters.dateTo ? new Date(`${filters.dateTo}T00:00:00.000Z`) : undefined,
       },
-      workTimeType: {
-        isAbsence: true,
-      },
+      OR: [{ workTimeType: { isAbsence: true } }, { workTimeTypeCode: UNPAID_ABSENCE_CODE }],
     },
     include: {
       employee: true,
@@ -216,7 +196,7 @@ export async function getAbsencePeriodRows(
   };
 
   for (const report of reports) {
-    if (!report.workTimeType.isAbsence) continue;
+    if (!isReportingAbsence(report)) continue;
     const dateKey = formatDateKey(report.date);
     if (!(await getDecision(dateKey)).isWorkingDay) continue;
     const employeeName = formatEmployeeName(report.employee);
@@ -304,36 +284,19 @@ export async function getEmployeeReportRows(
   const pivot: Record<string, InternalPivotRow> = {};
 
   reports.forEach((report) => {
-    const isAbsence = report.workTimeType?.isAbsence ?? false;
-    let shiftKey: ShiftDimension;
-    if (isAbsence) {
-      shiftKey = 'ABSENCE';
-    } else if (report.workShift === 'FIRST') {
-      shiftKey = 'FIRST';
-    } else if (report.workShift === 'SECOND') {
-      shiftKey = 'SECOND';
-    } else if (report.workShift === 'THIRD') {
-      shiftKey = 'THIRD';
-    } else {
-      shiftKey = 'UNSPECIFIED';
-    }
+    const employeeId = report.employeeId;
 
-    const rowKey = `${report.employeeId}\u0000${shiftKey}`;
-
-    if (!pivot[rowKey]) {
+    if (!pivot[employeeId]) {
       const emp = report.employee;
       const lastNameForSort = (emp.lastName || (emp.fullName ? emp.fullName.trim().split(' ').slice(-1)[0] : '') || '').trim();
       const firstNameForSort = (emp.firstName || (emp.fullName ? emp.fullName.trim().split(' ').slice(0, -1).join(' ') : '') || '').trim();
       const sortKey = `${lastNameForSort} ${firstNameForSort}`.trim().toLowerCase();
       const employeeName = formatEmployeeName(emp);
 
-      pivot[rowKey] = {
-        employeeId: report.employeeId,
+      pivot[employeeId] = {
+        employeeId,
         employeeName,
-        workShift: shiftKey,
-        workShiftLabel: SHIFT_LABELS[shiftKey],
         sortKey,
-        shiftOrder: SHIFT_ORDER[shiftKey],
         suma: 0,
         sumaBezNadgodzin: 0,
         counts: {},
@@ -342,27 +305,26 @@ export async function getEmployeeReportRows(
 
     const hours = Number(report.hours);
     const code = report.workTimeTypeCode;
+    const isAbsence = isReportingAbsence(report);
     const isOvertime =
       OVERTIME_CODES.includes(code) ||
       code.startsWith('ND') ||
       code.startsWith('NS') ||
       (report.workTimeType?.name?.toLowerCase().includes('nadgodzin') ?? false);
 
-    pivot[rowKey].counts[code] = (pivot[rowKey].counts[code] || 0) + hours;
-    pivot[rowKey].suma += hours;
-    if (!isOvertime) {
-      pivot[rowKey].sumaBezNadgodzin += hours;
+    pivot[employeeId].counts[code] = (pivot[employeeId].counts[code] || 0) + hours;
+    if (!isAbsence) {
+      pivot[employeeId].suma += hours;
+      if (!isOvertime) pivot[employeeId].sumaBezNadgodzin += hours;
+    } else if (code !== UNPAID_ABSENCE_CODE) {
+      pivot[employeeId].sumaBezNadgodzin += hours;
     }
   });
 
   return Object.values(pivot)
-    .sort((a, b) => {
-      const cmp = a.sortKey.localeCompare(b.sortKey, 'pl');
-      if (cmp !== 0) return cmp;
-      return a.shiftOrder - b.shiftOrder;
-    })
+    .sort((a, b) => a.sortKey.localeCompare(b.sortKey, 'pl'))
     .map((item) => {
-      const { sortKey, shiftOrder, counts, ...rest } = item;
+      const { sortKey, counts, ...rest } = item;
       return {
         ...rest,
         ...counts,
@@ -423,6 +385,8 @@ router.get('/dashboard', async (_req: AuthRequest, res: Response) => {
       where: {
         deletedAt: null,
         date: { gte: startOfToday, lte: endOfToday },
+        workTimeTypeCode: { not: UNPAID_ABSENCE_CODE },
+        workTimeType: { isAbsence: false },
       },
       _sum: { hours: true },
     });
@@ -431,6 +395,8 @@ router.get('/dashboard', async (_req: AuthRequest, res: Response) => {
       where: {
         deletedAt: null,
         date: { gte: startOfMonth, lte: endOfMonth },
+        workTimeTypeCode: { not: UNPAID_ABSENCE_CODE },
+        workTimeType: { isAbsence: false },
       },
       _sum: { hours: true },
     });
@@ -440,7 +406,7 @@ router.get('/dashboard', async (_req: AuthRequest, res: Response) => {
       where: { deletedAt: null, status: OrderStatus.OPEN, isActive: true },
       include: {
         reports: {
-          where: { deletedAt: null },
+          where: { deletedAt: null, workTimeTypeCode: { not: UNPAID_ABSENCE_CODE } },
           select: { hours: true },
         },
       },
@@ -554,6 +520,7 @@ export async function getOrderReportRows(
               reports: {
                 some: {
                   deletedAt: null,
+                  workTimeTypeCode: { not: UNPAID_ABSENCE_CODE },
                   date: reportDateRange,
                 },
               },
@@ -565,6 +532,7 @@ export async function getOrderReportRows(
       reports: {
         where: {
           deletedAt: null,
+          workTimeTypeCode: { not: UNPAID_ABSENCE_CODE },
           // Fetch all non-deleted reports up to the report end.  The same set
           // supplies periodActualHours and cumulativeActualHours below.
           date: { lte: reportDateRange.lte },
@@ -668,6 +636,7 @@ export async function getReconciliationDiagnostics(
           reports: {
             some: {
               deletedAt: null,
+              workTimeTypeCode: { not: UNPAID_ABSENCE_CODE },
               date: {
                 gte: new Date(`${dateFrom}T00:00:00.000Z`),
                 lte: new Date(`${dateTo}T23:59:59.999Z`),
@@ -683,7 +652,7 @@ export async function getReconciliationDiagnostics(
 
   // Compute signed contribution for each report to the difference (settledHours - employeeHours)
   // settledHours = ordersHours + absenceHours
-  // employeeHours = sum of all reports
+  // employeeHours = attendance + absences other than NN
   // For each report:
   // - absence + orderInClosure: counted in both absenceHours AND ordersHours → contribution = +hours
   // - absence + no orderInClosure: counted in absenceHours only → contribution = 0
@@ -692,7 +661,9 @@ export async function getReconciliationDiagnostics(
   const diagnostics: ReconciliationDiagnosticRecord[] = [];
 
   for (const report of allReports) {
-    const isAbsence = report.workTimeType.isAbsence;
+    // NN contributes to neither side of the reconciliation.
+    if (report.workTimeTypeCode === UNPAID_ABSENCE_CODE) continue;
+    const isAbsence = isReportingAbsence(report);
     const orderId = report.orderId;
     const orderInClosure = orderId ? orderIdsInClosure.has(orderId) : false;
     const hours = Number(report.hours);
@@ -776,7 +747,7 @@ export async function getClosureControlSummary(
     // 2. Nieobecności dynamicznie wyznaczane ze słownika WorkTimeType (isAbsence: true) przez tx
     const [absenceTypes, absenceReports] = await Promise.all([
       tx.workTimeType.findMany({
-        where: { isAbsence: true },
+        where: { OR: [{ isAbsence: true }, { code: UNPAID_ABSENCE_CODE }] },
         select: { code: true, name: true },
         orderBy: [{ createdAt: 'asc' }, { code: 'asc' }],
       }),
@@ -787,9 +758,7 @@ export async function getClosureControlSummary(
             gte: new Date(`${dateFrom}T00:00:00.000Z`),
             lte: new Date(`${dateTo}T00:00:00.000Z`),
           },
-          workTimeType: {
-            isAbsence: true,
-          },
+          OR: [{ workTimeType: { isAbsence: true } }, { workTimeTypeCode: UNPAID_ABSENCE_CODE }],
         },
         select: {
           workTimeTypeCode: true,
@@ -813,10 +782,10 @@ export async function getClosureControlSummary(
         const rounded = Math.round(hours * 100) / 100;
         absences.push({
           code: type.code,
-          name: type.name,
+          name: type.code === UNPAID_ABSENCE_CODE ? `${type.name} — niepłatne, poza sumą` : type.name,
           hours: rounded,
         });
-        totalAbsenceHours += rounded;
+        if (type.code !== UNPAID_ABSENCE_CODE) totalAbsenceHours += rounded;
       }
     }
 
@@ -826,10 +795,10 @@ export async function getClosureControlSummary(
         const rounded = Math.round(hours * 100) / 100;
         absences.push({
           code,
-          name: code,
+          name: code === UNPAID_ABSENCE_CODE ? `${code} — niepłatne, poza sumą` : code,
           hours: rounded,
         });
-        totalAbsenceHours += rounded;
+        if (code !== UNPAID_ABSENCE_CODE) totalAbsenceHours += rounded;
       }
     }
 
@@ -844,9 +813,23 @@ export async function getClosureControlSummary(
       },
       tx,
     );
+    // Build a set of absence codes for filtering (from absenceTypes already fetched above)
+    const absenceCodes = new Set(absenceTypes.map((t) => t.code));
     const totalEmployeeHours =
       Math.round(
-        employeeRows.reduce((sum, row) => sum + (Number(row.suma) || 0), 0) * 100,
+        employeeRows.reduce((sum, row) => {
+          // Each row is one employee (no shift breakdown).
+          // suma = worked hours with overtime.
+          // Dynamic columns contain both work and absence hours.
+          // We need: worked hours (suma) + paid absence hours from dynamic columns (excluding NN).
+          const { employeeId, employeeName, suma, sumaBezNadgodzin, ...counts } = row;
+          const absenceHours = Object.entries(counts).reduce((hours, [code, value]) => {
+            if (code === UNPAID_ABSENCE_CODE) return hours;
+            if (!absenceCodes.has(code)) return hours;
+            return hours + (Number(value) || 0);
+          }, 0);
+          return sum + Number(suma) + absenceHours;
+        }, 0) * 100,
       ) / 100;
 
     // 4. Różnica i status
@@ -1190,7 +1173,6 @@ router.get('/export/by-employee', async (req: AuthRequest, res: Response) => {
 
     const headers = [
       'Pracownik',
-      'Zmiana',
       'Suma godzin z nadgodzinami',
       'Suma godzin bez nadgodzin',
       ...workTimeTypes.map((type) => `${type.code} (${type.name})`),
@@ -1198,14 +1180,13 @@ router.get('/export/by-employee', async (req: AuthRequest, res: Response) => {
 
     const data = rows.map((row) => [
       row.employeeName,
-      row.workShiftLabel,
       row.suma,
       row.sumaBezNadgodzin,
       ...workTimeTypes.map((type) => Number(row[type.code]) || 0),
     ]);
     const numberColumns = Array.from(
-      { length: headers.length - 2 },
-      (_, index) => index + 3,
+      { length: workTimeTypes.length + 2 },
+      (_, index) => index + 2,
     );
 
     let empNameVal = 'Wszyscy pracownicy';

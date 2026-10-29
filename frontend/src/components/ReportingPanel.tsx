@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import type { UserSession } from '../App';
 import AbsenceRangeModal from './AbsenceRangeModal';
+import ContextHelpButton from './ContextHelpButton';
 
 const WEEKDAY_ABBREVIATIONS = ['nd', 'pn', 'wt', 'śr', 'czw', 'pt', 'sob'];
 
@@ -140,9 +141,10 @@ interface WarningResponse {
 interface ReportingPanelProps {
   token: string;
   user: UserSession;
+  onOpenHelp?: (chapter: string) => void;
 }
 
-export default function ReportingPanel({ token }: ReportingPanelProps) {
+export default function ReportingPanel({ token, onOpenHelp }: ReportingPanelProps) {
   // Global Dictionaries
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [activeOrders, setActiveOrders] = useState<Order[]>([]);
@@ -201,7 +203,6 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [hoursInput, setHoursInput] = useState('8.00');
   const [selectedWorkType, setSelectedWorkType] = useState('G');
-  const [workShift, setWorkShift] = useState<'FIRST' | 'SECOND' | 'THIRD' | ''>('FIRST');
   const [missingCard, setMissingCard] = useState(false);
 
   // Autocomplete UI states
@@ -433,7 +434,6 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
         ? getDefaultWorkType(cachedDecision, workTypes, currentDate)
         : '';
     setSelectedWorkType(defaultType);
-    setWorkShift('');
     setMissingCard(false);
     setValidationError('');
     setEditingReportId(null);
@@ -467,7 +467,6 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
 
     const defaultType = getDefaultWorkType(calendarDecision, workTypes, currentDate);
     setSelectedWorkType(defaultType);
-    setWorkShift('');
   }, [dictionariesLoaded, currentEmployee, currentDate, calendarDecision, workTypes]);
 
   // Navigation handlers
@@ -622,13 +621,6 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
       return;
     }
 
-    if (!currentType.isAbsence) {
-      if (!workShift || !['FIRST', 'SECOND', 'THIRD'].includes(workShift)) {
-        setValidationError('Wybór zmiany (I, II lub III zmiana) jest wymagany dla czasu pracy.');
-        return;
-      }
-    }
-
     // Pre-flight warning check
     if (!bypassWarningsCheck) {
       try {
@@ -668,8 +660,6 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
     try {
       const url = editingReportId ? `/api/reports/${editingReportId}` : '/api/reports';
       const method = editingReportId ? 'PUT' : 'POST';
-      const currentType = workTypes.find(t => t.code === selectedWorkType);
-      const isAbsence = currentType?.isAbsence ?? false;
 
       const res = await fetch(url, {
         method,
@@ -683,7 +673,6 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
           orderId: selectedOrder?.id || null,
           hours,
           workTimeTypeCode: selectedWorkType,
-          workShift: isAbsence ? null : workShift,
           missingCard
         })
       });
@@ -714,14 +703,6 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
     formModeRef.current = 'editing';
     setEditingReportId(entry.id);
     setSelectedWorkType(entry.workTimeTypeCode);
-    const isEntryAbsence = entry.workTimeType?.isAbsence ?? false;
-    if (isEntryAbsence) {
-      setWorkShift('');
-    } else if (entry.workShift === 'FIRST' || entry.workShift === 'SECOND' || entry.workShift === 'THIRD') {
-      setWorkShift(entry.workShift);
-    } else {
-      setWorkShift('');
-    }
     setHoursInput(entry.hours.toString());
 
     if (entry.order) {
@@ -906,6 +887,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
         <h2 style={{ fontFamily: 'var(--font-header)', fontSize: '1.8rem', margin: 0 }}>
           Raportowanie Godzin Pracy
         </h2>
+        <ContextHelpButton chapter="rejestracja-czasu" onOpenHelp={onOpenHelp} />
       </div>
 
       {/* Główna akcja (Wybór daty) */}
@@ -1045,12 +1027,7 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                 value={selectedWorkType}
                 onChange={e => {
                   markFormModified();
-                  const newCode = e.target.value;
-                  setSelectedWorkType(newCode);
-                  const targetType = workTypes.find(t => t.code === newCode);
-                  if (targetType?.isAbsence) {
-                    setWorkShift('');
-                  }
+                  setSelectedWorkType(e.target.value);
                   setValidationError('');
                 }}
               >
@@ -1060,33 +1037,6 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                     {t.code} - {t.name}
                   </option>
                 ))}
-              </select>
-            </div>
-
-            {/* Shift selector */}
-            <div className="form-group">
-              <label className="form-label" htmlFor="workShiftSelect">Zmiana</label>
-              <select
-                id="workShiftSelect"
-                className="form-control"
-                value={workTypes.find(t => t.code === selectedWorkType)?.isAbsence ? '' : workShift}
-                disabled={workTypes.find(t => t.code === selectedWorkType)?.isAbsence ?? false}
-                onChange={e => {
-                  markFormModified();
-                  setWorkShift(e.target.value as 'FIRST' | 'SECOND' | 'THIRD' | '');
-                  setValidationError('');
-                }}
-              >
-                {workTypes.find(t => t.code === selectedWorkType)?.isAbsence ? (
-                  <option value="">Nie dotyczy (nieobecność)</option>
-                ) : (
-                  <>
-                    <option value="">-- Wybierz zmianę --</option>
-                    <option value="FIRST">I</option>
-                    <option value="SECOND">II</option>
-                    <option value="THIRD">III</option>
-                  </>
-                )}
               </select>
             </div>
 
@@ -1277,15 +1227,11 @@ export default function ReportingPanel({ token }: ReportingPanelProps) {
                         }}>
                           {entry.workTimeTypeCode}
                         </span>
-                        {entry.workShift ? (
+                        {entry.workShift && (
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
                             {entry.workShift === 'FIRST' ? 'I zmiana' : entry.workShift === 'SECOND' ? 'II zmiana' : 'III zmiana'}
                           </div>
-                        ) : !entry.workTimeType.isAbsence ? (
-                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.15rem', fontStyle: 'italic' }}>
-                            Brak danych o zmianie
-                          </div>
-                        ) : null}
+                        )}
                         {entry.missingCard && (
                           <div style={{ fontSize: '0.7rem', color: 'var(--danger-color)', marginTop: '0.15rem', fontWeight: 'bold' }}>
                             Brak karty

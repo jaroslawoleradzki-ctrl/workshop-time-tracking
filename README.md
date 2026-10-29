@@ -67,15 +67,15 @@ Zapewnia administratorom syntetyczne spojrzenie na statusy produkcyjne:
 
 ### 3. Panel Szybkiego Raportowania (Raportowanie)
 * **Wyszukiwarka pracowników**: Panel wyboru filtrujący na żywo po imieniu, nazwisku i numerze ewidencyjnym pracownika.
-* **Ewidencja zmian roboczych**: Każdy wpis obecności (czasu przepracowanego) rejestruje przypisaną zmianę (`I`, `II` lub `III` zmiana). Dla nieobecności pole jest automatycznie blokowane i zapisywane jako null.
+* **Ewidencja czasu pracy**: Wpis obecności (czasu przepracowanego) obejmuje rodzaj czasu, opcjonalne zlecenie, liczbę godzin i oznaczenie braku karty. Formularz rejestracji nie zawiera dodatkowych pól, a zapis jest zoptymalizowany pod szybkie wprowadzanie.
 * **Optymalizacja pod kątem szybkiego pisania**: Cały formularz obsługuje się bez użycia myszy – wciśnięcie klawisza `Enter` zatwierdza wybór zlecenia, pozwala wpisać godziny i zapisuje wpis, po czym kursor automatycznie wraca do wyboru kolejnego zlecenia.
 * **Przycisk "Dzisiaj"**: Jedno kliknięcie ustawia datę raportu na dzisiejszy dzień w lokalnej strefie czasowej, automatycznie odświeżając widoczne wpisy.
-* **Kopiowanie poprzedniego dnia**: Automatyczne powielenie struktury wpisów z ostatniego dnia roboczego wybranego pracownika (z zachowaniem przypisanych zmian `I`, `II`, `III` dla obecności) w celu przyspieszenia ewidencji powtarzalnych prac.
+* **Kopiowanie poprzedniego dnia**: Automatyczne powielenie struktury wpisów z ostatniego dnia roboczego wybranego pracownika w celu przyspieszenia ewidencji powtarzalnych prac.
 * **Ostrzeżenia dobowe (Soft Validation)**: Wyświetlanie ostrzeżeń w kolorach żółtym (Standard > 8h), pomarańczowym (Suma > 12h) lub czerwonym (Suma > 24h) bez blokowania możliwości zapisu.
 
 ### 4. Centrum Raportów (Raporty)
 * Generowanie okresowych zestawień i rozliczeń zleceniowych dla liderów oraz administracji.
-* **Miesięczny raport pracowników**: Prezentuje sumaryczny czas pracy pracowników z pojedynczą kolumną `Zmiana` i podziałem na wiersze per pracownik i zmiana (`I`, `II`, `III`, `Brak danych` dla wpisów historycznych, `Nie dotyczy` dla nieobecności) w widoku tabeli oraz eksportach XLSX i CSV.
+* **Miesięczny raport pracowników**: Pokazuje jeden wiersz na pracownika z kolumnami **Pracownik**, **Suma godzin z nadgodzinami** (przepracowane godziny z nadgodzinami), **Suma godzin bez nadgodzin** (godziny normatywne + płatne nieobecności: UW, L4, UOK, UŻ itp., bez nadgodzin i bez NN) oraz dynamicznymi kolumnami rodzajów czasu. NN pozostaje widoczne w swojej kolumnie, lecz jest wyłączone z obu sum. Ta sama struktura obowiązuje w widoku tabeli oraz eksportach XLSX i CSV.
 * Istniejący raport „Godziny wg zleceń” udostępnia tryb „Raport zamknięcia”, łączący otwarte zlecenia z godzinami oraz zlecenia zamknięte w wybranym okresie, także z zerową liczbą godzin.
 * Raport okresów nieobecności grupuje kolejne dni robocze tego samego pracownika i rodzaju nieobecności, mostkuje przez dni wolne (święta ustawowe, weekendy, wyjątki kalendarza), pozwala filtrować wyniki oraz eksportować je do XLSX i CSV.
 * Każdy raport zachowuje własne filtry w bieżącej sesji karty przeglądarki; wartości są odtwarzane po zmianie widoku i odświeżeniu strony, a zamknięcie karty usuwa je automatycznie.
@@ -102,8 +102,8 @@ Aplikacja rozróżnia dwie role użytkowników posiadające odmienne uprawnienia
    * Zarządzanie bazą pracowników, kontami użytkowników, słownikami oraz masowym importem Excel.
    * Przeglądanie statystyk w Dashboardzie oraz konfiguracja statusów aktywności zleceń.
 2. **Leader (`leader`)**:
-   * **Dostęp wyłącznie do dwóch zakładek**: 📝 **Raportowanie** oraz 📈 **Raporty**.
-   * Brak dostępu do Dashboardu, Zleceń, Pracowników oraz menu Administracja.
+   * Dostęp do **Raportowania**, **Raportów**, **Zleceń** (tylko odczyt) oraz **Pomocy / Instrukcji**.
+   * Brak dostępu do Dashboardu, Pracowników oraz menu Administracja.
    * Uproszczony pasek boczny dopasowany do urządzeń mobilnych (tabletów) na hali produkcyjnej.
 
 ---
@@ -300,7 +300,7 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 
 ### Użytkowanie
 
-* [Instrukcja użytkownika](docs/user-guide.md) – obsługa dla lidera i administratora.
+* [Instrukcja użytkownika](docs/user-guide.md) – obsługa dla lidera i administratora. Wbudowana Pomoc / Instrukcja zawiera 14 rozdziałów, 19 rzeczywistych zrzutów oraz odnośniki kontekstowe przy pięciu ekranach; na tablecie rozdziały są w rozwijanym menu.
 * [Reguły biznesowe](docs/business-rules.md) – obowiązujące walidacje, statusy, audyt i zasady raportowania.
 * [Importy i eksporty](docs/import-export-specification.md) – formaty kolumn, walidacja i raporty plikowe.
 
@@ -312,6 +312,7 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 * [Architektura](docs/architecture.md) – komponenty, model danych i przepływy.
 * [Konfiguracja](docs/configuration.md) – zmienne środowiskowe i różnice środowisk.
 * [Testowanie](docs/testing.md) – istniejące testy, polecenia i checklista regresji.
+* Walidacja zasobów przewodnika: `cd frontend && npm run docs:validate`. Generowanie zrzutów z izolowanej bazy `*_docs`: `npm run docs:screenshots` przy uruchomionym backendzie dokumentacyjnym.
 * [Zasady współpracy](AGENTS.md) – standardy dla deweloperów i agentów AI.
 * [Branding i środowisko demo](docs/BRANDING.md) – konfiguracja brandingu LaserCAD i środowiska demo.
 
@@ -330,8 +331,10 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 
 ## Status projektu
 
-* **Aktualna wersja**: `0.5.9`
-* **Docelowa gałąź integracyjna**: `development`
-* **Status prac**: Aktywny rozwój (Active development)
+* **Aktualna wersja**: `0.6.2`
+* **Gałąź release**: `main`
+* **Status wdrożenia**: v0.6.2 nie została jeszcze wdrożona na produkcję.
 
 W funkcji **Kopiuj ostatni dzień** kompletny zestaw wpisów, w tym nieobecności takie jak UW i L4, może być kopiowany pomiędzy dniami roboczymi. Jeżeli wybrany dzień docelowy jest sobotą lub niedzielą, cała operacja jest blokowana bez tworzenia rekordów.
+
+Wersja v0.6.2 przywraca raport miesięczny pracowników do jednego wiersza na pracownika, usuwa selektor zmian z interfejsu raportowania i poprawia obliczenia sum godzin.

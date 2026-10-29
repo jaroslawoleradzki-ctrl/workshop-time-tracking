@@ -1,12 +1,18 @@
 # Instrukcja użytkownika
 
+## Instrukcja w aplikacji
+
+W implementacji v0.6.0 aplikacja udostępnia pozycję **Pomoc / Instrukcja** dla Administratora i Leadera. Wbudowany przewodnik zawiera 14 rozdziałów: od logowania i rejestracji pracy po raporty, eksport, kalendarz, administrację i FAQ. Każdy rozdział ma oznaczenie roli i rzeczywiste zrzuty odpowiednich ekranów. Rozdziały można otwierać także adresem `#help/<identyfikator-rozdziału>`; przykład: `#help/logowanie`.
+Po wybraniu zwykłej zakładki aplikacja usuwa adres rozdziału Pomocy i po odświeżeniu przywraca wybraną zakładkę.
+Przyciski pomocy przy Raportowaniu, raporcie pracowników, raporcie zleceń, Bazie zleceń i Kalendarzu zakładowym otwierają właściwy rozdział. Na tablecie lista rozdziałów jest rozwijana nad treścią. Zrzuty pochodzą z fikcyjnej bazy dokumentacyjnej `*_docs`.
+
 ## Lider
 
 ### Logowanie i nawigacja
 
-Otwórz aplikację, wpisz login i hasło, wybierz **Zaloguj się**. Po zalogowaniu lider ma dostęp do **Raportowania** i **Raportów**. Pasek górny pozwala zmienić motyw i się wylogować.
+Otwórz aplikację, wpisz login i hasło, wybierz **Zaloguj się**. Po zalogowaniu lider ma dostęp do **Raportowania**, **Zleceń** (odczyt), **Raportów** i **Pomocy**. Pasek górny pozwala zmienić motyw i się wylogować.
 
-> **Zrzut ekranu do wstawienia:** formularz logowania z pustymi polami Login i Hasło oraz widocznym przyciskiem Zaloguj się.
+Rzeczywisty ekran: [Logowanie](../frontend/public/help/logowanie-01-ekran-logowania.png).
 
 ### Rejestrowanie czasu
 
@@ -14,20 +20,20 @@ Otwórz aplikację, wpisz login i hasło, wybierz **Zaloguj się**. Po zalogowan
 2. Formularz automatycznie podpowiada domyślny rodzaj czasu pracy zgodnie z Kalendarzem zakładowym: zwykły dzień roboczy to `G` (Godziny standardowe), a zwykła sobota lub niedziela to `NS` (Nadgodziny sobota/niedziela), jeżeli dany kod istnieje w słowniku. Święto ustawowe lub firmowy dzień wolny pozostawia typ pusty. Firma może oznaczyć sobotę albo niedzielę jako dzień roboczy — wtedy formularz podpowiada `G`. Jeśli wymagany typ (`G` lub `NS`) nie istnieje w słowniku, formularz pozostawia typ pusty.
 3. Wyszukaj pracownika po nazwie lub identyfikatorze; możesz użyć przycisków poprzedni/następny.
 4. Wybierz rodzaj czasu. Jeśli wymaga zlecenia (np. `NS`), wyszukaj aktywne zlecenie po numerze, produkcie lub koncie. W dni wolne praca jest dopuszczalna wyłącznie ze zleceniem.
-5. Wybierz zmianę roboczą (**I**, **II** lub **III**). Dla czasu obecności (przepracowanego) wybór zmiany jest wymagany. W przypadku wybrania rodzaju nieobecności (np. urlop, L4, WKU) pole zmiany jest automatycznie dezaktywowane i wskazuje `Nie dotyczy (nieobecność)`. Przełączenie z czasu przepracowanego na nieobecność automatycznie czyści zmianę; ponowne przejście na czas przepracowany wymaga ponownego wyboru zmiany.
-6. Wprowadź dodatnią liczbę godzin i zapisz. Klawisze strzałek i Enter obsługują listy i przejście do pola godzin.
+5. Wprowadź dodatnią liczbę godzin i zapisz.
+6. Klawisze strzałek i Enter obsługują listy i przejście do pola godzin.
 
-> **Zrzut ekranu do wstawienia:** panel Raportowanie z wybranym pracownikiem i datą, otwartą listą pasujących zleceń oraz formularzem nowego wpisu.
+Rzeczywisty ekran: [Wypełniony formularz Raportowania](../frontend/public/help/rejestracja-czasu-01-wypelniony-formularz.png).
 
-Wpisy wybranego pracownika i dnia są widoczne obok formularza z etykietami przypisanej zmiany (`I zmiana`, `II zmiana`, `III zmiana`, `Nie dotyczy (nieobecność)` dla nieobecności lub `Brak danych o zmianie` dla wpisów historycznych). Możesz ręcznie wybrać inny dozwolony rodzaj czasu pracy niż podpowiedź. **Edytuj** ładuje wpis do formularza, zachowując jego zapisany typ czasu, zlecenie, liczbę godzin, przypisaną zmianę i oznaczenie braku karty (jeśli edytowany wpis historyczny nie posiada zmiany, system wymusza jej wybór przed zapisem); **Usuń** wymaga potwierdzenia i wykonuje soft delete. **Kopiuj ostatni dzień** kopiuje wyłącznie wpisy aktualnie wybranego pracownika z jego najnowszej wcześniejszej daty wraz z przypisanymi zmianami `I`, `II`, `III` dla wpisów obecności (dla nieobecności zmiana wynosi null). Jeżeli którykolwiek wpis obecności w dniu źródłowym nie ma przypisanej zmiany, operacja jest blokowana. Wybranie soboty lub niedzieli jako dnia docelowego blokuje całą operację bez utworzenia wpisów, niezależnie od ich rodzaju. Podczas operacji przycisk jest zablokowany. Jeśli wybrany dzień zawiera już wpis tego pracownika, aplikacja nie dopisze danych i wyświetli komunikat o konflikcie.
+Wpisy wybranego pracownika i dnia są widoczne obok formularza. Możesz ręcznie wybrać inny dozwolony rodzaj czasu pracy niż podpowiedź. **Edytuj** ładuje wpis do formularza, zachowując jego zapisany typ czasu, zlecenie, liczbę godzin i oznaczenie braku karty. **Usuń** wymaga potwierdzenia i wykonuje soft delete. **Kopiuj ostatni dzień** kopiuje wyłącznie wpisy aktualnie wybranego pracownika z jego najnowszej wcześniejszej daty. Wybranie soboty lub niedzieli jako dnia docelowego blokuje całą operację bez utworzenia wpisów, niezależnie od ich rodzaju. Podczas operacji przycisk jest zablokowany. Jeśli wybrany dzień zawiera już wpis tego pracownika, aplikacja nie dopisze danych i wyświetli komunikat o konflikcie.
 
 Jeśli kod `G` przekroczy 8 godzin lub suma przekroczy 12/24 godziny, pojawi się ostrzeżenie. Można anulować albo wybrać **Ignoruj i zapisz**.
 
-> **Zrzut ekranu do wstawienia:** modal ostrzeżenia z przekroczeniem godzin i przyciskami Anuluj oraz Ignoruj i zapisz.
+Rzeczywisty ekran: [Ostrzeżenie o godzinach](../frontend/public/help/rejestracja-czasu-03-ostrzezenie.png).
 
 ### Raporty i eksport
 
-Zakładka Raporty udostępnia zestawienia według zleceń, pracowników, kont księgowych, szczegółowe oraz okresów nieobecności. Ustaw zakres dat i filtry właściwe dla zakładki, wygeneruj raport, a następnie pobierz XLSX lub CSV. Szerokie tabele można przewijać poziomo za pomocą zsynchronizowanych pasków nad i pod tabelą; układ nie rozszerza strony poza szerokość ekranu. W miesięcznym raporcie według pracowników tabela oraz oba eksporty (XLSX i CSV) zawierają ten sam zestaw rekordów, prezentując podsumowania ogólne, pojedynczą kolumnę `Zmiana` z podziałem wierszy per pracownik i zmiana (`I`, `II`, `III`, `Brak danych` dla wpisów historycznych, `Nie dotyczy` dla nieobecności) oraz kolumny poszczególnych rodzajów czasu pracy ze słownika. Szczegółowy raport umożliwia również usunięcie wpisu.
+Zakładka Raporty udostępnia zestawienia według zleceń, pracowników, kont księgowych, szczegółowe oraz okresów nieobecności. Ustaw zakres dat i filtry właściwe dla zakładki, wygeneruj raport, a następnie pobierz XLSX lub CSV. Szerokie tabele można przewijać poziomo za pomocą zsynchronizowanych pasków nad i pod tabelą; układ nie rozszerza strony poza szerokość ekranu. W miesięcznym raporcie według pracowników tabela oraz oba eksporty (XLSX i CSV) zawierają jeden wiersz na pracownika z kolumnami: **Pracownik**, **Suma godzin z nadgodzinami**, **Suma godzin bez nadgodzin** oraz dynamiczne kolumny poszczególnych rodzajów czasu pracy ze słownika. Szczegółowy raport umożliwia również usunięcie wpisu.
 
 Każda zakładka raportu zapamiętuje własny zakres dat i pozostałe filtry w bieżącej sesji karty. Filtry pozostają ustawione po przejściu do innego raportu lub modułu i po odświeżeniu strony. Przycisk **Wyczyść filtry** przywraca wartości domyślne tylko w aktywnym raporcie. Zamknięcie karty przeglądarki kończy sesję i usuwa zapamiętane filtry.
 
@@ -35,7 +41,7 @@ W raporcie **Godziny wg zleceń** ustaw obie daty i wybierz **Raport zamknięcia
 
 Raport **Okresy Nieobecności** uwzględnia wyłącznie typy oznaczone w słowniku jako „Nieobecność”. Filtry obejmują zakres dat, pracownika i rodzaj nieobecności. Kolejne dni robocze są łączone w okres, dni wolne (święta ustawowe, weekendy, wyjątki kalendarza) nie przerywają okresu ani nie zwiększają liczby dni, a brakujący dzień roboczy rozpoczyna kolejny okres. Pod tabelą wyświetlane jest łączne podsumowanie liczby dni nieobecności. Wynik można pobrać w formacie XLSX oraz CSV.
 
-> **Zrzut ekranu do wstawienia:** zakładka Raporty z wybranym raportem szczegółowym, zakresem dat, wynikami oraz przyciskami eksportu.
+Rzeczywiste ekrany: [Raport HR z jedną sumą na pracownika](../frontend/public/help/raport-hr-01-podsumowanie.png), [raport zleceń](../frontend/public/help/raport-zlecen-01-tabela.png), [akcje eksportu](../frontend/public/help/eksport-01-akcje.png).
 
 ## Administrator
 
@@ -53,6 +59,12 @@ Administrator ma wszystkie funkcje lidera oraz poniższe ekrany.
 > Standardowe kody nieobecności (`UW`, `UOK`, `UŻ`, `L4` oraz `WKU`) są traktowane jako nieobecności i biorą udział w raportowaniu okresów nieobecności oraz rozliczeniu sum kontrolnych. Własne typy nieobecności utworzone przez użytkownika mogą być w dowolnym momencie oznaczone przez administratora flagą „Nieobecność”.
 - **Importy**: pobranie szablonu i wgranie pracowników albo zleceń. Wynik pokazuje rekordy poprawne i błędne; historia zawiera wykonawcę, czas, status i log błędów. Szczegóły formatów zawiera [specyfikacja importów i eksportów](import-export-specification.md).
 
-> **Zrzut ekranu do wstawienia:** Dashboard administratora z czterema licznikami i tabelami wykorzystania planu.
+Rzeczywisty ekran: [Dashboard administratora](../frontend/public/help/ekran-glowny-03-pulpit.png).
 
-> **Zrzut ekranu do wstawienia:** ekran Import danych z kartami pracowników i zleceń, przyciskiem pobrania szablonu, polem wyboru pliku i widoczną historią importów.
+Rzeczywisty ekran: [Import danych](../frontend/public/help/administracja-02-importy.png).
+
+## Poprawki raportu i Pomocy v0.6.2
+
+W miesięcznym raporcie pracowników usunięto kolumnę **Łącznie przepracowane w okresie** (duplikowała sumę godzin z nadgodzinami). Raport pokazuje teraz jeden wiersz na pracownika z kolumnami: **Pracownik**, **Suma godzin z nadgodzinami** (przepracowane godziny z nadgodzinami), **Suma godzin bez nadgodzin** (godziny normatywne + płatne nieobecności: UW, L4, UOK, UŻ itp., bez nadgodzin i bez NN), oraz dynamiczne kolumny poszczególnych rodzajów czasu pracy. NN pozostaje widoczne jako czas niepłatny i jest wyłączone z obu sum. Płatne nieobecności (urlopy, L4) zwiększają tylko **Sumę godzin bez nadgodzin**.
+
+W Pomocy przewijaj główną treść, aby dotrzeć do dolnej części rozdziału i przycisków Poprzedni/Następny. Nagłówek aplikacji i sidebar zachowują własny układ. Na tablecie listę rozdziałów można zwinąć.

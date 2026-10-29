@@ -11,7 +11,8 @@ import {
   Moon, 
   Lock,
   ChevronDown,
-  CalendarDays
+  CalendarDays,
+  BookOpen
 } from 'lucide-react';
 
 // View Components (to be created)
@@ -25,6 +26,8 @@ import ReportsView from './components/ReportsView';
 import ImportsView from './components/ImportsView';
 import { branding } from './config/branding';
 import CompanyCalendarView from './components/CompanyCalendarView';
+import HelpView from './components/HelpView';
+import { helpChapterFromHash } from './help/chapters';
 
 export interface UserSession {
   id: string;
@@ -56,8 +59,12 @@ function App() {
     (localStorage.getItem('theme') as 'dark' | 'light') || 'dark'
   );
   const [currentTab, setCurrentTab] = useState<string>(() => {
-    return sessionStorage.getItem('current_tab') || 'reporting';
+    if (helpChapterFromHash(window.location.hash)) return 'help';
+    const storedTab = sessionStorage.getItem('current_tab');
+    return storedTab && storedTab !== 'help' ? storedTab : sessionStorage.getItem('last_non_help_tab') || 'reporting';
   });
+  const [helpChapter, setHelpChapter] = useState<string | null>(() => helpChapterFromHash(window.location.hash));
+  const lastNonHelpTabRef = useRef<string>(sessionStorage.getItem('last_non_help_tab') || (sessionStorage.getItem('current_tab') !== 'help' ? sessionStorage.getItem('current_tab') : null) || (user?.role === 'admin' ? 'dashboard' : 'reporting'));
   
   // Login form state
   const [loginUsername, setLoginUsername] = useState('');
@@ -80,6 +87,8 @@ function App() {
     sessionStorage.removeItem('user');
     sessionStorage.removeItem('current_tab');
     sessionStorage.removeItem('sidebar_admin_open');
+    sessionStorage.removeItem('help_chapter');
+    sessionStorage.removeItem('last_non_help_tab');
   };
 
   // Fetch app version on mount
@@ -168,6 +177,43 @@ function App() {
       setIsAdminOpen(true);
     }
   }, [currentTab]);
+
+  useEffect(() => {
+    const syncHash = () => {
+      const chapter = helpChapterFromHash(window.location.hash);
+      if (chapter) {
+        setHelpChapter(chapter);
+        setCurrentTab((tab) => {
+          if (tab !== 'help') lastNonHelpTabRef.current = tab;
+          return 'help';
+        });
+      } else {
+        setCurrentTab((tab) => tab === 'help' ? lastNonHelpTabRef.current : tab);
+      }
+    };
+    window.addEventListener('hashchange', syncHash);
+    return () => window.removeEventListener('hashchange', syncHash);
+  }, []);
+
+  const selectHelpChapter = (chapter: string) => {
+    if (currentTab !== 'help') {
+      lastNonHelpTabRef.current = currentTab;
+      sessionStorage.setItem('last_non_help_tab', currentTab);
+    }
+    setHelpChapter(chapter);
+    sessionStorage.setItem('help_chapter', chapter);
+    setCurrentTab('help');
+    window.location.hash = `help/${chapter}`;
+  };
+
+  const openHelp = () => selectHelpChapter(helpChapter || sessionStorage.getItem('help_chapter') || 'pierwsze-kroki');
+
+  const selectTab = (tab: string) => {
+    lastNonHelpTabRef.current = tab;
+    sessionStorage.setItem('last_non_help_tab', tab);
+    if (window.location.hash) window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    setCurrentTab(tab);
+  };
 
   // Set default tab based on user role on login
   useEffect(() => {
@@ -320,12 +366,12 @@ function App() {
       case 'dashboard':
         return <DashboardView token={token} />;
       case 'reporting':
-        return <ReportingPanel token={token} user={user} />;
+        return <ReportingPanel token={token} user={user} onOpenHelp={selectHelpChapter} />;
       case 'orders':
         if (user.role !== 'admin' && user.role !== 'leader') {
-          return <ReportingPanel token={token} user={user} />;
+          return <ReportingPanel token={token} user={user} onOpenHelp={selectHelpChapter} />;
         }
-        return <OrdersView token={token} user={user} />;
+        return <OrdersView token={token} user={user} onOpenHelp={selectHelpChapter} />;
       case 'employees':
         return <EmployeesView token={token} />;
       case 'dictionaries':
@@ -335,11 +381,13 @@ function App() {
       case 'imports':
         return <ImportsView token={token} />;
       case 'calendar':
-        return user.role === 'admin' ? <CompanyCalendarView token={token} /> : <ReportingPanel token={token} user={user} />;
+        return user.role === 'admin' ? <CompanyCalendarView token={token} onOpenHelp={selectHelpChapter} /> : <ReportingPanel token={token} user={user} onOpenHelp={selectHelpChapter} />;
       case 'reports':
-        return <ReportsView token={token} user={user} />;
+        return <ReportsView token={token} user={user} onOpenHelp={selectHelpChapter} />;
+      case 'help':
+        return <HelpView chapterId={helpChapter} appVersion={appVersion} onSelectChapter={selectHelpChapter} />;
       default:
-        return <ReportingPanel token={token} user={user} />;
+        return <ReportingPanel token={token} user={user} onOpenHelp={selectHelpChapter} />;
     }
   };
 
@@ -353,6 +401,7 @@ function App() {
         </div>
 
         <div className="navbar-actions">
+          <button className="theme-toggle" onClick={openHelp} title="Pomoc / Instrukcja" aria-label="Pomoc / Instrukcja"><BookOpen size={18} /></button>
           <button className="theme-toggle" onClick={toggleTheme} title="Przełącz motyw">
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>
@@ -376,65 +425,67 @@ function App() {
             {user.role === 'leader' ? (
               <>
                 <button
-                  onClick={() => setCurrentTab('orders')}
+                  onClick={() => selectTab('orders')}
                   className={`nav-item ${currentTab === 'orders' ? 'active' : ''}`}
                 >
                   <FolderGit2 size={18} />
                   <span>Zlecenia</span>
                 </button>
                 <button
-                  onClick={() => setCurrentTab('reporting')}
+                  onClick={() => selectTab('reporting')}
                   className={`nav-item ${currentTab === 'reporting' ? 'active' : ''}`}
                 >
                   <Clock size={18} />
                   <span>Raportowanie</span>
                 </button>
                 <button
-                  onClick={() => setCurrentTab('reports')}
+                  onClick={() => selectTab('reports')}
                   className={`nav-item ${currentTab === 'reports' ? 'active' : ''}`}
                 >
                   <FileDown size={18} />
                   <span>Raporty</span>
                 </button>
+                <button onClick={openHelp} className={`nav-item ${currentTab === 'help' ? 'active' : ''}`}><BookOpen size={18} /><span>Pomoc / Instrukcja</span></button>
               </>
             ) : user.role === 'admin' ? (
               <>
                 {/* Robocza (Workspace) Section */}
                 <button
-                  onClick={() => setCurrentTab('dashboard')}
+                  onClick={() => selectTab('dashboard')}
                   className={`nav-item ${currentTab === 'dashboard' ? 'active' : ''}`}
                 >
                   <BarChart3 size={18} />
                   <span>Dashboard</span>
                 </button>
                 <button
-                  onClick={() => setCurrentTab('orders')}
+                  onClick={() => selectTab('orders')}
                   className={`nav-item ${currentTab === 'orders' ? 'active' : ''}`}
                 >
                   <FolderGit2 size={18} />
                   <span>Zlecenia</span>
                 </button>
                 <button
-                  onClick={() => setCurrentTab('reporting')}
+                  onClick={() => selectTab('reporting')}
                   className={`nav-item ${currentTab === 'reporting' ? 'active' : ''}`}
                 >
                   <Clock size={18} />
                   <span>Raportowanie</span>
                 </button>
                 <button
-                  onClick={() => setCurrentTab('reports')}
+                  onClick={() => selectTab('reports')}
                   className={`nav-item ${currentTab === 'reports' ? 'active' : ''}`}
                 >
                   <FileDown size={18} />
                   <span>Raporty</span>
                 </button>
+                <button onClick={openHelp} className={`nav-item ${currentTab === 'help' ? 'active' : ''}`}><BookOpen size={18} /><span>Pomoc / Instrukcja</span></button>
 
                 {/* Divider separating Workspace from Administration */}
                 <div className="sidebar-divider"></div>
 
                 {/* Administracja Section */}
                 <button
-                  onClick={() => setCurrentTab('employees')}
+                  onClick={() => selectTab('employees')}
                   className={`nav-item ${currentTab === 'employees' ? 'active' : ''}`}
                 >
                   <Users size={18} />
@@ -466,28 +517,28 @@ function App() {
                 <div className={`sidebar-submenu-wrapper ${isAdminOpen ? 'open' : ''}`}>
                   <div className="sidebar-submenu">
                     <button
-                      onClick={() => setCurrentTab('users')}
+                      onClick={() => selectTab('users')}
                       className={`nav-submenu-item ${currentTab === 'users' ? 'active' : ''}`}
                     >
                       <span className="bullet">•</span>
                       <span>Użytkownicy</span>
                     </button>
                     <button
-                      onClick={() => setCurrentTab('dictionaries')}
+                      onClick={() => selectTab('dictionaries')}
                       className={`nav-submenu-item ${currentTab === 'dictionaries' ? 'active' : ''}`}
                     >
                       <span className="bullet">•</span>
                       <span>Słowniki</span>
                     </button>
                     <button
-                      onClick={() => setCurrentTab('calendar')}
+                      onClick={() => selectTab('calendar')}
                       className={`nav-submenu-item ${currentTab === 'calendar' ? 'active' : ''}`}
                     >
                       <CalendarDays size={15} />
                       <span>Kalendarz zakładowy</span>
                     </button>
                     <button
-                      onClick={() => setCurrentTab('imports')}
+                      onClick={() => selectTab('imports')}
                       className={`nav-submenu-item ${currentTab === 'imports' ? 'active' : ''}`}
                     >
                       <span className="bullet">•</span>
@@ -499,19 +550,20 @@ function App() {
             ) : (
               <>
                 <button
-                  onClick={() => setCurrentTab('reporting')}
+                  onClick={() => selectTab('reporting')}
                   className={`nav-item ${currentTab === 'reporting' ? 'active' : ''}`}
                 >
                   <Clock size={18} />
                   <span>Raportowanie</span>
                 </button>
                 <button
-                  onClick={() => setCurrentTab('reports')}
+                  onClick={() => selectTab('reports')}
                   className={`nav-item ${currentTab === 'reports' ? 'active' : ''}`}
                 >
                   <FileDown size={18} />
                   <span>Raporty</span>
                 </button>
+                <button onClick={openHelp} className={`nav-item ${currentTab === 'help' ? 'active' : ''}`}><BookOpen size={18} /><span>Pomoc / Instrukcja</span></button>
               </>
             )}
           </nav>

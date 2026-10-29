@@ -1145,7 +1145,7 @@ describe('POST /api/reports/copy-last-day', () => {
       expect(copied?.workShift).toBeNull();
     });
 
-    it('should reject copy-last-day when source day contains a historical worked entry with workShift = null', async () => {
+    it('should copy a historical worked entry with workShift = null as null', async () => {
       const Thursday = new Date('2026-07-23T00:00:00.000Z');
       const orderId = fakePrisma.seedOrder();
       const historicalId = randomUUID();
@@ -1169,16 +1169,13 @@ describe('POST /api/reports/copy-last-day', () => {
           employeeId: EMPLOYEE_A_ID,
           date: '2026-07-29',
         })
-        .expect(400);
+        .expect(201);
 
-      expect(res.body.code).toBe('WORK_SHIFT_REQUIRED');
-      expect(res.body.message).toContain('określonej zmiany');
-
-      // ZERO destination rows created
       const destinationReports = fakePrisma.reports.filter(
         (r) => r.employeeId === EMPLOYEE_A_ID && sameDate(r.date, new Date('2026-07-29T00:00:00.000Z')),
       );
-      expect(destinationReports).toHaveLength(0);
+      expect(destinationReports).toHaveLength(1);
+      expect(destinationReports[0].workShift).toBeNull();
 
       // Source data remains intact
       const sourceReport = fakePrisma.reports.find((r) => r.id === historicalId);
@@ -1186,7 +1183,7 @@ describe('POST /api/reports/copy-last-day', () => {
       expect(sourceReport?.workShift).toBeNull();
     });
 
-    it('should atomically reject mixed-source copy (valid FIRST/SECOND + historical NULL) with ZERO destination rows', async () => {
+    it('should copy mixed source (valid FIRST + historical NULL) preserving each shift', async () => {
       const Thursday = new Date('2026-07-23T00:00:00.000Z');
       const orderId = fakePrisma.seedOrder();
       const validEntryId = randomUUID();
@@ -1226,15 +1223,18 @@ describe('POST /api/reports/copy-last-day', () => {
           employeeId: EMPLOYEE_A_ID,
           date: '2026-07-29',
         })
-        .expect(400);
+        .expect(201);
 
-      expect(res.body.code).toBe('WORK_SHIFT_REQUIRED');
-
-      // Entire copy operation rejected -> ZERO destination rows created
+      expect(res.body.createdCount).toBe(2);
       const destinationReports = fakePrisma.reports.filter(
         (r) => r.employeeId === EMPLOYEE_A_ID && sameDate(r.date, new Date('2026-07-29T00:00:00.000Z')),
       );
-      expect(destinationReports).toHaveLength(0);
+      expect(destinationReports).toHaveLength(2);
+
+      const copiedFirst = destinationReports.find((r) => r.workTimeTypeCode === 'G');
+      const copiedNull = destinationReports.find((r) => r.workTimeTypeCode === 'NDR');
+      expect(copiedFirst?.workShift).toBe('FIRST');
+      expect(copiedNull?.workShift).toBeNull();
 
       // Both source reports remain intact
       const validSource = fakePrisma.reports.find((r) => r.id === validEntryId);

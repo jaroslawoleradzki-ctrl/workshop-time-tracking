@@ -3,11 +3,20 @@
 ## Stan bieżący
 
 - Projekt: Workshop Time Tracking
-- Aktualna wersja produkcyjna: `0.5.7`
-- Aktualna wersja development: `0.5.9`
+- Aktualna wersja repozytorium: `0.6.1`
+- Aktualna wersja produkcyjna: `0.6.0` (deployment v0.6.1 nie został wykonany)
+- Aktualna wersja development: `0.6.1`
 - Gałąź produkcyjna: `main`
-- Gałąź robocza: `development`
-- Stan prac: v0.5.8 wydane i zweryfikowane; v0.5.9 dostosowane na dedykowanej gałęzi `fix/v0.5.9-manual-acceptance-shift-report` po uwagach z akceptacji manualnej, z pełną weryfikacją automatyczną.
+- Gałąź integracyjna: `development` (`0.6.1`); poprawka z `fix/v0.6.1-client-feedback` została scalona
+- Stan prac: v0.6.1 zaakceptowana i scalona do `main`; produkcja pozostaje na `0.6.0` do ręcznego deploymentu.
+
+Poprawka v0.6.1: NN i inne nieobecności nie zwiększają czasu przepracowanego. NN pozostaje widoczne, lecz nie uczestniczy w godzinach zleceń, KPI pracy ani obu sumach kontroli rozliczenia. Raport pracowników pokazuje osobną sumę okresu ponad podziałem zmian. Pomoc przewija się w głównej treści, również przy niskim viewporcie tabletu. Nie zmieniono schematu bazy. Weryfikacja po integracji: backend 225/225 testów, frontend 138/138, build obu projektów, lint, `docs:validate` 21/21. Development stack przebudowano na istniejącym wolumenie `workshop-time-tracking-dev_pgdata`; API health i baza są zdrowe, `/api/version` zwraca `0.6.1`, frontend odpowiada HTTP 200 na porcie 8085. Ręczna akceptacja funkcjonalna została udzielona. Ryzyko: niestandardowe kody nieobecności inne niż NN zachowują dotychczasową semantykę rozliczenia. Szczegóły: `V0.6.1_CLIENT_FEEDBACK_FIX_REPORT.md`.
+
+Prace v0.6.2 (branch `feature/v0.6.2-employee-report-shift-revert`, wersja docelowa): miesięczny raport pracowników wraca do jednego wiersza na pracownika, bez kolumny `Zmiana` i bez `Łącznie przepracowane w okresie`. `suma` pozostaje czasem pracy z nadgodzinami, a `sumaBezNadgodzin` obejmuje pracę normatywną i płatne nieobecności (UW, L4, UOK, UŻ, WKU i inne typy `isAbsence=true`), z wyłączeniem NN i nadgodzin. Historyczne zmiany `I`/`II`/`III` są sumowane w jednym wierszu. Zaktualizowano rozdział Pomocy „Raport HR” i zrzuty HR. W ramach v0.6.2 usunięto wybór zmiany z formularza Raportowania oraz rozdział Pomocy o zmianach; nowe wpisy zapisują się z `workShift=null`, a historyczne wartości `I`/`II`/`III` pozostają czytelne i zachowywane przy edycji. Manifest dokumentacji liczy 19 pozycji. Schemat bazy danych oraz semantyka kontroli rozliczenia pozostają bez zmian. Metadane pakietów backendu i frontendu oraz `APP_VERSION` w plikach Compose zostały podniesione do `0.6.2`. Wersję 0.6.1 opisuje poniższy wpis.
+
+Zakres v0.6.0: 15 rozdziałów Pomocy, 21 rzeczywistych zrzutów Playwright, pięć odnośników kontekstowych, rozwijana lista rozdziałów na tablecie i walidacja zasobów w skrypcie wydania. Fixture obejmuje wyłącznie fikcyjne rekordy w bazie zakończonej `_docs`. Dwie świeże bazy dokumentacyjne miały identyczne migawki; ponowny seed nie zmienił danych. Akceptacja ręczna: PASSED. Wyniki automatycznej walidacji i zakres wydania opisuje raport końcowy v0.6.0.
+
+Fundament po pierwszym przeglądzie zachowuje poprawki nawigacji, walidacji referencji i powtarzalności seeda. Ponowny przegląd wskazał nieaktualny opis historii commitów w raporcie fundamentu oraz brak niezależnego uruchomienia Playwright na izolowanej infrastrukturze; oba punkty skorygowano w obecnym przyroście.
 
 Zakres wersji `0.5.9` (po uwagach z akceptacji manualnej):
 

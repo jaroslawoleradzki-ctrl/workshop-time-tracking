@@ -3,6 +3,41 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.6.2] - 2026-10-05
+
+### Changed
+- Usunięto wybór zmiany roboczej z formularza Raportowania. Nowe wpisy czasu pracy zapisują się bez zmiany (`workShift = null`); historyczne wartości `I`/`II`/`III` pozostają czytelne i są zachowywane przy edycji. Kopiowanie dnia nie jest już blokowane brakiem zmiany w źródle.
+- Usunięto kolumnę **Zmiana** z miesięcznego raportu pracowników – raport pokazuje teraz jeden wiersz na pracownika.
+- Usunięto kolumnę **Łącznie przepracowane w okresie** (duplikowała "Suma godzin z nadgodzinami").
+- Zmieniono semantykę **Suma godzin bez nadgodzin**: teraz obejmuje godziny normatywne ORAZ płatne nieobecności (UW, L4, UOK, UŻ, WKU itp.), z wyłączeniem nadgodzin i niepłatnego NN.
+- Zachowano: NN widoczne w dynamicznej kolumnie, wyłączone z obu sum; `suma` = przepracowane godziny z nadgodzinami (bez nieobecności).
+
+### Fixed
+- Raport pracowników nie dzieli już wierszy na zmiany (I/II/III/Brak danych/Nie dotyczy).
+- Eksporty XLSX/CSV odpowiadają nowemu układowi tabeli.
+- Zaktualizowano rozdział Pomocy „Raport HR” (bez kolumny Zmiana i osobnych wierszy zmian) oraz zrzuty HR; manifest dokumentacji liczy teraz 20 zrzutów.
+
+## [0.6.1] - 2026-10-01
+
+### Fixed
+- Nieobecności nie zwiększają sum przepracowanych godzin; NN pozostaje widoczne i jest wyłączone z sum rozliczenia, raportu zleceń oraz KPI pracy.
+- Raport pracowników pokazuje jedną sumę przepracowanych godzin za okres przed szczegółami zmian.
+- Pomoc / Instrukcja przewija się w głównym kontenerze treści przy różnych wysokościach viewportu.
+
+## [0.6.0] - 2026-09-30
+
+### Added
+- Uzupełniono wbudowaną instrukcję o wszystkie 15 rozdziałów zatwierdzonego zakresu, pięć odnośników kontekstowych i rozwijaną nawigację na tablecie.
+- Dodano 21 rzeczywistych zrzutów Playwright z fikcyjnej bazy `*_docs`, obejmujących rejestrację, zmiany I/II/III, nieobecności, raporty, kontrolę sum, eksport i administrację.
+- Rozszerzono deterministyczny seed dokumentacyjny o wpisy zmian, nieobecności, wyjątek kalendarza i historię importu; `docs:validate` uruchamia się także w skrypcie walidacji wydania.
+- Rozpoczęto v0.6.0 od wbudowanej Instrukcji użytkownika dostępnej dla ról Administrator i Leader, z nawigacją rozdziałów, adresami `#help/<chapter-id>`, odznakami ról oraz wersją aplikacji.
+- Dodano pierwsze rozdziały „Pierwsze kroki” i „Logowanie”, wraz z generowanym przez Playwright rzeczywistym zrzutem ekranu logowania.
+- Dodano manifestową walidację zasobów zrzutów, skrypty `docs:screenshots` i `docs:validate` oraz dokumentacyjny seed chroniony wymaganiem nazwy bazy kończącej się na `_docs`.
+
+### Fixed
+- Po przejściu z Pomocy do zwykłej zakładki jej hash jest usuwany, a odświeżenie zachowuje wybraną zakładkę; poprawne głębokie odnośniki do Pomocy pozostają obsługiwane.
+- Walidacja dokumentacyjnych zrzutów wykrywa niezgodności rozdziałów, manifestu i plików, a seed dokumentacyjny zapisuje stałe identyfikatory i daty.
+
 ## [Unreleased]
 
 ## [0.5.9] - 2026-09-18
