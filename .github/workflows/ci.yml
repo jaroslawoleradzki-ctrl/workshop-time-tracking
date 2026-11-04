@@ -12,6 +12,13 @@ concurrency:
 jobs:
   qa:
     name: WTT QA
+    # Only reviewed same-repository PRs; forks cannot initialize service containers.
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association))
+    env:
+      DOCKER_HOST: unix:///var/run/docker.sock
     runs-on: [self-hosted, Linux, X64, wtt]
     timeout-minutes: 25
     services:
@@ -27,20 +34,17 @@ jobs:
           --health-cmd "pg_isready -U postgres"
           --health-interval 5s --health-timeout 5s --health-retries 12
     steps:
-      - name: Reject untrusted pull requests before checkout
-        if: >-
-          github.event_name == 'pull_request' &&
-          (github.event.pull_request.head.repo.full_name != github.repository ||
-          !contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association))
+      - name: Verify dedicated WTT runner and system Docker
         run: |
-          echo 'Untrusted PR: maintainer review and a trusted same-repository branch are required.'
-          exit 1
-      - name: Verify dedicated runner isolation
-        run: |
-          test "$(id -un)" = wtt-runner
-          test "$DOCKER_HOST" = "unix:///run/user/$(id -u)/docker.sock"
-          docker info --format '{{json .SecurityOptions}}' | grep -q rootless
-          test ! -r /home/cloud/.ssh/id_ed25519
+          test "$(id -un)" = cloud
+          test "$RUNNER_NAME" = ai-node-wtt
+          test "$DOCKER_HOST" = unix:///var/run/docker.sock
+          case "$GITHUB_WORKSPACE" in
+            /home/cloud/actions-runner-wtt/_work/*) ;;
+            *) echo 'Wrong WTT workspace'; exit 1 ;;
+          esac
+          options="$(docker info --format '{{json .SecurityOptions}}')"
+          case "$options" in *rootless*) exit 1 ;; esac
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false

@@ -1,0 +1,17 @@
+[Unit]
+Description=Dedicated WTT GitHub Actions runner (trusted code, system Docker)
+After=network-online.target
+[Service]
+WorkingDirectory=/home/cloud/actions-runner-wtt
+ExecStart=/home/cloud/actions-runner-wtt/run.sh
+Environment=HOME=/home/cloud/actions-runner-wtt/home
+Environment=DOCKER_HOST=unix:///var/run/docker.sock
+Environment=DOCKER_CONFIG=/home/cloud/actions-runner-wtt/home/.docker
+Environment=RUNNER_TOOL_CACHE=/home/cloud/actions-runner-wtt/_tool
+UnsetEnvironment=DOCKER_CONTEXT DOCKER_TLS DOCKER_TLS_VERIFY GH_TOKEN GITHUB_TOKEN SSH_AUTH_SOCK AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN DATABASE_URL WTT_POSTGRES_PASSWORD WTT_JWT_SECRET
+Restart=on-failure
+RestartSec=10
+KillMode=control-group
+TimeoutStopSec=5min
+[Install]
+WantedBy=default.target

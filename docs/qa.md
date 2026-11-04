@@ -20,6 +20,6 @@ Workflow `.github/workflows/ci.yml` wywołuje ten sam skrypt. Usługa PostgreSQL
 
 ## Self-hosted runner i ochrona gałęzi
 
-Instalacja oraz warunki bezpieczeństwa są opisane w [instrukcji runnera](../ops/ci-runner/README.md). `runs-on: [self-hosted, Linux, X64, wtt]` jest docelowym kontraktem dedykowanej instancji; przed jej rejestracją job pozostaje w kolejce. Nie przekierowywać go na `ai-node-finance`.
+Aktualne CI używa osobnego runnera ai-node-wtt jako cloud, osobnej usługi user-systemd i systemowego Dockera. Właściciel zaakceptował brak pełnej izolacji na współdzielonym hoście. Rootless pozostaje zachowany i nieużywany. Warunek joba odrzuca niezaufane forki przed utworzeniem usług. Szczegóły rejestracji, autostartu, zaufania, rollbacku i ochrony danych: [instrukcja runnera](../ops/ci-runner/README.md).
 
-Administrator powinien po pierwszym zielonym wykonaniu zaimportować/reviewować `ops/ci-runner/branch-ruleset.json` w Settings → Rules → Rulesets. Reguły obejmują development i main: PR wymagany, co najmniej jeden niezależny review, akceptacja ostatniego push przez inną osobę, odrzucenie starych akceptacji, rozwiązane dyskusje, wymagany zielony `WTT QA`, aktualna baza PR, brak force-push i usuwania. Nie dodawać bypass dla autora. Autor PR nie może zastąpić niezależnego review własną akceptacją. Szablon nie jest automatycznie stosowany i nie zmienia polityki repozytorium.
+Szablon ops/ci-runner/branch-ruleset.json pozostaje do zatwierdzenia przez administratora; nie zastosowano go automatycznie. Wymagany niezależny review i zielony WTT QA przed merge. Nie zmieniono globalnej polityki GitHub.

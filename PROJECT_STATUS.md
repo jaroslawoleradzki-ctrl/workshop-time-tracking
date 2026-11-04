@@ -375,3 +375,5 @@ Poprawka preflight runnera: obsłużono null w Docker IPAM.Config, dodano testy 
 Rootless Docker WTT działa jako UID 1001 (potwierdzenie administratora i osobne procesy). Skrypt przygotowania uzupełniono o bezpieczne ponawianie i uprawnienia katalogów; 16 testów preflight PASS, pełne lokalne QA PASS. Rejestracja runnera nadal wymaga testu izolacji z uprawnieniami administratora i zatwierdzenia polityki GitHub. FINNARO bez zmian.
 
 Weryfikacja izolacji: poprawiono test dostępu do systemowego Docker Engine i dodano kontrole administratora przed/po. Pełny wynik pozostaje BLOCKED z powodu wymaganej autoryzacji sudo; FINNARO active. Nie rejestrowano WTT i nie zmieniano polityk GitHub.
+
+Decyzja CI 2026-11-04: przyjęto systemowy Docker i osobny runner WTT jako cloud; zaakceptowano współdzielenie uprawnień hosta. Rootless nie jest już ścieżką CI, pozostaje bez zmian. Runner ai-node-wtt zarejestrowano; pełne lokalne QA PASS, rzeczywisty Actions do potwierdzenia po uruchomieniu osobnej usługi. FINNARO bez zmian.

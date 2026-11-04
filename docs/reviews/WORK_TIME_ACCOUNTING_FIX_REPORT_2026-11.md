@@ -284,3 +284,18 @@ sudo python3 /tmp/wtt-accounting-fix/ops/ci-runner/probe-isolation.py
 ```
 
 Kontroler sam przełącza test do systemd użytkownika WTT. Nie uruchamiać verify-isolation przez sudo bash jako root. Gdy punkt kontrolny nie działa, wynik BLOCKED; instrukcja bezpiecznego serwera na pustym katalogu znajduje się w ops/ci-runner/README.md. Rejestracja możliwa dopiero po pełnym PASS oraz osobnym spełnieniu wymagań publicznego repozytorium. W ramach tej sesji nie zmieniono polityki i nie pozyskano tokenu.
+
+
+## Aktualna decyzja CI: systemowy Docker — 2026-11-04
+
+Właściciel zastąpił wcześniejszą architekturę rootless: zaufane repo/workflow WTT, osobny runner i katalogi, konto cloud oraz istniejący systemowy Docker. Zaakceptowano brak pełnej izolacji bezpieczeństwa. Wcześniejsze raporty i blokady rootless są historyczne; konfiguracji, konta i usług rootless nie usunięto ani nie restartowano. Nie zmieniono systemowego Docker Engine, socketu, grup ani polityki GitHub.
+
+Potwierdzono cloud z istniejącą grupą docker, systemowy Engine 29.9.3, aktywny user systemd i Linger=yes. FINNARO jest osobną usługą systemową pod cloud, PID 1856, online jako ai-node-finance. WTT ma własne /home/cloud/actions-runner-wtt, _work, home, _tool; pakiet 2.338.2 ze zweryfikowanym SHA256. Rejestracja ai-node-wtt zakończyła się sukcesem przez istniejącą autoryzację gh i krótkotrwały token tylko WTT przekazany przez stdin. Nie odczytywano credentials FINNARO. Własny HOME i wyczyszczone środowisko ograniczają przypadkowe użycie konfiguracji innych projektów, ale nie są granicą dostępu przy tym samym UID i rootful Engine.
+
+Nowa usługa user-systemd wtt-system-runner.service jest niezależna od systemowej usługi FINNARO i od pozostawionej nieaktywnej wtt-runner.service. Istniejący linger zapewnia autostart bez sudo. Workflow zachowuje etykietę wtt, contents:read i wspólne QA; wymaga RUNNER_NAME=ai-node-wtt, cloud, własnego workspace i systemowego socketu. Warunek zaufania PR jest na poziomie joba przed inicjalizacją PostgreSQL; forki nie wykonują joba. Nie zmieniono globalnej polityki GitHub.
+
+Lokalne QA na systemowym Dockerze: PASS, exit 0, 30 testów skryptów, backend 239, frontend 143, oba buildy, lint, Prisma, migracje fresh/upgrade, integracje, docs:validate, actionlint oraz audyt zależności względem jawnego baseline. ShellCheck nowego instalatora PASS. Istniejące podatności nadal raportowane. Log /tmp/wtt-system-runner-qa.log. Nazwy kontenerów WTT mają własne prefiksy i PID, porty są losowe na loopback; brak współdzielonych wolumenów/Compose i dostępu do HomeLab.
+
+Na moment przygotowania tej rewizji: runner zarejestrowany, jeszcze nieuruchomiony; Actions nie ma potwierdzonego PASS nowej konfiguracji. Kolejność: commit/push dostosowanego workflow, start usługi WTT, weryfikacja ONLINE i rzeczywistego runu PR #4, aktualizacja wyniku. Nie wykonano merge/deploymentu/release i nie zmieniono wersji aplikacji.
+
+Pliki tej decyzji: .github/workflows/ci.yml, ops/ci-runner/install-system-runner.sh, ops/ci-runner/wtt-system-runner.service, ops/ci-runner/README.md, docs/qa.md, README.md, CHANGELOG.md, PROJECT_STATUS.md, niniejszy raport; dołączono historyczne dokumenty docs/ci z oznaczeniem zastąpienia decyzji. Szczegóły rejestracji i bezpiecznego rollbacku usługi WTT w instrukcji runnera.

@@ -340,3 +340,5 @@ Wersja v0.6.1 poprawia rozliczanie nieobecności NN, przywraca czytelną sumę g
 ## QA i rozliczanie rodzajów czasu
 
 Pełną kontrolę jakości uruchamia `./scripts/qa.sh` na Node z `.node-version`, z Python 3 do testów preflight runnera. Szczegóły lokalnego QA, GitHub Actions i izolacji baz: [docs/qa.md](docs/qa.md). Nowe rodzaje czasu wymagają kategorii; istniejące zachowują dotychczasowe zasady, z celowaną korektą OK i wykluczeniem nieobecności z godzin zleceń.
+
+Aktualny runner CI WTT to `ai-node-wtt` jako cloud z systemowym Dockerem; osobna usługa i katalog roboczy. Zaakceptowano brak pełnej izolacji hosta. Instrukcja: [ops/ci-runner/README.md](ops/ci-runner/README.md). Rootless zachowano jako nieużywaną wcześniejszą konfigurację.

@@ -539,3 +539,5 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Przygotowanie runnera zachowuje działający rootless Docker i istniejący daemon.json, poprawia właściciela .config oraz dostęp do /tmp; dodano regresje ponownego uruchamiania.
 
 - Izolacja runnera sprawdza rzeczywistą odmowę dostępu do systemowego Docker Engine zamiast niewidoczności socketu; błędy techniczne blokują wynik. Dodano regresje i kontrolę A/B serwera na porcie 8765.
+
+- CI WTT korzysta z osobnego runnera ai-node-wtt i usługi user-systemd jako cloud, z istniejącym systemowym Dockerem zgodnie z decyzją właściciela. Warunek zaufania do PR przeniesiono na poziom joba; rootless zachowano jako nieużywany.
