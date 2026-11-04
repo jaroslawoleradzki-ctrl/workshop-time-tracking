@@ -30,7 +30,7 @@ sudo bash /tmp/wtt-accounting-fix/ops/ci-runner/prepare-host.sh
 
 Przed uruchomieniem należy przeczytać skrypt. Instaluje wyłącznie wymagania rootless bez aktualizowania istniejących pakietów i bez restartowania innych usług, tworzy osobne konto i sprawdza zakresy subuid/subgid. Zapisuje ograniczenia tylko dla nowego UID: maskowanie `/home/cloud`, danych hosta i rootful socketu, blokadę prywatnych/metadata adresów oraz limity 2 CPU / 6 GiB w dedykowanym user slice. Włącza autostart wyłącznie nowego user managera/rootless Docker. Dla rootless transportu i jego własnych testowych sieci rezerwuje 10.0.2.0/24 i 10.250.0.0/16, sprawdzając wcześniej brak kolizji z trasami hosta i sieciami Docker innych projektów. Tylko manager nowego użytkownika ma wyjątki tych wewnętrznych zakresów, aby nie zablokować komunikacji kontenerów QA. Sam proces runnera nie ma tych wyjątków. Nie zmienia globalnych sysctl, AppArmor, firewalla, konta cloud ani FINNARO. Nie rejestruje runnera i nie uruchamia workflow.
 
-Na końcu wykonuje `verify-isolation.sh` przez nowy user manager, wraz z `probe-isolation.py`: uruchamia chwilowy, pusty listener TCP na losowym porcie AI-node i potwierdza jego dostępność przed oraz po negatywnym teście nowego konta i kontenera. Nie łączy się z HomeLab. Dzięki porównaniu A/B timeout sam w sobie nie jest dowodem izolacji. Sprawdzany jest też brak odczytu poświadczeń cloud i dostępu do hostowego socketu. Listener zawsze jest zamykany po teście. Reguły blokują całą podsieć HomeLab, a nie tylko punkt kontrolny. Każdy błąd zatrzymuje przygotowanie. Nie przechodzić do etapu B, jeżeli izolacja nie ma wyniku PASS. Bez działania administratora te kontrole runtime nie zostały wykonane.
+Na końcu wykonuje `verify-isolation.sh` przez nowy user manager, wraz z `probe-isolation.py`: wymaga wcześniej uruchomionego serwera kontrolnego na 192.168.100.29:8765 i potwierdza jego dostępność przed oraz po negatywnym teście nowego konta i kontenera. Nie łączy się z HomeLab. Dzięki porównaniu A/B timeout sam w sobie nie jest dowodem izolacji. Sprawdzany jest też brak odczytu poświadczeń cloud i dostępu do hostowego socketu. Serwer kontrolny administrator zamyka po zakończeniu testów. Reguły blokują całą podsieć HomeLab, a nie tylko punkt kontrolny. Każdy błąd zatrzymuje przygotowanie. Nie przechodzić do etapu B, jeżeli izolacja nie ma wyniku PASS. Bez działania administratora te kontrole runtime nie zostały wykonane.
 
 **Etap B — zatwierdzenie polityki GitHub przez administratora repozytorium** (nie wykonano automatycznie):
 
@@ -62,3 +62,52 @@ Po tych krokach można kontynuować od sprawdzenia `gh api .../actions/runners` 
 ## Testy diagnostyki sieci
 
 `python3 -m unittest discover -s ops/ci-runner/tests -v` uruchamia rzeczywisty fragment preflight z podmienionym wyłącznie odczytem poleceń. Nie wykonuje instalacji ani wymaga sudo/Dockera. Obejmuje `IPAM.Config=null`, pustą listę, poprawne podsieci, brak IPAM, brak sieci i wykrywanie kolizji także po sieci z Config=null. Testy są częścią wspólnego `scripts/qa.sh`.
+
+
+## Ponowne przygotowanie po uruchomieniu rootless Docker (UID 1001)
+
+`prepare-host.sh` ustawia właściciela i tryb 700 zarówno `.config`, jak i `.config/docker`. W polityce user managera dopuszcza zapis do `/tmp` potrzebny RootlessKit przy ProtectSystem=strict. Jest to współdzielony katalog tymczasowy hosta (nie sandbox dla niezaufanego kodu). Nie zapisywać tam sekretów; izolacja sieci i maskowanie danych innych kont pozostają wymagane.
+
+Skrypt sprawdza zainstalowane pakiety i pomija apt, jeśli wszystkie wymagania istnieją. Zachowuje istniejący daemon.json. Działający daemon z name=rootless nie jest reinstalowany ani restartowany. Zatrzymana, istniejąca usługa Docker jest uruchamiana bez reinstalacji; instalator rootless jest wykonywany tylko przy braku działającego daemonu i usługi. Odpowiedź inna niż rootless zatrzymuje przygotowanie. Istniejąca rejestracja GitHub nadal powoduje bezpieczną odmowę zmian. Skrypt nie restartuje aktywnego user managera; daemon-reload nie stosuje nowych zabezpieczeń do już działających procesów. Jeżeli polityka uruchomionej usługi różni się od przygotowanej, administrator musi zaplanować jej zastosowanie i ponowić testy izolacji przed aktywacją runnera.
+
+Na obecnym etapie konto cloud nie ma dostępu do socketu `/run/user/1001/docker.sock`, a sudo wymaga uwierzytelnienia. Administrator może kontynuować etap A powyżej; po PASS testów runtime oraz zatwierdzeniu polityki forków przejść do B/C. Nie reinstalować ręcznie działającego rootless Docker. Nie podawać tokenów w rozmowie. Testy A/B sprawdzają dostęp do prywatnej sieci na lokalnym punkcie kontrolnym, bez połączeń do HomeLab. Rejestracja nadal jest odrębnym krokiem i nie została wykonana.
+
+
+## Pełna weryfikacja izolacji — obowiązująca procedura (8765)
+
+Samo istnienie systemowego socketu nie stanowi FAIL. `system_docker_access.py` wykonuje `docker --host unix:///var/run/docker.sock info` z limitem czasu, sprawdza klienta i niezależną próbą AF_UNIX potwierdza EACCES/EPERM. Tylko jawna odmowa uprawnień w obu próbach daje PASS tego komponentu. Udane połączenie daje FAIL. Timeout, brak klienta/socketu, niedziałający daemon, inny błąd oraz błędny DOCKER_HOST/context/TLS dają BLOCKED. Administrator przed i po testach potwierdza również, że systemowy Engine odpowiada. Skrypt nie zmienia socketu ani Dockera.
+
+Wymagane środowisko testu WTT:
+
+```text
+DOCKER_HOST=unix:///run/user/1001/docker.sock
+WTT_ISOLATION_PROBE_HOST=192.168.100.29
+WTT_ISOLATION_PROBE_PORT=8765
+```
+
+Orkiestrator ustawia je jawnie w jednostce systemd użytkownika WTT. `verify-isolation.sh` nie uruchamiać przez sudo bash jako root. `probe-isolation.py` wymaga administratora wyłącznie do kontroli A/B i przejścia przez runuser do systemd-run --user. Nie zmienia usług i nie rejestruje runnera.
+
+1. Serwer kontrolny musi działać. Jeśli port jest już zajęty przez znany serwer kontrolny, nie uruchamiać drugiego i nie zatrzymywać istniejącej usługi. Jeśli serwera nie ma, w osobnym terminalu AI-node uruchomić prosty HTTP server obsługujący wyłącznie nowy pusty katalog, bez danych innych projektów:
+
+```bash
+(
+  probe_dir="$(mktemp -d /tmp/wtt-isolation-control.XXXXXX)"
+  trap 'rmdir -- "$probe_dir"' EXIT
+  python3 -m http.server 8765 --bind 192.168.100.29 --directory "$probe_dir"
+)
+```
+
+Nie otwierać portu publicznie i nie zmieniać firewalla. Jeśli bindowanie lub osiągalność są niemożliwe: BLOCKED. Po teście zakończyć własny serwer Ctrl+C. Nie zatrzymywać cudzego procesu.
+
+2. Administrator po review aktualnych plików kopiuje wyłącznie diagnostykę (bez prepare-host, bez reinstalacji i bez restartów):
+
+```bash
+sudo install -o wtt-runner -g wtt-runner -m 700   /tmp/wtt-accounting-fix/ops/ci-runner/verify-isolation.sh   /tmp/wtt-accounting-fix/ops/ci-runner/system_docker_access.py   /home/wtt-runner/
+sudo python3 /tmp/wtt-accounting-fix/ops/ci-runner/probe-isolation.py
+```
+
+Kontrole administratora sprawdzają rzeczywistą odpowiedź Engine i połączenie TCP przed i po teście. Brak serwera lub Engine blokuje test; nie jest dowodem izolacji. Test WTT sprawdza konto/grupy, rootless, konfigurację, chronione pliki cloud, jawny brak dostępu do systemowego Engine, pull alpine:3.21, start kontenera, bind chronionego HOME i połączenia sieciowe z konta oraz kontenera. Potwierdzony sukces bind mount albo połączenia oznacza FAIL. Niejasny błąd bind lub techniczny błąd kontenera oznacza BLOCKED. Sam verify-isolation wypisuje jedynie zakończenie komponentów, nie pełny PASS.
+
+3. Interpretacja: **PASS** wyłącznie po sukcesie całego orkiestratora i obu kontroli A/B; **FAIL** oznacza wykryte naruszenie lub niezaliczone wymaganie; **BLOCKED** oznacza brak warunków, uprawnień albo niejednoznaczny błąd techniczny. Kody orkiestratora: 0 PASS, niezero bez prawa rejestracji; wyjście 2 oznacza blokadę. Przy FAIL/BLOCKED nie rejestrować ani nie uruchamiać runnera.
+
+4. Dopiero po udokumentowanym pełnym PASS administrator może przejść do etapów B/C powyżej. Najpierw wymagane jest odrębne zatwierdzenie warunków dla publicznego repozytorium. Nie wykonywać zmian polityki ani rejestracji w ramach samego testu. Token rejestracyjny pozyskiwać wyłącznie w terminalu, bez rozmowy i bez pliku. Następnie sprawdzić nazwę ai-node-wtt, repo, etykiety self-hosted/Linux/X64/wtt i ONLINE. Pełny PASS izolacji nie zastępuje zielonego wykonania QA na GitHub.

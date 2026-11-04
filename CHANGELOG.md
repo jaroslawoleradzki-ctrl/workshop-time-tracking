@@ -535,3 +535,7 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Runner WTT — diagnostyka 2026-11-04
 - Preflight toleruje Docker IPAM.Config=null oraz brak IPAM, zachowując wykrywanie kolizji podsieci. Dodano testy regresyjne uruchamiane przez wspólny skrypt QA.
+
+- Przygotowanie runnera zachowuje działający rootless Docker i istniejący daemon.json, poprawia właściciela .config oraz dostęp do /tmp; dodano regresje ponownego uruchamiania.
+
+- Izolacja runnera sprawdza rzeczywistą odmowę dostępu do systemowego Docker Engine zamiast niewidoczności socketu; błędy techniczne blokują wynik. Dodano regresje i kontrolę A/B serwera na porcie 8765.

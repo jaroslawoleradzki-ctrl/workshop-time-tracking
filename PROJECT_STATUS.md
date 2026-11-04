@@ -371,3 +371,7 @@ Przed następną zmianą należy wykonać procedurę z `docs/session-start.md`, 
 Na izolowanej gałęzi `fix/work-time-accounting-2026-11` zaimplementowano kategorie czasu, korektę słownika OK, ochronę przed podwójnym naliczaniem oraz wspólne lokalne QA/workflow self-hosted. Nie wykonano merge ani deploymentu. Status zakończenia, wyniki testów i blokady rejestracji osobnego runnera są zapisane w `docs/reviews/WORK_TIME_ACCOUNTING_FIX_REPORT_2026-11.md`. Wynik lokalnego QA nie oznacza sukcesu GitHub Actions.
 
 Poprawka preflight runnera: obsłużono null w Docker IPAM.Config, dodano testy diagnostyki sieci do wspólnego QA. Nie wykonano instalacji systemowej ani rejestracji runnera w tej kontynuacji.
+
+Rootless Docker WTT działa jako UID 1001 (potwierdzenie administratora i osobne procesy). Skrypt przygotowania uzupełniono o bezpieczne ponawianie i uprawnienia katalogów; 16 testów preflight PASS, pełne lokalne QA PASS. Rejestracja runnera nadal wymaga testu izolacji z uprawnieniami administratora i zatwierdzenia polityki GitHub. FINNARO bez zmian.
+
+Weryfikacja izolacji: poprawiono test dostępu do systemowego Docker Engine i dodano kontrole administratora przed/po. Pełny wynik pozostaje BLOCKED z powodu wymaganej autoryzacji sudo; FINNARO active. Nie rejestrowano WTT i nie zmieniano polityk GitHub.

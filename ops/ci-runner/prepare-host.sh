@@ -4,6 +4,8 @@ set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo 'Run as administrator: sudo bash ops/ci-runner/prepare-host.sh' >&2; exit 1; }
 [[ $(hostname) == ai-node ]] || { echo 'This preparation is limited to AI-node' >&2; exit 1; }
 source_dir="$(cd -- "$(dirname -- "$0")" && pwd)"
+# shellcheck source=ops/ci-runner/prepare-host-functions.sh
+source "$source_dir/prepare-host-functions.sh"
 account=wtt-runner
 runner_home=/home/wtt-runner
 [[ ! -e "$runner_home/actions-runner-wtt/.runner" ]] || { echo 'Runner already registered; refusing to reconfigure its account' >&2; exit 1; }
@@ -29,8 +31,16 @@ for destination in existing:
         raise SystemExit('Reserved rootless range overlaps host networking; choose isolated ranges before installation')
 NETWORKS
 export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l
-apt-get update
-apt-get install -y --no-install-recommends --no-upgrade uidmap dbus-user-session slirp4netns fuse-overlayfs
+missing_packages=()
+for package in uidmap dbus-user-session slirp4netns fuse-overlayfs; do
+  if [[ $(dpkg-query -W -f='${Status}' "$package" 2>/dev/null || true) != 'install ok installed' ]]; then
+    missing_packages+=("$package")
+  fi
+done
+if (( ${#missing_packages[@]} )); then
+  apt-get update
+  apt-get install -y --no-install-recommends --no-upgrade "${missing_packages[@]}"
+fi
 if ! id "$account" >/dev/null 2>&1; then
   useradd --create-home --user-group --shell /bin/bash "$account"
 fi
@@ -64,7 +74,8 @@ InaccessiblePaths=-/home/cloud -/root -/srv -/tank -/var/lib/docker -/run/docker
 ProtectProc=invisible
 ProtectSystem=strict
 UNIT
-printf 'ReadWritePaths=/home/wtt-runner /run/user/%s\n' "$runner_uid" >> "/etc/systemd/system/user@${runner_uid}.service.d/50-wtt-isolation.conf"
+# RootlessKit requires temporary files while ProtectSystem=strict is enabled.
+printf 'ReadWritePaths=/home/wtt-runner /run/user/%s /tmp\n' "$runner_uid" >> "/etc/systemd/system/user@${runner_uid}.service.d/50-wtt-isolation.conf"
 # Only this account's slice; FINNARO remains in its own account/slice.
 cat > "/etc/systemd/system/user-${runner_uid}.slice.d/50-wtt-limits.conf" <<'UNIT'
 [Slice]
@@ -73,14 +84,18 @@ MemoryHigh=5G
 MemoryMax=6G
 TasksMax=2048
 UNIT
-install -d -o "$account" -g "$account" -m 700 "$runner_home/.config/docker"
+prepare_runner_directories "$account" "$runner_home"
+# Preserve an existing daemon configuration on every rerun.
+if [[ ! -e "$runner_home/.config/docker/daemon.json" ]]; then
 cat > "$runner_home/.config/docker/daemon.json" <<'DOCKER'
 {"bip":"10.250.0.1/24","default-address-pools":[{"base":"10.250.0.0/16","size":24}]}
 DOCKER
 chown "$account:$account" "$runner_home/.config/docker/daemon.json"
 chmod 600 "$runner_home/.config/docker/daemon.json"
+fi
 install -o "$account" -g "$account" -m 700 "$source_dir/install-runner.sh" "$runner_home/install-runner.sh"
 install -o "$account" -g "$account" -m 700 "$source_dir/verify-isolation.sh" "$runner_home/verify-isolation.sh"
+install -o "$account" -g "$account" -m 700 "$source_dir/system_docker_access.py" "$runner_home/system_docker_access.py"
 sed "s/@UID@/${runner_uid}/g" "$source_dir/wtt-runner.service.template" > /etc/systemd/system/wtt-runner.service
 systemctl daemon-reload
 loginctl enable-linger "$account"
@@ -91,8 +106,7 @@ as_runner() {
     DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${runner_uid}/bus" \
     DOCKER_HOST="unix:///run/user/${runner_uid}/docker.sock" "$@"
 }
-as_runner dockerd-rootless-setuptool.sh install
-as_runner systemctl --user enable --now docker
+ensure_rootless_docker
 python3 "$source_dir/probe-isolation.py"
 echo 'Host prerequisites prepared. No GitHub runner has been registered or started.'
 echo 'Next: administrator approves fork policy, registers ai-node-wtt, then enables wtt-runner.service.'

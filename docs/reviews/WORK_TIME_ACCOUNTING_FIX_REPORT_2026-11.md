@@ -223,3 +223,64 @@ Przegląd ops/ i scripts/: pozostałe użycia Docker JSON to docker info Securit
 Bieżące wyniki: pełne ./scripts/qa.sh PASS (exit 0), backend 239/239, frontend 143/143, preflight 7/7, build obu pakietów, ESLint, Prisma, migracje fresh/upgrade, walidacja Pomocy i actionlint PASS. Dodatkowo ShellCheck wszystkich skryptów runnera i bash -n PASS. Kontrola bezpieczeństwa zależności PASS względem jawnego baseline; nadal 23 podatności backendu (w tym 1 critical) oraz 23 frontendu. Log lokalny: /tmp/wtt-prepare-host-qa.log, nie jest artefaktem Git.
 
 W tej kontynuacji nie wykonano sudo, instalacji systemowej, rejestracji runnera, zmian FINNARO ani dostępu do HomeLab. Poprawka instalatora jest zweryfikowana lokalnie; instalacja i izolacja runtime nadal wymagają administratora. Commit obejmuje również znane, wcześniej niezatwierdzone pliki przygotowania runnera z poprzedniej kontynuacji. Nie wykonano push, merge ani deploymentu. Brak nowego wyniku GitHub Actions.
+
+
+## Kontynuacja po uruchomieniu rootless Docker — 2026-11-04
+
+**Stan instalacji: nadal ZABLOKOWANE przed rejestracją/aktywacją GitHub runnera.** Konto wtt-runner istnieje (UID/GID 1001), ma wyłącznie własną grupę. Procesy RootlessKit, dockerd i containerd działają jako to konto; RootlessKit ma --disable-host-loopback. User manager active. Potwierdzenie SecurityOptions name=rootless i socketu /run/user/1001/docker.sock pochodzi od administratora; bezpośrednia próba odczytu jako cloud jest odrzucana, sudo -n -u wtt-runner wymaga uwierzytelnienia. Nie obchodzono tych ograniczeń.
+
+Systemowy daemon działa jako root, SecurityOptions bez rootless, storage /srv/docker, socket /var/run/docker.sock root:docker 660. Rozdzielenie kont i procesów jest potwierdzone; pełne porównanie storage/kontenerów oraz negatywne testy WTT wymagają uruchomienia przygotowanej diagnostyki przez administratora. Nie można jeszcze zadeklarować pełnej izolacji runtime.
+
+Odczyt systemctl user@1001: ProtectSystem=strict, ReadWritePaths obejmuje własne HOME, runtime oraz /tmp; maski /home/cloud, /root, /srv, /tank, /var/lib/docker i rootful socketu; deny zakresów prywatnych/metadata z wyjątkami wyłącznie dla własnych sieci rootless. PrivateTmp=no — /tmp pozostaje współdzielone. Nie zmieniono ustawień hosta. FINNARO nadal active z PID 1856, bez ingerencji. wtt-runner.service inactive, GitHub API 0 runnerów WTT. Polityka forków nadal first_time_contributors; administrator musi zatwierdzić jej zaostrzenie przed aktywacją. CI YAML pozostaje bez zmian, self-hosted/Linux/X64/wtt, contents:read, bez dostępu do infrastruktury klienta.
+
+### Zmiany instalatora
+
+- Osobny testowalny prepare-host-functions.sh: jawny właściciel obu poziomów .config, wykrywanie działającego rootless bez reinstalacji/restartu, start istniejącej zatrzymanej usługi bez reinstalacji, weryfikacja po starcie, odmowa daemonu innego niż rootless.
+- Dostęp /tmp w ReadWritePaths user managera. Kontrola możliwości utworzenia i usunięcia własnego pliku tymczasowego oraz właściciela .config w verify-isolation.sh.
+- Zachowanie istniejącego daemon.json, pominięcie apt przy komplecie pakietów. Brak automatycznego restartu aktywnych usług i brak przepisywania rejestracji runnera.
+- probe-isolation.py przekazuje DOCKER_HOST jawnie przez systemd-run --setenv; środowisko klienta systemd-run nie jest automatycznie środowiskiem uruchamianego joba.
+- 9 nowych testów regresyjnych, razem 16: działający rootless, odmowa rootful, start istniejącej usługi i pierwsza instalacja (sukces/porażka), właściciel katalogów, /tmp, zachowanie daemon.json. Polecenia systemowe zastępowane wyłącznie w testach; bez sudo i instalacji.
+
+### Wyniki i ograniczenia
+
+Pełne lokalne ./scripts/qa.sh zakończone exit 0: backend 239, frontend 143, Prisma, migracje fresh/upgrade, oba buildy, lint, walidacja Pomocy, actionlint, kontrola zależności względem dotychczasowego baseline. Finalne testy preflight 16/16 PASS; ShellCheck -x wszystkich skryptów runnera i bash -n PASS. Przy pierwszym ShellCheck wykryto adnotację source i zakres zmiennych; skorygowano je i ponowna kontrola przeszła. Log pełnego QA: /tmp/wtt-runner-rerun-qa.log. Istniejące podatności zależności nie zostały usunięte.
+
+Nie instalowano ponownie Dockera, nie wykonywano prepare-host.sh ani rejestracji, nie zmieniano FINNARO lub baz HomeLab. Nie pobrano tokenu rejestracyjnego. Nie wykonano merge, deploymentu ani nowego push/commita. Zmiany pozostają w bieżącej gałęzi roboczej po ee8122f; origin nadal cd76089.
+
+Następny krok administratora: przejrzeć zmiany i wykonać etap A z ops/ci-runner/README.md (`sudo bash /tmp/wtt-accounting-fix/ops/ci-runner/prepare-host.sh`), który teraz zachowuje działający rootless Docker. Jeżeli izolacja runtime ma PASS i aktywne polityki odpowiadają wymaganiom, zatwierdzić politykę GitHub i wykonać opisane etapy B/C bez przekazywania sekretów do rozmowy. Następnie wymagane ONLINE i rzeczywisty PASS Actions. Samo uruchomienie Docker nie spełnia kryterium zakończenia całego zadania.
+
+
+## Finalizacja testu dostępu do systemowego Engine — 2026-11-04
+
+**Pełna izolacja: BLOCKED. Gotowość do rejestracji: NIE.** Usunięto błędny warunek `! -S /var/run/docker.sock`: widoczność socketu nie oznacza dostępu. Nowy system_docker_access.py wymaga jawnej odmowy uprawnień z klienta Docker oraz EACCES/EPERM z niezależnego połączenia AF_UNIX. Połączenie skuteczne to FAIL; błędy klienta, timeout, odmowa połączenia przez niedziałający daemon, brak socketu i błędne DOCKER_HOST/context/TLS to BLOCKED. Orkiestrator dodatkowo wymaga odpowiedzi systemowego Engine przed i po próbie WTT. Nie zmieniono uprawnień socketu ani konfiguracji Dockera.
+
+probe-isolation.py nie uruchamia już własnego serwera na losowym porcie. Wymaga działającego punktu 192.168.100.29:8765; kontroluje go z kontekstu administratora przed i po systemd-run --user dla wtt-runner. verify-isolation.sh nie wypisuje samodzielnie pełnego PASS. Dodano rozróżnienie technicznych błędów bind mount/kontenera; ogólny błąd nie stanowi dowodu izolacji. Udany bind chronionego HOME lub połączenie sieciowe powoduje FAIL. Instalator kopiuje nowy moduł diagnostyczny; dotychczasowe poprawki ponawiania przygotowania z poprzedniej sesji są zachowane.
+
+### Faktycznie wykonane sprawdzenia hosta
+
+- Tożsamość: wtt-runner UID/GID 1001, wyłącznie grupa wtt-runner.
+- Systemowy Docker odpowiada na odczyt info z uprawnionego konta cloud. Nie zmieniano konfiguracji ani danych.
+- Serwer kontrolny 192.168.100.29:8765 osiągalny z cloud. Nie uruchamiano ani nie zatrzymywano serwera.
+- Próba `sudo -n python3 .../probe-isolation.py` zatrzymana: interactive authentication is required. Kontrole administratora oraz user-systemd NIE zostały wykonane. Nie deklarujemy PASS na podstawie samej osiągalności z cloud.
+- FINNARO active, MainPID 1856, bez restartu lub zmian.
+- Rootless, pull/start alpine, odmowa systemowego Engine jako WTT, bind chronionych katalogów i filtracja sieci z WTT wymagają jeszcze rzeczywistego pełnego testu. Potwierdzenia administratora z opisu zadania nie zastępują wykonania nowej wersji testu.
+
+### Testy i pliki
+
+30 regresji skryptów PASS (7 sieci Docker, 9 ponawiania, 10 systemowego Engine, 4 kontroli A/B). Obejmują wymaganą odmowę dostępu, sukces połączenia, błąd klienta, timeout, błędny host, zanik serwera oraz wymóg user-systemd. Testy używają kontrolowanych odpowiedzi procesów/socketów; nie stanowią rzeczywistego PASS izolacji hosta. ShellCheck -x i bash -n PASS. Pełne lokalne QA: backend 239, frontend 143, oba buildy, lint, Prisma, migracje fresh/upgrade, walidacja Pomocy, actionlint i baseline zależności PASS. Zastane podatności pozostają jawne. Log: /tmp/wtt-isolation-final-qa.log.
+
+Zmiany bieżące oraz zatwierdzane zaległe poprawki tej samej diagnostyki: CHANGELOG.md, PROJECT_STATUS.md, niniejszy raport, ops/ci-runner/.gitignore, README.md, prepare-host.sh, prepare-host-functions.sh, probe-isolation.py, verify-isolation.sh, system_docker_access.py, tests/test_prepare_host_rerun.py, tests/test_isolation_controls.py, tests/test_system_docker_access.py. Nie zmieniano kodu biznesowego, YAML workflow ani polityki GitHub. Commit używa dokładnej wcześniej zatwierdzonej wiadomości. Bez push, rejestracji, merge i deploymentu.
+
+### Dokładny następny krok
+
+Administrator po review kopiuje wyłącznie dwa aktualne pliki diagnostyczne i uruchamia kontroler; nie musi ponownie wykonywać prepare-host.sh:
+
+```bash
+sudo install -o wtt-runner -g wtt-runner -m 700 \
+  /tmp/wtt-accounting-fix/ops/ci-runner/verify-isolation.sh \
+  /tmp/wtt-accounting-fix/ops/ci-runner/system_docker_access.py \
+  /home/wtt-runner/
+sudo python3 /tmp/wtt-accounting-fix/ops/ci-runner/probe-isolation.py
+```
+
+Kontroler sam przełącza test do systemd użytkownika WTT. Nie uruchamiać verify-isolation przez sudo bash jako root. Gdy punkt kontrolny nie działa, wynik BLOCKED; instrukcja bezpiecznego serwera na pustym katalogu znajduje się w ops/ci-runner/README.md. Rejestracja możliwa dopiero po pełnym PASS oraz osobnym spełnieniu wymagań publicznego repozytorium. W ramach tej sesji nie zmieniono polityki i nie pozyskano tokenu.
