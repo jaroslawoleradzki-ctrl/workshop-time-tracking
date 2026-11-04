@@ -532,3 +532,6 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 - walidacja formularza pracowników (poprawne sprawdzanie i fallback na rozdzielanie pełnych nazwisk starszych rekordów).
+
+### Runner WTT — diagnostyka 2026-11-04
+- Preflight toleruje Docker IPAM.Config=null oraz brak IPAM, zachowując wykrywanie kolizji podsieci. Dodano testy regresyjne uruchamiane przez wspólny skrypt QA.

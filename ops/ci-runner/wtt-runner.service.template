@@ -1,22 +1,29 @@
 [Unit]
 Description=GitHub Actions runner for workshop-time-tracking only
 After=network-online.target user@@UID@.service
+Requires=user@@UID@.service
 Wants=network-online.target
 [Service]
 User=wtt-runner
 Group=wtt-runner
+Slice=user-@UID@.slice
 WorkingDirectory=/home/wtt-runner/actions-runner-wtt
+ExecStartPre=/bin/bash -c 'for attempt in {1..30}; do /usr/bin/docker info >/dev/null 2>&1 && exit 0; sleep 2; done; exit 1'
+TimeoutStartSec=90
 ExecStart=/home/wtt-runner/actions-runner-wtt/run.sh
 Environment=DOCKER_HOST=unix:///run/user/@UID@/docker.sock
 Environment=XDG_RUNTIME_DIR=/run/user/@UID@
 Environment=RUNNER_TOOL_CACHE=/home/wtt-runner/_tool
+UnsetEnvironment=GH_TOKEN GITHUB_TOKEN SSH_AUTH_SOCK AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN DATABASE_URL WTT_POSTGRES_PASSWORD WTT_JWT_SECRET
 Restart=on-failure
 RestartSec=10
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
+ProtectProc=invisible
+InaccessiblePaths=-/home/cloud -/root -/srv -/tank -/var/lib/docker -/run/docker.sock -/var/run/docker.sock
 ReadWritePaths=/home/wtt-runner /run/user/@UID@
 PrivateTmp=true
-IPAddressDeny=10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 fc00::/7
+IPAddressDeny=10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 169.254.0.0/16 fc00::/7 fe80::/10
 [Install]
 WantedBy=multi-user.target

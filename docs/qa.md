@@ -1,6 +1,6 @@
 # QA lokalnie i w GitHub Actions
 
-Wymagany Node zgodny z `.node-version` (22.22.1), npm i Docker z dostępem do sieci rejestru npm/Docker. Framework: Vitest, Supertest, React Testing Library; PostgreSQL sprawdza prawdziwe predykaty Prisma i migracje. Backend nie ma lintera; frontend ma ESLint. TypeScript jest sprawdzany przez build `tsc` obu pakietów.
+Wymagany Node zgodny z `.node-version` (22.22.1), npm, Python 3 i Docker z dostępem do sieci rejestru npm/Docker. Framework: Vitest, Supertest, React Testing Library; PostgreSQL sprawdza prawdziwe predykaty Prisma i migracje. Backend nie ma lintera; frontend ma ESLint. TypeScript jest sprawdzany przez build `tsc` obu pakietów.
 
 Pełne QA na AI-node:
 
@@ -8,7 +8,7 @@ Pełne QA na AI-node:
 ./scripts/qa.sh
 ```
 
-Skrypt instaluje oba lockfile przez `npm ci`, generuje i waliduje Prisma, sprawdza migrację istniejącego schematu i korektę OK, kompiluje backend, uruchamia komplet testów backendu (w tym testy pustej bazy, upgrade i regresję PostgreSQL), lint/build/testy frontendu, walidację Pomocy i kontrolę zależności. Błąd dowolnego kroku przerywa QA. Docker jest wymagany; testy bazodanowe nie mogą zostać pominięte w tym trybie.
+Skrypt najpierw uruchamia testy unittest diagnostyki sieci runnera (bez sudo i bez instalacji systemowej), następnie instaluje oba lockfile przez `npm ci`, generuje i waliduje Prisma, sprawdza migrację istniejącego schematu i korektę OK, kompiluje backend, uruchamia komplet testów backendu (w tym testy pustej bazy, upgrade i regresję PostgreSQL), lint/build/testy frontendu, walidację Pomocy i kontrolę zależności. Błąd dowolnego kroku przerywa QA. Docker jest wymagany; testy bazodanowe nie mogą zostać pominięte w tym trybie.
 
 Lokalnie skrypt tworzy własny kontener PostgreSQL z losowym portem wyłącznie na loopback i usuwa tylko ten kontener przy wyjściu. Testy migracyjne również używają kontenera o unikalnej nazwie i losowym porcie. Nie korzysta z `wtt_dev`, DEMO, `wtt_client_test` ani HomeLab. Testy zawierają wyłącznie fikcyjne dane. `QA_DATABASE_PORT` jest zarezerwowane dla świeżej usługi PostgreSQL workflow; skrypt odmawia przygotowania bazy, która już zawiera tabele. Nie należy kierować QA na istniejącą bazę.
 

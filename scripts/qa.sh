@@ -4,6 +4,7 @@ export TZ=UTC
 cd "$(dirname "$0")/.."
 required_node="$(cat .node-version)"
 [[ "$(node -v)" == "v${required_node}" ]] || { echo "Use Node ${required_node}" >&2; exit 1; }
+python3 -m unittest discover -s ops/ci-runner/tests -v
 docker info >/dev/null
 qa_container=""
 cleanup() { if [[ -n "$qa_container" ]]; then docker rm -f "$qa_container" >/dev/null; fi; }

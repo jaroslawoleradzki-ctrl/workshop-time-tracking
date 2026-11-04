@@ -169,3 +169,57 @@ Lista obejmuje implementację, regresje, QA/CI i dokumentację; dwa wcześniejsz
 - `scripts/qa/dependency-audit.mjs`
 - `scripts/qa/dependency-baseline.json`
 - `scripts/qa/prepare-database.mjs`
+
+
+## Kontynuacja: dedykowany runner AI-node — 2026-11-04
+
+**Status: ZABLOKOWANE.** Nie zarejestrowano ani nie uruchomiono runnera WTT. GitHub API zwraca 0 runnerów repozytorium. Run [41812659006](https://github.com/jaroslawoleradzki-ctrl/workshop-time-tracking/actions/runs/41812659006) pozostaje `queued`, job `WTT QA` nie wykonał żadnego kroku. Nie jest to wynik PASS. Commit opublikowany pozostaje `cd76089`, draft PR #4 istnieje; poniższe przygotowania infrastrukturalne są lokalnymi zmianami bez nowego commita/pusha.
+
+### Potwierdzony stan hosta i blokada
+
+AI-node / 192.168.100.29: Ubuntu 26.04.1, cloud UID 1000. Konto cloud należy do sudo i docker, ale `sudo -n true` wymaga uwierzytelnienia. Nie istnieje konto wtt-runner; brakuje newuidmap/newgidmap, slirp4netns i fuse-overlayfs. Dostępne są Docker 29.9.3, rootlesskit i skrypty dockerd-rootless; aktualny daemon hosta jest rootful. Profil AppArmor rootlesskit istnieje; nie wyłączano ograniczeń namespace ani AppArmor.
+
+FINNARO: runner `ai-node-finance`, repo `jaroslawoleradzki-ctrl/finance-platform`, etykiety self-hosted/Linux/X64/ai-node, katalog `/home/cloud/actions-runner`. Usługa `actions.runner.jaroslawoleradzki-ctrl-finance-platform.ai-node-finance.service` nadal active, PID 1856, start 2026-10-30 09:07:21 UTC. Nie zmieniono konfiguracji, procesu, konta ani kontenerów FINNARO.
+
+### Przygotowana konfiguracja — jeszcze niezastosowana
+
+Docelowo `ai-node-wtt`, repo `jaroslawoleradzki-ctrl/workshop-time-tracking`, etykiety self-hosted/Linux/X64/wtt. Osobne konto i HOME `/home/wtt-runner`, katalog runnera `actions-runner-wtt`, własny rootless daemon/socket/storage. Osobna usługa wtt-runner.service, linger i autostart Docker; ograniczenia zapisu, maskowanie HOME cloud i rootful socketu, blokada prywatnych i metadata adresów, limity wyłącznie nowego user slice. Wewnętrzne zakresy rootless 10.0.2.0/24 oraz 10.250.0.0/16 wymagają kontroli kolizji i mają wyjątki tylko w nowym user managerze.
+
+Dodano `ops/ci-runner/prepare-host.sh`, `verify-isolation.sh`, `probe-isolation.py`; uzupełniono README i template usługi. Skrypt przygotowania nie rejestruje runnera. Test izolacji wymaga działającego lokalnego punktu kontrolnego przed i po odmowie połączenia z nowego konta i kontenera; nie łączy się z HomeLab. Bez sudo nie wykonano tych testów runtime. Nie można potwierdzić izolacji samą analizą plików.
+
+### Bezpieczeństwo publicznego repozytorium
+
+Workflow ma triggers PR/push development i main, GITHUB_TOKEN contents:read, przypięte akcje i checkout bez utrwalania credentials. Repo API wykazało 0 sekretów repozytorium i 0 environments; nie jest to audyt wszystkich sekretów hosta/organizacji. Workflow odrzuca obce forki przed checkout, ale usługi joba są tworzone wcześniej, a YAML PR może się zmienić. Warunek YAML nie stanowi granicy bezpieczeństwa.
+
+Polityka forków `first_time_contributors` wymaga zaostrzenia przez administratora do `all_external_contributors`. Nie zmieniono jej samodzielnie. Nawet po zmianie nie zatwierdzać niezaufanych workflow na tym hoście. Rootless Docker i osobne konto nie są izolacją równoważną osobnej maszynie: współdzielą kernel i zasoby hosta. Dla wykonywania dowolnego niezaufanego kodu potrzebna jest dodatkowa izolacja, np. odtwarzana VM z kontrolowanym egress, bez danych i poświadczeń innych projektów. Przygotowanie dotyczy wyłącznie przejrzanych, zaufanych gałęzi; dopóki testy izolacji i polityka nie zostaną zweryfikowane, nie uruchamiać workflow. Nie potwierdzono jeszcze braku możliwości dostępu do wszystkich usług hosta, w tym loopback; wymaga to kontroli runtime przed aktywacją.
+
+### Wykonane kontrole
+
+- bash -n, ShellCheck skryptów runnera: PASS.
+- actionlint konfiguracji workflow: PASS.
+- kontrola składni Python i odmowy uruchomienia instalatora/przygotowania z niewłaściwego konta: PASS.
+- oficjalny pakiet runnera 2.338.2 pobrany do katalogu tymczasowego: SHA256 zgodne, Runner.Listener --version działa. Bez rejestracji i uruchomienia jobów.
+- 414 testów aplikacji PASS to wcześniejszy wynik lokalnego QA; nie uruchamiano ich ponownie w tej kontynuacji infrastrukturalnej. Brak nowych wyników Actions.
+
+### Następny wymagany krok
+
+Administrator AI-node powinien przejrzeć przygotowane pliki i wykonać w terminalu hosta:
+
+```bash
+sudo bash /tmp/wtt-accounting-fix/ops/ci-runner/prepare-host.sh
+```
+
+To rzeczywista blokada uprawnień, nie problem aplikacji. Bez przesyłania haseł/tokenów do rozmowy. Dalsze kroki zatwierdzenia polityki, rejestracji i autostartu opisuje `ops/ci-runner/README.md`; nie włączać usługi przed zaakceptowaniem zabezpieczeń i weryfikacją izolacji. Następnie wymagane są ONLINE, rzeczywisty PASS wszystkich jobów PR #4 i ponowna kontrola FINNARO. Zadanie pozostaje nieukończone.
+
+
+## Naprawa preflight Docker IPAM.Config — 2026-11-04
+
+Docker network inspect może zwracać `IPAM.Config=null`; domyślna wartość `dict.get` nie zastępuje jawnego null. Preflight normalizuje teraz brak/null IPAM i Config do pustych kolekcji. Sprawdzanie rzeczywistych podsieci i odrzucanie kolizji pozostają aktywne.
+
+Dodano 7 testów unittest wykonujących rzeczywisty fragment diagnostyczny prepare-host.sh z podmienionym wyłącznie subprocess.check_output: null, pusta lista, poprawne IPv4/IPv6, brak/null IPAM, kolizja po null, kolizja trasy hosta oraz brak sieci Docker. Sprawdzono, że przywrócenie starego wyrażenia w pamięci powoduje oczekiwany TypeError w teście regresyjnym. Testy są częścią scripts/qa.sh lokalnie i w Actions. Nie uruchamiają instalatora ani operacji administracyjnych.
+
+Przegląd ops/ i scripts/: pozostałe użycia Docker JSON to docker info SecurityOptions filtrowane tekstowo; nie iterują po nullable polach. Iteracja po wyniku network inspect oczekuje listy zgodnej z kontraktem tego polecenia; odczyt tras hosta dotyczy JSON ip, nie Dockera.
+
+Bieżące wyniki: pełne ./scripts/qa.sh PASS (exit 0), backend 239/239, frontend 143/143, preflight 7/7, build obu pakietów, ESLint, Prisma, migracje fresh/upgrade, walidacja Pomocy i actionlint PASS. Dodatkowo ShellCheck wszystkich skryptów runnera i bash -n PASS. Kontrola bezpieczeństwa zależności PASS względem jawnego baseline; nadal 23 podatności backendu (w tym 1 critical) oraz 23 frontendu. Log lokalny: /tmp/wtt-prepare-host-qa.log, nie jest artefaktem Git.
+
+W tej kontynuacji nie wykonano sudo, instalacji systemowej, rejestracji runnera, zmian FINNARO ani dostępu do HomeLab. Poprawka instalatora jest zweryfikowana lokalnie; instalacja i izolacja runtime nadal wymagają administratora. Commit obejmuje również znane, wcześniej niezatwierdzone pliki przygotowania runnera z poprzedniej kontynuacji. Nie wykonano push, merge ani deploymentu. Brak nowego wyniku GitHub Actions.
