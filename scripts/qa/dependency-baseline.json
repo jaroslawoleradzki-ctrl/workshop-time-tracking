@@ -1,0 +1,41 @@
+{
+  "backend": [
+    "body-parser:1243073:high",
+    "brace-expansion:1123896:high",
+    "brace-expansion:1123897:high",
+    "brace-expansion:1130588:high",
+    "brace-expansion:1130589:high",
+    "brace-expansion:1130736:high",
+    "brace-expansion:1130737:high",
+    "brace-expansion:1240104:high",
+    "brace-expansion:1240105:high",
+    "brace-expansion:1240108:high",
+    "brace-expansion:1240109:high",
+    "nanoid:1138811:high",
+    "nanoid:1139427:high",
+    "postcss:1139510:high",
+    "proxy-addr:1241210:critical",
+    "source-map-js:1241209:high",
+    "vite:1242660:high",
+    "xlsx:1108110:high",
+    "xlsx:1108111:high",
+    "zod:1243066:high"
+  ],
+  "frontend": [
+    "brace-expansion:1240104:high",
+    "brace-expansion:1240105:high",
+    "brace-expansion:1240108:high",
+    "brace-expansion:1240109:high",
+    "browserslist:1153171:high",
+    "browserslist:1153172:high",
+    "happy-dom:1243084:high",
+    "happy-dom:1243623:high",
+    "js-yaml:1193727:high",
+    "nanoid:1138811:high",
+    "nanoid:1139427:high",
+    "postcss:1139510:high",
+    "source-map-js:1241209:high",
+    "vite:1242658:high",
+    "vite:1242660:high"
+  ]
+}

@@ -67,3 +67,7 @@ W eksporcie według zleceń `closureReport=true` wymaga obu dat. Arkusz zawiera 
 > Techniczne szablony importowe (`szablon_pracownicy.xlsx`, `szablon_zlecen.xlsx`) nie są raportami użytkownika i pozostały bez zmian.
 
 W v0.6.2 raport pracowników w JSON, XLSX i CSV ma jeden wiersz na pracownika i nie zawiera kolumny `Zmiana` ani `Łącznie przepracowane w okresie`. **Suma godzin z nadgodzinami** obejmuje godziny przepracowane z nadgodzinami (bez nieobecności), a **Suma godzin bez nadgodzin** obejmuje godziny normatywne oraz płatne nieobecności (UW, L4, UOK, UŻ, WKU i inne typy z `isAbsence=true`), z wyłączeniem nadgodzin i NN. Dynamiczne kolumny nieobecności zachowują dane, w tym NN. Kontrola rozliczenia zleceń uwzględnia pozostałe nieobecności, ale wyłącza NN z obu porównywanych sum; NN jest prezentowane z opisem „niepłatne, poza sumą”.
+
+## Kategorie czasu a eksporty kontroli
+
+Kontrola w XLSX i CSV zawiera składnik „Praca poza zleceniem” (`offOrderHours`) dla jawnie zdefiniowanych typów OFF_ORDER_WORK. Nieobecności są wyłączone z godzin zleceń nawet przy historycznym order_id. Raport miesięczny nadal pokazuje dynamiczne kolumny typów i sumy zgodne z JSON. Nowe rodzaje czasu tworzy administrator przez słownik z obowiązkową kategorią; import zleceń/pracowników nie klasyfikuje rodzajów czasu.

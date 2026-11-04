@@ -39,7 +39,7 @@ for (const theme of ['light', 'dark']) {
   }
 }
 
-test('v0.6.1 real API: legacy NN preserves absence detail and reconciliation; employee total stays readable', async ({ page }) => {
+test('real API: NN preserves absence detail and reconciliation; employee total stays readable', async ({ page }) => {
   await login(page);
   const token = await page.evaluate(() => localStorage.getItem('token'));
   const headers = { Authorization: `Bearer ${token}` };
@@ -56,10 +56,10 @@ test('v0.6.1 real API: legacy NN preserves absence detail and reconciliation; em
   const baseline = await baselineResponse.json();
   const types = await (await page.request.get('/api/work-time-types', { headers })).json();
   const createdType = types.some((type: { code: string }) => type.code === 'NN')
-    ? await page.request.put('/api/work-time-types/NN', { headers, data: { name: 'Nieobecność nieusprawiedliwiona', requiresOrder: false, isAbsence: false } })
-    : await page.request.post('/api/work-time-types', { headers, data: { code: 'NN', name: 'Nieobecność nieusprawiedliwiona', requiresOrder: false, isAbsence: false } });
+    ? await page.request.put('/api/work-time-types/NN', { headers, data: { name: 'Nieobecność nieusprawiedliwiona', requiresOrder: false, isAbsence: true } })
+    : await page.request.post('/api/work-time-types', { headers, data: { code: 'NN', name: 'Nieobecność nieusprawiedliwiona', accountingCategory: 'ABSENCE', requiresOrder: false, isAbsence: true } });
   expect(createdType.ok()).toBeTruthy();
-  const created = await page.request.post('/api/reports', { headers, data: { employeeId: '00000000-0000-4000-8000-000000000001', date: '2026-07-13', hours: 8, workTimeTypeCode: 'NN', orderId: '00000000-0000-4000-8000-000000000201' } });
+  const created = await page.request.post('/api/reports', { headers, data: { employeeId: '00000000-0000-4000-8000-000000000001', date: '2026-07-13', hours: 8, workTimeTypeCode: 'NN' } });
   expect(created.ok()).toBeTruthy();
   const { report: record } = await created.json();
   try {

@@ -40,6 +40,15 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- OK jest klasyfikowane jako nieobecność poprzez celowaną migrację słownika, bez zmian historycznych wpisów czasu.
+- Nieobecności nie zwiększają godzin zleceń w raportach, eksportach, bazie zleceń i dashboardzie.
+
+### Added
+- Jawne kategorie nowych rodzajów czasu, walidacja flag oraz składnik pracy poza zleceniem w kontroli.
+- Wspólny skrypt QA, testy PostgreSQL i migracji, jawna kontrola zależności i workflow dla dedykowanego self-hosted runnera WTT; instrukcja administracyjna ochrony gałęzi.
+
+
 ## [0.5.9] - 2026-09-18
 
 ### Added

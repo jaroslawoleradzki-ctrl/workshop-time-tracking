@@ -336,3 +336,7 @@ Każda publikacja wersji systemu wiąże się ze spójnym podbiciem wersji jedno
 W funkcji **Kopiuj ostatni dzień** kompletny zestaw wpisów, w tym nieobecności takie jak UW i L4, może być kopiowany pomiędzy dniami roboczymi. Jeżeli wybrany dzień docelowy jest sobotą lub niedzielą, cała operacja jest blokowana bez tworzenia rekordów.
 
 Wersja v0.6.1 poprawia rozliczanie nieobecności NN, przywraca czytelną sumę godzin w raporcie pracowników oraz przewijanie Pomocy / Instrukcji.
+
+## QA i rozliczanie rodzajów czasu
+
+Pełną kontrolę jakości uruchamia `./scripts/qa.sh` na Node z `.node-version`. Szczegóły lokalnego QA, GitHub Actions i izolacji baz: [docs/qa.md](docs/qa.md). Nowe rodzaje czasu wymagają kategorii; istniejące zachowują dotychczasowe zasady, z celowaną korektą OK i wykluczeniem nieobecności z godzin zleceń.

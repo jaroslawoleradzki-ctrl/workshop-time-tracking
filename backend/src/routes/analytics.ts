@@ -1,3 +1,4 @@
+import { orderHoursWhere, isAbsenceType, isOffOrderType } from '../utils/work-time-accounting';
 import { Router, Response } from 'express';
 import prisma from '../utils/prisma';
 import { AuthRequest, authenticateJWT } from '../middlewares/auth';
@@ -31,7 +32,8 @@ import {
 // NN is the client-approved unpaid absence; legacy dictionary flags may be false.
 const UNPAID_ABSENCE_CODE = 'NN';
 const isReportingAbsence = (report: { workTimeTypeCode: string; workTimeType?: { isAbsence?: boolean } | null }) =>
-  report.workTimeTypeCode === UNPAID_ABSENCE_CODE || Boolean(report.workTimeType?.isAbsence);
+  report.workTimeTypeCode === UNPAID_ABSENCE_CODE || isAbsenceType({ ...report.workTimeType, code: report.workTimeTypeCode });
+
 
 const router = Router();
 
@@ -406,7 +408,7 @@ router.get('/dashboard', async (_req: AuthRequest, res: Response) => {
       where: { deletedAt: null, status: OrderStatus.OPEN, isActive: true },
       include: {
         reports: {
-          where: { deletedAt: null, workTimeTypeCode: { not: UNPAID_ABSENCE_CODE } },
+          where: { deletedAt: null, ...orderHoursWhere },
           select: { hours: true },
         },
       },
@@ -520,7 +522,7 @@ export async function getOrderReportRows(
               reports: {
                 some: {
                   deletedAt: null,
-                  workTimeTypeCode: { not: UNPAID_ABSENCE_CODE },
+                  ...orderHoursWhere,
                   date: reportDateRange,
                 },
               },
@@ -532,7 +534,7 @@ export async function getOrderReportRows(
       reports: {
         where: {
           deletedAt: null,
-          workTimeTypeCode: { not: UNPAID_ABSENCE_CODE },
+          ...orderHoursWhere,
           // Fetch all non-deleted reports up to the report end.  The same set
           // supplies periodActualHours and cumulativeActualHours below.
           date: { lte: reportDateRange.lte },
@@ -609,7 +611,7 @@ export async function getReconciliationDiagnostics(
         select: { orderNumber: true },
       },
       workTimeType: {
-        select: { code: true, name: true, isAbsence: true, requiresOrder: true },
+        select: { code: true, name: true, isAbsence: true, requiresOrder: true, accountingCategory: true },
       },
     },
     orderBy: [{ employee: { lastName: 'asc' } }, { date: 'asc' }, { createdAt: 'asc' }],
@@ -636,7 +638,7 @@ export async function getReconciliationDiagnostics(
           reports: {
             some: {
               deletedAt: null,
-              workTimeTypeCode: { not: UNPAID_ABSENCE_CODE },
+              ...orderHoursWhere,
               date: {
                 gte: new Date(`${dateFrom}T00:00:00.000Z`),
                 lte: new Date(`${dateTo}T23:59:59.999Z`),
@@ -654,7 +656,7 @@ export async function getReconciliationDiagnostics(
   // settledHours = ordersHours + absenceHours
   // employeeHours = attendance + absences other than NN
   // For each report:
-  // - absence + orderInClosure: counted in both absenceHours AND ordersHours → contribution = +hours
+  // - absence or explicitly categorized off-order work: settled once, contribution = 0
   // - absence + no orderInClosure: counted in absenceHours only → contribution = 0
   // - non-absence + orderInClosure: counted in ordersHours only → contribution = 0
   // - non-absence + no order OR order not in closure: counted in employeeHours only → contribution = -hours
@@ -671,15 +673,10 @@ export async function getReconciliationDiagnostics(
     let contribution = 0;
     let reason: string | null = null;
 
-    if (isAbsence) {
-      if (orderInClosure) {
-        // Double-counted: in absenceHours AND ordersHours
-        contribution = hours;
-        reason = 'Nieobecność z zleceniem w rozliczeniu (podwójne naliczenie)';
-      } else {
-        // Counted only in absenceHours, matches employee hours
-        contribution = 0;
-      }
+    if (isAbsence || isOffOrderType(report.workTimeType)) {
+      // Absences and explicitly configured off-order work are settled once,
+      // independently of any historical order_id. Never count them in orders.
+      contribution = 0;
     } else {
       if (orderInClosure) {
         // Counted in ordersHours, matches employee hours
@@ -803,7 +800,7 @@ export async function getClosureControlSummary(
     }
 
     totalAbsenceHours = Math.round(totalAbsenceHours * 100) / 100;
-    const totalSettledHours = Math.round((ordersHours + totalAbsenceHours) * 100) / 100;
+    // Settled total is calculated after employee rows to reuse the same snapshot.
 
     // 3. Suma godzin pracowników z miesięcznego raportu przez tx
     const employeeRows = await getEmployeeReportRows(
@@ -831,6 +828,12 @@ export async function getClosureControlSummary(
           return sum + Number(suma) + absenceHours;
         }, 0) * 100,
       ) / 100;
+
+    const offOrderTypes = await tx.workTimeType.findMany({ where: { accountingCategory: 'OFF_ORDER_WORK' } });
+    const offOrderCodes = offOrderTypes.filter(isOffOrderType).map(t => t.code);
+    const offOrderHours = Math.round(employeeRows.reduce((sum, row) =>
+      sum + offOrderCodes.reduce((n, code) => n + Number(row[code] || 0), 0), 0) * 100) / 100;
+    const totalSettledHours = Math.round((ordersHours + totalAbsenceHours + offOrderHours) * 100) / 100;
 
     // 4. Różnica i status
     const difference = Math.round((totalSettledHours - totalEmployeeHours) * 100) / 100;
@@ -867,6 +870,7 @@ export async function getClosureControlSummary(
 
     return {
       ordersHours,
+      offOrderHours,
       absences,
       totalAbsenceHours,
       totalSettledHours,

@@ -1,3 +1,4 @@
+import { accountingFixture } from './accounting-fixture';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -350,79 +351,9 @@ describe('Canonical WorkTimeTypes and Hardening (v0.5.4)', () => {
       expect(summary.diagnostics![0].contribution).toBe(summary.difference);
     });
 
-    it('CASE 6: absence with order causing double counting -> diagnostic identifies double counting and positive contribution', async () => {
-      const order = { id: 'ord-200', orderNumber: 'ZL-2026-200', status: 'OPEN', completionDate: null, deletedAt: null };
-      const mockReports = [
-        {
-          id: 'rep-wku-double',
-          employeeId: EMPLOYEE_ID,
-          employee,
-          date: new Date('2026-09-02T00:00:00.000Z'),
-          hours: 8,
-          workTimeTypeCode: 'WKU',
-          workTimeType: { code: 'WKU', name: 'Wojsko', isAbsence: true, requiresOrder: false },
-          orderId: 'ord-200',
-          order,
-          deletedAt: null,
-        },
-      ];
-
-      const mockDb: any = {
-        order: {
-          findMany: vi.fn().mockImplementation(async (args: any) => {
-            if (args?.select?.id) return [{ id: 'ord-200' }];
-            return [
-              {
-                ...order,
-                productName: 'Produkt Dbl',
-                productCode: 'PR-DBL',
-                accountingAccount: 'KK-DBL',
-                plannedHours: 8,
-                quantity: 1,
-                quantityUnit: 'szt.',
-                reports: [{ hours: 8, date: new Date('2026-09-02T00:00:00.000Z'), deletedAt: null }],
-              },
-            ];
-          }),
-        },
-        workTimeType: {
-          findMany: vi.fn().mockImplementation(async (args: any) => {
-            const where = args?.where;
-            const isAbsenceQuery = where?.OR?.some((o: any) => o.isAbsence === true || o.code === 'NN');
-            if (isAbsenceQuery) {
-              return [{ code: 'WKU', name: 'Wojsko', isAbsence: true, requiresOrder: false }];
-            }
-            return [{ code: 'WKU', name: 'Wojsko', isAbsence: true, requiresOrder: false }];
-          }),
-        },
-        workTimeReport: {
-          findMany: vi.fn().mockImplementation(async (args: any) => {
-            if (args?.where?.OR?.[0]?.workTimeType?.isAbsence) {
-              return [{ workTimeTypeCode: 'WKU', hours: 8 }];
-            }
-            return mockReports;
-          }),
-        },
-      };
-
-      const summary = await getClosureControlSummary({ dateFrom: '2026-09-01', dateTo: '2026-09-30' }, mockDb);
-
-      expect(summary.status).toBe('MISMATCHED');
-      expect(summary.ordersHours).toBe(8);
-      expect(summary.totalAbsenceHours).toBe(8);
-      expect(summary.totalSettledHours).toBe(16); // 8 + 8 = 16
-      expect(summary.totalEmployeeHours).toBe(8);
-      expect(summary.difference).toBe(8); // +8 discrepancy due to double counting
-
-      expect(summary.diagnostics).toHaveLength(1);
-      expect(summary.diagnostics![0]).toMatchObject({
-        orderNumber: 'ZL-2026-200',
-        reason: 'Nieobecność z zleceniem w rozliczeniu (podwójne naliczenie)',
-        contribution: 8,
-      });
-      // Invariant check: sum(diagnostic contribution) === difference
-      const sumContrib = summary.diagnostics!.reduce((s, d) => s + d.contribution, 0);
-      expect(sumContrib).toBe(summary.difference);
+    it('CASE 6: absence with an order is settled once', async () => {
+      const summary = await getClosureControlSummary({ dateFrom: '2026-08-01', dateTo: '2026-08-31' }, accountingFixture(8) as any);
+      expect(summary).toMatchObject({ ordersHours: 40, totalAbsenceHours: 8, totalSettledHours: 48, totalEmployeeHours: 48, difference: 0, status: 'MATCHED' });
     });
   });
 
@@ -550,7 +481,7 @@ describe('Canonical WorkTimeTypes and Hardening (v0.5.4)', () => {
         .send({
           name: 'Służba wojskowa (WCR)',
           requiresOrder: true, // Custom type can modify requiresOrder
-          isAbsence: true,
+          isAbsence: false,
         })
         .expect(200);
 
@@ -559,7 +490,7 @@ describe('Canonical WorkTimeTypes and Hardening (v0.5.4)', () => {
         data: {
           name: 'Służba wojskowa (WCR)',
           requiresOrder: true,
-          isAbsence: true,
+          isAbsence: false,
         },
       });
     });

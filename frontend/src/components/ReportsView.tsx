@@ -52,6 +52,7 @@ export interface ReconciliationDiagnosticRecord {
 
 export interface ClosureControlSummary {
   ordersHours: number;
+  offOrderHours?: number;
   absences: AbsenceSummaryItem[];
   totalAbsenceHours: number;
   totalSettledHours: number;
@@ -461,6 +462,7 @@ export default function ReportsView({ token, user, onOpenHelp }: ReportsViewProp
       tableLines.push('');
       tableLines.push(escapeCsvValue('Kontrola rozliczenia czasu'));
       tableLines.push(`${escapeCsvValue('Godziny wg zleceń')};${escapeCsvValue(controlSummary.ordersHours.toFixed(2))}`);
+      tableLines.push(`${escapeCsvValue('Praca poza zleceniem')};${escapeCsvValue((controlSummary.offOrderHours || 0).toFixed(2))}`);
       controlSummary.absences.forEach((abs) => {
         tableLines.push(`${escapeCsvValue(`${abs.code} (${abs.name})`)};${escapeCsvValue(abs.hours.toFixed(2))}`);
       });
@@ -986,6 +988,7 @@ export default function ReportsView({ token, user, onOpenHelp }: ReportsViewProp
                     <span>Godziny wg zleceń:</span>
                     <strong data-testid="control-orders-hours">{(Number(controlSummary.ordersHours) || 0).toFixed(2)} h</strong>
                   </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Praca poza zleceniem:</span><strong>{(controlSummary.offOrderHours || 0).toFixed(2)} h</strong></div>
                   {Array.isArray(controlSummary.absences) && controlSummary.absences.length > 0 && (
                     <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '0.5rem', marginTop: '0.25rem' }}>
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.35rem', fontWeight: 600 }}>

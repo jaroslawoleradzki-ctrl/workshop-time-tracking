@@ -843,6 +843,31 @@ describe('ReportsView — miesięczny raport pracowników', () => {
       expect(within(summaryCard).getByTestId('control-difference')).toHaveTextContent('0.00 h');
     });
 
+
+    it('exports the off-order control bucket to CSV with the displayed total', async () => {
+      const original = globalThis.fetch;
+      vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input).startsWith('/api/analytics/closure-control-summary')) {
+          return response({ ordersHours: 8, offOrderHours: 4, absences: [], totalAbsenceHours: 0,
+            totalSettledHours: 12, totalEmployeeHours: 12, difference: 0, status: 'MATCHED', statusLabel: 'Zgodne' });
+        }
+        return original(input, init);
+      }));
+      let exported: Blob | undefined;
+      vi.spyOn(URL, 'createObjectURL').mockImplementation(blob => { exported = blob as Blob; return 'blob:qa'; });
+      vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+      renderReports();
+      fireEvent.change(screen.getByLabelText('Data od'), { target: { value: '2026-10-01' } });
+      fireEvent.change(screen.getByLabelText('Data do'), { target: { value: '2026-10-31' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Raport zamknięcia' }));
+      const card = await screen.findByTestId('closure-control-summary');
+      await waitFor(() => expect(within(card).getByTestId('control-total-settled')).toHaveTextContent('12.00 h'));
+      expect(within(card).getByText('4.00 h')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Pobierz plik CSV' }));
+      const csv = await exported!.text();
+      expect(csv).toContain('Praca poza zleceniem;4.00');
+      expect(csv).toContain('Łącznie rozliczono;12.00');
+    });
     it('renders MISMATCHED status, difference, and full diagnostics table with signed contributions', async () => {
       vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);

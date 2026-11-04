@@ -9,6 +9,7 @@ export interface AbsenceSummaryItem {
 
 export interface ClosureControlSummary {
   ordersHours: number;
+  offOrderHours?: number;
   absences: AbsenceSummaryItem[];
   totalAbsenceHours: number;
   totalSettledHours: number;
@@ -211,6 +212,7 @@ export async function generateExcelResponse(params: {
     };
 
     addCtrlRow('Godziny wg zleceń', summary.ordersHours);
+    addCtrlRow('Praca poza zleceniem', summary.offOrderHours || 0);
     summary.absences.forEach((abs) => {
       addCtrlRow(`${abs.code} (${abs.name})`, abs.hours);
     });

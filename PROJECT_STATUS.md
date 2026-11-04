@@ -365,3 +365,7 @@ Indeks dokumentów znajduje się w `README.md`.
 ## Rozpoczęcie kolejnej pracy
 
 Przed następną zmianą należy wykonać procedurę z `docs/session-start.md`, sprawdzić aktualność tego pliku i zaktualizować go, jeżeli zmieniły się wersja, zakończony zakres, wyniki weryfikacji lub znane ryzyka.
+
+## Poprawka rozliczeń i QA — gałąź zadania 2026-11
+
+Na izolowanej gałęzi `fix/work-time-accounting-2026-11` zaimplementowano kategorie czasu, korektę słownika OK, ochronę przed podwójnym naliczaniem oraz wspólne lokalne QA/workflow self-hosted. Nie wykonano merge ani deploymentu. Status zakończenia, wyniki testów i blokady rejestracji osobnego runnera są zapisane w `docs/reviews/WORK_TIME_ACCOUNTING_FIX_REPORT_2026-11.md`. Wynik lokalnego QA nie oznacza sukcesu GitHub Actions.

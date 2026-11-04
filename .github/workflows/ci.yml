@@ -1,0 +1,53 @@
+name: WTT CI
+on:
+  pull_request:
+    branches: [development, main]
+  push:
+    branches: [development, main]
+permissions:
+  contents: read
+concurrency:
+  group: wtt-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  qa:
+    name: WTT QA
+    runs-on: [self-hosted, Linux, X64, wtt]
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: wtt_disposable_test_only
+          POSTGRES_DB: wtt_accounting_test
+        ports:
+          - '127.0.0.1::5432'
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - name: Reject untrusted pull requests before checkout
+        if: >-
+          github.event_name == 'pull_request' &&
+          (github.event.pull_request.head.repo.full_name != github.repository ||
+          !contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association))
+        run: |
+          echo 'Untrusted PR: maintainer review and a trusted same-repository branch are required.'
+          exit 1
+      - name: Verify dedicated runner isolation
+        run: |
+          test "$(id -un)" = wtt-runner
+          test "$DOCKER_HOST" = "unix:///run/user/$(id -u)/docker.sock"
+          docker info --format '{{json .SecurityOptions}}' | grep -q rootless
+          test ! -r /home/cloud/.ssh/id_ed25519
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .node-version
+      - name: Full local-equivalent QA
+        env:
+          QA_DATABASE_PORT: ${{ job.services.postgres.ports['5432'] }}
+        run: ./scripts/qa.sh

@@ -75,3 +75,7 @@ AuditLog jest tworzony pomocniczą funkcją dla zmian pracowników, zleceń i wp
 ## Daty i wdrożenie
 
 Daty raportów są przechowywane jako PostgreSQL `date`, pozostałe znaczniki jako `DateTime`. Kod miesza lokalne konstruktory `Date` z formatowaniem UTC; biznesowa strefa czasowa jest **do potwierdzenia**. Szczegóły uruchomienia zawierają [konfiguracja](configuration.md) i [wdrożenie](deployment.md).
+
+## Klasyfikacja rozliczeniowa
+
+Nullable enum `AccountingCategory` na `WorkTimeType` przechowuje ORDER_WORK / ABSENCE / OFF_ORDER_WORK. Brak kategorii zachowuje istniejące flagi. Nowa migracja dodaje kolumnę i ograniczenie spójności flag, aktualizując jedynie słownik OK; nie zmienia tabeli ani rekordów WorkTimeReport. `backend/src/utils/work-time-accounting.ts` współdzieli mapowanie flag, kwalifikację nieobecności i predykat godzin zleceń. Sumy zleceń w raportach, bazie zleceń i dashboardzie stosują ten sam predykat. Flagi pozostają zgodnym kontraktem dla formularza raportowania i kalendarza.
