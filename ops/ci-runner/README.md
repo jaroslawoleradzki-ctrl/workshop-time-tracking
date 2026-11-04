@@ -34,3 +34,7 @@ Pliki prepare-host.sh, prepare-host-functions.sh, install-runner.sh, wtt-runner.
 ## Weryfikacja i rollback
 
 Sprawdzić local QA, actionlint, GitHub run i FINNARO active/online. Zmiana jest gotowa dopiero po rzeczywistym PASS WTT Actions. Nie utożsamiać sukcesu lokalnego z wynikiem CI. Rollback zatrzymuje wyłącznie `systemctl --user disable --now wtt-system-runner.service`; pozostawia pliki i rejestrację do diagnostyki. Nie usuwać kontenerów innych jobów ani zmieniać konfiguracji FINNARO. Nie wykonuje deploymentu aplikacji.
+
+## Potwierdzony wynik
+
+2026-11-04: ai-node-wtt ONLINE, wtt-system-runner.service active/enabled, cloud Linger=yes. Rzeczywisty run [41833334661](https://github.com/jaroslawoleradzki-ctrl/workshop-time-tracking/actions/runs/41833334661) na PR #4 zakończył się PASS na ai-node-wtt, łącznie z pełnym QA i cleanup. FINNARO pozostało aktywne z PID 1856. Nie testowano restartu całego hosta; autostart wynika z konfiguracji linger/enabled.

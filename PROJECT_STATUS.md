@@ -377,3 +377,5 @@ Rootless Docker WTT działa jako UID 1001 (potwierdzenie administratora i osobne
 Weryfikacja izolacji: poprawiono test dostępu do systemowego Docker Engine i dodano kontrole administratora przed/po. Pełny wynik pozostaje BLOCKED z powodu wymaganej autoryzacji sudo; FINNARO active. Nie rejestrowano WTT i nie zmieniano polityk GitHub.
 
 Decyzja CI 2026-11-04: przyjęto systemowy Docker i osobny runner WTT jako cloud; zaakceptowano współdzielenie uprawnień hosta. Rootless nie jest już ścieżką CI, pozostaje bez zmian. Runner ai-node-wtt zarejestrowano; pełne lokalne QA PASS, rzeczywisty Actions do potwierdzenia po uruchomieniu osobnej usługi. FINNARO bez zmian.
+
+CI WTT potwierdzone 2026-11-04: ai-node-wtt ONLINE, osobna user service wtt-system-runner.service active/enabled. Run 41833334661 dla PR #4 zakończony success na runnerze WTT; lokalne i GitHub QA PASS (30 skryptów, 239 backend, 143 frontend oraz integracje/migracje/build/lint/Prisma/actionlint). FINNARO active bez zmian. Wymagane niezależne review, brak merge i deploymentu. Autostart skonfigurowany przez linger; restart hosta nie był wykonywany.

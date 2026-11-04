@@ -1,5 +1,7 @@
 # Work time accounting fix — 2026-11
 
+> Aktualny wynik końcowy CI (2026-11-04): ai-node-wtt ONLINE, osobna usługa cloud z systemowym Dockerem, Actions 41833334661 PASS. Poniższe wcześniejsze etapy rootless i blokady są historią; obowiązuje końcowa sekcja „Potwierdzone wykonanie”. Brak pełnej izolacji hosta został jawnie zaakceptowany przez właściciela.
+
 ## Stan i zakres
 
 Gałąź `fix/work-time-accounting-2026-11`, izolowany worktree `/tmp/wtt-accounting-fix`, baza `development` / `58f3ae7f218a9864222211af1aad0905ea505d1d`, pakiety aplikacji 0.6.2. Osobna gałąź jest zgodna z wyraźną instrukcją właściciela dla tego zadania. Wcześniejsze raporty audytu i planu zachowano jako historyczne dokumenty wejściowe; poniższy raport przedstawia aktualny stan implementacji.
@@ -299,3 +301,16 @@ Lokalne QA na systemowym Dockerze: PASS, exit 0, 30 testów skryptów, backend 2
 Na moment przygotowania tej rewizji: runner zarejestrowany, jeszcze nieuruchomiony; Actions nie ma potwierdzonego PASS nowej konfiguracji. Kolejność: commit/push dostosowanego workflow, start usługi WTT, weryfikacja ONLINE i rzeczywistego runu PR #4, aktualizacja wyniku. Nie wykonano merge/deploymentu/release i nie zmieniono wersji aplikacji.
 
 Pliki tej decyzji: .github/workflows/ci.yml, ops/ci-runner/install-system-runner.sh, ops/ci-runner/wtt-system-runner.service, ops/ci-runner/README.md, docs/qa.md, README.md, CHANGELOG.md, PROJECT_STATUS.md, niniejszy raport; dołączono historyczne dokumenty docs/ci z oznaczeniem zastąpienia decyzji. Szczegóły rejestracji i bezpiecznego rollbacku usługi WTT w instrukcji runnera.
+
+
+## Potwierdzone wykonanie na ai-node-wtt — 2026-11-04
+
+**Wynik: PASS.** Repozytorium WTT ma runner ai-node-wtt ONLINE, etykiety self-hosted/Linux/X64/wtt. Job API potwierdza runner_name=ai-node-wtt, grupa Default. Usługa użytkownika cloud wtt-system-runner.service active/enabled, PID 3172405. Jednostka: /home/cloud/.config/systemd/user/wtt-system-runner.service, instalacja /home/cloud/actions-runner-wtt, własne _work, home i _tool. cloud ma istniejący Linger=yes. Zapewniono konfigurację autostartu, ale nie restartowano całego hosta w celu jej testowania.
+
+Run [41833334661](https://github.com/jaroslawoleradzki-ctrl/workshop-time-tracking/actions/runs/41833334661) dla PR #4 i commita 68fe1fddfbc3f85796d94c22fb9897ece69f3dc7: completed/success. Job WTT QA 126585817627: success. Wszystkie etapy przeszły: setup, inicjalizacja PostgreSQL, kontrola runnera/systemowego Docker, checkout, Node, pełne QA, post actions i stop containers. W logu 30 testów skryptów, 239 backendu i 143 frontendu; migracje fresh/upgrade, integracje, oba buildy, frontend lint, Prisma, docs:validate, actionlint i kontrola zależności względem baseline PASS. Nie jest to wynik Playwright ani usunięcia zastanych podatności. Lokalny QA ma ten sam zakres i również exit 0.
+
+Stare oczekujące runy 41812659006 i 41812403287 zostały anulowane przez istniejącą concurrency po push nowej rewizji. Runner wystartował dopiero po publikacji nowej konfiguracji. Gałąź fix/work-time-accounting-2026-11 wypchnięta do GitHub; PR #4 pozostaje draft, bez merge. Kolejny commit dokumentacji zapisuje niniejsze rzeczywiste wyniki; jego workflow należy odrębnie sprawdzić po push.
+
+FINNARO: systemowa usługa active, PID 1856, bez zmian konfiguracji, konta i katalogów; runner nadal oddzielny. Nie używano jego credentials ani katalogu roboczego. Nie zmieniono Engine/socketu/grup, globalnej polityki Actions, produkcji, baz HomeLab, DEV/DEMO ani wersji aplikacji. Rootless i konto wtt-runner pozostawiono nietknięte i nie są wykorzystywane przez WTT CI.
+
+Pozostałe ograniczenia: oba runnery dzielą UID cloud i uprzywilejowany Engine, kernel i zasoby; nie ma pełnej separacji dostępu do danych hosta. Ten model jest zaakceptowaną decyzją właściciela i dotyczy tylko zaufanych workflow. Job-level gate odrzuca forki, ale kod/YAML może zmienić uprawniony współpracownik; wymagany review. Branch protection/rulesets nie zmieniono automatycznie. Nadal potrzebny niezależny review poprawki rozliczeń i decyzja administratora o ochronie gałęzi. Autostart po rzeczywistym restarcie hosta pozostaje do potwierdzenia w uzgodnionym oknie. Żaden z tych punktów nie został ukryty jako wynik testu izolacji rootless.
