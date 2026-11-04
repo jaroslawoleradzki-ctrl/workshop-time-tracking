@@ -25,7 +25,7 @@ describe('WorkTimeType isAbsence', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it('accepts an independent true/true combination when creating a custom type', async () => {
+  it('rejects an independent true/true combination when creating a custom type', async () => {
     vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue(null);
     const createSpy = vi.spyOn(prisma.workTimeType, 'create').mockImplementation(async ({ data }) => data as any);
 
@@ -33,14 +33,12 @@ describe('WorkTimeType isAbsence', () => {
       .post('/api/work-time-types')
       .set('Authorization', `Bearer ${token}`)
       .send({ code: 'NIEST', name: 'Niestandardowa nieobecność', requiresOrder: true, isAbsence: true })
-      .expect(201);
+      .expect(400);
 
-    expect(createSpy).toHaveBeenCalledWith({
-      data: expect.objectContaining({ requiresOrder: true, isAbsence: true }),
-    });
+    expect(createSpy).not.toHaveBeenCalled();
   });
 
-  it('changes isAbsence without changing requiresOrder', async () => {
+  it('rejects changing a legacy type into a contradictory configuration', async () => {
     vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue({
       code: 'SZK', name: 'Szkolenie', requiresOrder: true, isAbsence: false, isSystem: false,
     } as any);
@@ -50,15 +48,12 @@ describe('WorkTimeType isAbsence', () => {
       .put('/api/work-time-types/SZK')
       .set('Authorization', `Bearer ${token}`)
       .send({ name: 'Szkolenie', isAbsence: true })
-      .expect(200);
+      .expect(400);
 
-    expect(updateSpy).toHaveBeenCalledWith({
-      where: { code: 'SZK' },
-      data: { name: 'Szkolenie', requiresOrder: undefined, isAbsence: true },
-    });
+    expect(updateSpy).not.toHaveBeenCalled();
   });
 
-  it('changes requiresOrder without changing isAbsence', async () => {
+  it('rejects requiring an order for a legacy absence', async () => {
     vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue({
       code: 'NIEST', name: 'Niestandardowa', requiresOrder: false, isAbsence: true, isSystem: false,
     } as any);
@@ -68,12 +63,9 @@ describe('WorkTimeType isAbsence', () => {
       .put('/api/work-time-types/NIEST')
       .set('Authorization', `Bearer ${token}`)
       .send({ name: 'Niestandardowa', requiresOrder: true })
-      .expect(200);
+      .expect(400);
 
-    expect(updateSpy).toHaveBeenCalledWith({
-      where: { code: 'NIEST' },
-      data: { name: 'Niestandardowa', requiresOrder: true },
-    });
+    expect(updateSpy).not.toHaveBeenCalled();
   });
 
   it('rejects non-boolean flag values', async () => {
@@ -83,4 +75,19 @@ describe('WorkTimeType isAbsence', () => {
       .send({ code: 'BAD', name: 'Błędny', requiresOrder: false, isAbsence: 'yes' })
       .expect(400);
   });
+  it.each(['ORDER_WORK', 'ABSENCE', 'OFF_ORDER_WORK'])('creates %s with synchronized flags', async category => {
+    vi.spyOn(prisma.workTimeType, 'findUnique').mockResolvedValue(null);
+    const create = vi.spyOn(prisma.workTimeType, 'create').mockImplementation(async ({data}) => data as any);
+    const res = await request(app).post('/api/work-time-types').set('Authorization', `Bearer ${token}`)
+      .send({ code: 'NEW', name: 'Fikcyjny typ', accountingCategory: category }).expect(201);
+    expect(res.body).toMatchObject({ accountingCategory: category, requiresOrder: category === 'ORDER_WORK', isAbsence: category === 'ABSENCE' });
+    expect(create).toHaveBeenCalledOnce();
+  });
+  it('rejects contradictory category flags without writing', async () => {
+    const create = vi.spyOn(prisma.workTimeType, 'create');
+    await request(app).post('/api/work-time-types').set('Authorization', `Bearer ${token}`)
+      .send({ code: 'NEW', name: 'Fikcyjny typ', accountingCategory: 'ABSENCE', requiresOrder: true }).expect(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
 });

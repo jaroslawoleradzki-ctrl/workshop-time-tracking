@@ -3,6 +3,8 @@ import prisma from '../utils/prisma';
 import { AuthRequest, authenticateJWT, requireRole } from '../middlewares/auth';
 import logger from '../utils/logger';
 
+import { flagsForCategory, isCategory } from '../utils/work-time-accounting';
+
 const router = Router();
 
 // Auth required for all
@@ -23,7 +25,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 
 // Admin-only paths below
 router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response) => {
-  const { code, name, requiresOrder, isAbsence } = req.body;
+  const { code, name, requiresOrder, isAbsence, accountingCategory } = req.body;
 
   if (!code || !name) {
     return res.status(400).json({ message: 'Kod i nazwa są wymagane' });
@@ -35,6 +37,17 @@ router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response)
     return res.status(400).json({ message: 'Pole isAbsence musi być wartością logiczną' });
   }
 
+  if (!isCategory(accountingCategory)) {
+    return res.status(400).json({ message: 'Wybierz kategorię rozliczeniową', code: 'ACCOUNTING_CATEGORY_REQUIRED' });
+  }
+  if (['OK', 'NN'].includes(code.trim().toUpperCase()) && accountingCategory !== 'ABSENCE') {
+    return res.status(400).json({ message: 'Ten kod wymaga kategorii Nieobecność' });
+  }
+  const flags = flagsForCategory(accountingCategory);
+  if ((requiresOrder !== undefined && requiresOrder !== flags.requiresOrder) ||
+      (isAbsence !== undefined && isAbsence !== flags.isAbsence)) {
+    return res.status(400).json({ message: 'Parametry są sprzeczne z kategorią', code: 'INVALID_ACCOUNTING_FLAGS' });
+  }
   // UpperCase code
   const formattedCode = code.trim().toUpperCase();
 
@@ -51,8 +64,8 @@ router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response)
       data: {
         code: formattedCode,
         name: name.trim(),
-        requiresOrder: requiresOrder ?? false,
-        isAbsence: isAbsence ?? false,
+        accountingCategory,
+        ...flags,
         isSystem: false, // Custom types are not system types
       },
     });
@@ -66,7 +79,7 @@ router.post('/', requireRole(['admin']), async (req: AuthRequest, res: Response)
 
 router.put('/:code', requireRole(['admin']), async (req: AuthRequest, res: Response) => {
   const { code } = req.params;
-  const { name, requiresOrder, isAbsence } = req.body;
+  const { name, requiresOrder, isAbsence, accountingCategory } = req.body;
 
   if (!name) {
     return res.status(400).json({ message: 'Nazwa słownika jest wymagana' });
@@ -87,14 +100,34 @@ router.put('/:code', requireRole(['admin']), async (req: AuthRequest, res: Respo
       return res.status(404).json({ message: 'Pozycja słownika nie istnieje' });
     }
 
+    const category = accountingCategory === undefined ? type.accountingCategory : accountingCategory;
+    if (category != null && !isCategory(category)) {
+      return res.status(400).json({ message: 'Nieprawidłowa kategoria rozliczeniowa' });
+    }
+    if (accountingCategory === null && type.accountingCategory != null) {
+      return res.status(400).json({ message: 'Nie można usunąć wybranej kategorii' });
+    }
+    if (category == null && (type.isSystem ? type.requiresOrder : (requiresOrder ?? type.requiresOrder)) && (isAbsence ?? type.isAbsence) &&
+        !(type.requiresOrder && type.isAbsence)) {
+      return res.status(400).json({ message: 'Nieobecność nie może wymagać zlecenia' });
+    }
+    const flags = isCategory(category) ? flagsForCategory(category) : undefined;
+    if (flags && ((requiresOrder !== undefined && requiresOrder !== flags.requiresOrder) ||
+      (isAbsence !== undefined && isAbsence !== flags.isAbsence) ||
+      (type.isSystem && (flags.requiresOrder !== type.requiresOrder || flags.isAbsence !== type.isAbsence)) ||
+      (['OK', 'NN'].includes(code) && category !== 'ABSENCE'))) {
+      return res.status(400).json({ message: 'Parametry są sprzeczne z kategorią lub typem systemowym' });
+    }
     // System dictionary lock: system codes cannot change requiresOrder
     const updated = await prisma.workTimeType.update({
       where: { code },
       data: {
         name: name.trim(),
+        ...(accountingCategory !== undefined ? { accountingCategory } : {}),
+        ...(flags || {}),
         // Only allow changing requiresOrder if NOT system type
-        ...(!type.isSystem ? { requiresOrder } : {}),
-        ...(isAbsence !== undefined ? { isAbsence } : {}),
+        ...(!flags && !type.isSystem ? { requiresOrder } : {}),
+        ...(!flags && isAbsence !== undefined ? { isAbsence } : {}),
       },
     });
 

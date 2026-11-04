@@ -1,3 +1,4 @@
+import { isAbsenceType, isOffOrderType } from '../utils/work-time-accounting';
 import { randomUUID } from 'crypto';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { z } from 'zod';
@@ -187,7 +188,7 @@ export async function copyLastDayForEmployee({
         sourceTypeCodes.map((code) =>
           tx.workTimeType.findUnique({
             where: { code },
-            select: { code: true, isAbsence: true, requiresOrder: true },
+            select: { code: true, isAbsence: true, requiresOrder: true, accountingCategory: true },
           }),
         ),
       );
@@ -216,11 +217,11 @@ export async function copyLastDayForEmployee({
       const created = await tx.workTimeReport.createMany({
         data: sourceReports.map((report) => {
           const type = typesByCode.get(report.workTimeTypeCode);
-          const isAbsence = type?.isAbsence ?? false;
+          const isAbsence = type ? isAbsenceType(type) : false;
           return {
             date: targetDateValue,
             employeeId: report.employeeId,
-            orderId: report.orderId,
+            orderId: type && (isAbsenceType(type) || isOffOrderType(type)) ? null : report.orderId,
             hours: report.hours,
             workTimeTypeCode: report.workTimeTypeCode,
             workShift: isAbsence ? null : report.workShift,

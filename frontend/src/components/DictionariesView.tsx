@@ -11,6 +11,7 @@ import {
 interface WorkTimeType {
   code: string;
   name: string;
+  accountingCategory?: 'ORDER_WORK' | 'ABSENCE' | 'OFF_ORDER_WORK' | null;
   requiresOrder: boolean;
   isAbsence: boolean;
   isSystem: boolean;
@@ -30,6 +31,7 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
   const [editingCode, setEditingCode] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
+  const [accountingCategory, setAccountingCategory] = useState('');
   const [requiresOrder, setRequiresOrder] = useState(false);
   const [isAbsence, setIsAbsence] = useState(false);
   const [formValidationError, setFormValidationError] = useState('');
@@ -55,6 +57,7 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
 
   const handleOpenCreateModal = () => {
     setEditingCode(null);
+    setAccountingCategory('');
     setCode('');
     setName('');
     setRequiresOrder(false);
@@ -65,6 +68,7 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
 
   const handleOpenEditModal = (t: WorkTimeType) => {
     setEditingCode(t.code);
+    setAccountingCategory(t.accountingCategory || '');
     setCode(t.code);
     setName(t.name);
     setRequiresOrder(t.requiresOrder);
@@ -82,6 +86,13 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
       return;
     }
 
+    if (!editingCode && !accountingCategory) {
+      setFormValidationError('Wybierz kategorię rozliczeniową.');
+      return;
+    }
+    const previousCategory = types.find(t => t.code === editingCode)?.accountingCategory || '';
+    if (editingCode && accountingCategory !== previousCategory &&
+        !window.confirm('Zmiana kategorii wpłynie również na raporty historyczne. Czy kontynuować?')) return;
     try {
       const url = editingCode ? `/api/work-time-types/${editingCode}` : '/api/work-time-types';
       const method = editingCode ? 'PUT' : 'POST';
@@ -95,8 +106,9 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
         body: JSON.stringify({
           code: code.trim().toUpperCase(),
           name: name.trim(),
-          requiresOrder,
-          isAbsence
+          requiresOrder: accountingCategory ? accountingCategory === 'ORDER_WORK' : requiresOrder,
+          isAbsence: accountingCategory ? accountingCategory === 'ABSENCE' : isAbsence,
+          ...(accountingCategory ? { accountingCategory } : {})
         })
       });
 
@@ -183,21 +195,23 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
                 />
               </div>
 
-              <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
-                <input
-                  type="checkbox"
-                  id="isAbsence"
-                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                  checked={isAbsence}
-                  onChange={e => setIsAbsence(e.target.checked)}
-                />
-                <label htmlFor="isAbsence" className="form-label" style={{ margin: 0, cursor: 'pointer' }}>
-                  Nieobecność pracownika
-                </label>
+              <div className="form-group">
+                <label className="form-label" htmlFor="accounting-category">Kategoria rozliczenia</label>
+                <select id="accounting-category" className="form-control" value={accountingCategory}
+                  onChange={e => setAccountingCategory(e.target.value)} required={!editingCode}>
+                  <option value="" disabled={Boolean(types.find(t => t.code === editingCode)?.accountingCategory)}>{editingCode ? 'Dotychczasowe zasady rozliczania' : 'Wybierz kategorię'}</option>
+                  <option value="ORDER_WORK">Praca na zleceniu</option>
+                  <option value="ABSENCE">Nieobecność</option>
+                  <option value="OFF_ORDER_WORK">Praca poza zleceniem</option>
+                </select>
               </div>
+              {editingCode && !accountingCategory && <div className="form-group">
+                <input type="checkbox" id="isAbsence" checked={isAbsence} onChange={e => setIsAbsence(e.target.checked)} />
+                <label htmlFor="isAbsence">Nieobecność pracownika</label>
+              </div>}
 
               {/* requiresOrder is locked for system codes to prevent workflow breaking */}
-              {(!editingCode || !(Array.isArray(types) ? types : []).find(t => t.code === editingCode)?.isSystem) ? (
+              {editingCode && !accountingCategory && (!types.find(t => t.code === editingCode)?.isSystem ? (
                 <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
                   <input
                     type="checkbox"
@@ -225,7 +239,7 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
                   <ShieldAlert size={16} style={{ color: 'var(--warning-color)' }} />
                   Dla kodów systemowych parametry wymagalności zlecenia są zablokowane.
                 </div>
-              )}
+              ))}
 
               <div className="modal-actions" style={{ marginTop: '1.5rem' }}>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowFormModal(false)}>
@@ -269,6 +283,7 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
               <tr>
                 <th>Kod</th>
                 <th>Pełna nazwa</th>
+                <th>Kategoria rozliczenia</th>
                 <th>Wymaga zlecenia</th>
                 <th>Nieobecność</th>
                 <th>Status słownika</th>
@@ -289,6 +304,7 @@ export default function DictionariesView({ token }: DictionariesViewProps) {
                     </code>
                   </td>
                   <td style={{ fontWeight: 500 }}>{t.name}</td>
+                  <td>{t.accountingCategory === 'ORDER_WORK' ? 'Praca na zleceniu' : t.accountingCategory === 'ABSENCE' ? 'Nieobecność' : t.accountingCategory === 'OFF_ORDER_WORK' ? 'Praca poza zleceniem' : 'Dotychczasowe zasady rozliczania'}</td>
                   <td>
                     {t.requiresOrder ? (
                       <span className="badge badge-suspended">Wymagane</span>

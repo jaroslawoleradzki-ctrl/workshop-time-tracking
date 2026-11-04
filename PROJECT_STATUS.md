@@ -365,3 +365,17 @@ Indeks dokumentów znajduje się w `README.md`.
 ## Rozpoczęcie kolejnej pracy
 
 Przed następną zmianą należy wykonać procedurę z `docs/session-start.md`, sprawdzić aktualność tego pliku i zaktualizować go, jeżeli zmieniły się wersja, zakończony zakres, wyniki weryfikacji lub znane ryzyka.
+
+## Poprawka rozliczeń i QA — gałąź zadania 2026-11
+
+Na izolowanej gałęzi `fix/work-time-accounting-2026-11` zaimplementowano kategorie czasu, korektę słownika OK, ochronę przed podwójnym naliczaniem oraz wspólne lokalne QA/workflow self-hosted. Nie wykonano merge ani deploymentu. Status zakończenia, wyniki testów i blokady rejestracji osobnego runnera są zapisane w `docs/reviews/WORK_TIME_ACCOUNTING_FIX_REPORT_2026-11.md`. Wynik lokalnego QA nie oznacza sukcesu GitHub Actions.
+
+Poprawka preflight runnera: obsłużono null w Docker IPAM.Config, dodano testy diagnostyki sieci do wspólnego QA. Nie wykonano instalacji systemowej ani rejestracji runnera w tej kontynuacji.
+
+Rootless Docker WTT działa jako UID 1001 (potwierdzenie administratora i osobne procesy). Skrypt przygotowania uzupełniono o bezpieczne ponawianie i uprawnienia katalogów; 16 testów preflight PASS, pełne lokalne QA PASS. Rejestracja runnera nadal wymaga testu izolacji z uprawnieniami administratora i zatwierdzenia polityki GitHub. FINNARO bez zmian.
+
+Weryfikacja izolacji: poprawiono test dostępu do systemowego Docker Engine i dodano kontrole administratora przed/po. Pełny wynik pozostaje BLOCKED z powodu wymaganej autoryzacji sudo; FINNARO active. Nie rejestrowano WTT i nie zmieniano polityk GitHub.
+
+Decyzja CI 2026-11-04: przyjęto systemowy Docker i osobny runner WTT jako cloud; zaakceptowano współdzielenie uprawnień hosta. Rootless nie jest już ścieżką CI, pozostaje bez zmian. Runner ai-node-wtt zarejestrowano; pełne lokalne QA PASS, rzeczywisty Actions do potwierdzenia po uruchomieniu osobnej usługi. FINNARO bez zmian.
+
+CI WTT potwierdzone 2026-11-04: ai-node-wtt ONLINE, osobna user service wtt-system-runner.service active/enabled. Run 41833334661 dla PR #4 zakończony success na runnerze WTT; lokalne i GitHub QA PASS (30 skryptów, 239 backend, 143 frontend oraz integracje/migracje/build/lint/Prisma/actionlint). FINNARO active bez zmian. Wymagane niezależne review, brak merge i deploymentu. Autostart skonfigurowany przez linger; restart hosta nie był wykonywany.
