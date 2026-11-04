@@ -3,6 +3,22 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.6.3] - 2026-11-04
+
+### Fixed
+- Nieobecności nie zwiększają godzin zleceń w raportach, eksportach, bazie zleceń ani dashboardzie.
+- Typ `OK` jest klasyfikowany jako nieobecność poprzez celowaną migrację słownika, bez zmiany historycznych wpisów czasu.
+- Raportowanie i rozliczenie czasu pracy uwzględniają kategorię rodzaju czasu, w tym pracę poza zleceniem i kontrolę sum.
+
+### Added
+- Jawne kategorie dla nowych rodzajów czasu pracy oraz walidacja ich flag.
+- Opcja `SKIP_DB_SEED=true` pomija seed przy uruchamianiu środowiska DEV; migracje i standardowy start API pozostają aktywne. Ustawienie jest skonfigurowane wyłącznie w `docker-compose.homelab-dev.yml`.
+- Wspólny skrypt QA, testy PostgreSQL i migracji oraz workflow CI dla dedykowanego runnera `ai-node-wtt`.
+
+### Changed
+- Kontrola jakości obejmuje przygotowanie świeżej, izolowanej bazy testowej, walidację migracji, dokumentacji i zależności.
+- Uzupełniono instrukcję runnera CI oraz ochrony gałęzi.
+
 ## [0.6.2] - 2026-10-05
 
 ### Changed
@@ -37,8 +53,6 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 - Po przejściu z Pomocy do zwykłej zakładki jej hash jest usuwany, a odświeżenie zachowuje wybraną zakładkę; poprawne głębokie odnośniki do Pomocy pozostają obsługiwane.
 - Walidacja dokumentacyjnych zrzutów wykrywa niezgodności rozdziałów, manifestu i plików, a seed dokumentacyjny zapisuje stałe identyfikatory i daty.
-
-## [Unreleased]
 
 ## [0.5.9] - 2026-09-18
 
@@ -523,3 +537,12 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 - walidacja formularza pracowników (poprawne sprawdzanie i fallback na rozdzielanie pełnych nazwisk starszych rekordów).
+
+### Runner WTT — diagnostyka 2026-11-04
+- Preflight toleruje Docker IPAM.Config=null oraz brak IPAM, zachowując wykrywanie kolizji podsieci. Dodano testy regresyjne uruchamiane przez wspólny skrypt QA.
+
+- Przygotowanie runnera zachowuje działający rootless Docker i istniejący daemon.json, poprawia właściciela .config oraz dostęp do /tmp; dodano regresje ponownego uruchamiania.
+
+- Izolacja runnera sprawdza rzeczywistą odmowę dostępu do systemowego Docker Engine zamiast niewidoczności socketu; błędy techniczne blokują wynik. Dodano regresje i kontrolę A/B serwera na porcie 8765.
+
+- CI WTT korzysta z osobnego runnera ai-node-wtt i usługi user-systemd jako cloud, z istniejącym systemowym Dockerem zgodnie z decyzją właściciela. Warunek zaufania do PR przeniesiono na poziom joba; rootless zachowano jako nieużywany.

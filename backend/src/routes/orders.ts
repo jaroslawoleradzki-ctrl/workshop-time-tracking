@@ -1,3 +1,4 @@
+import { orderHoursWhere } from '../utils/work-time-accounting';
 import { Router, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../utils/prisma';
@@ -19,7 +20,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       where: { deletedAt: null },
       include: {
         reports: {
-          where: { deletedAt: null },
+          where: { deletedAt: null, ...orderHoursWhere },
           select: { hours: true },
         },
       },
@@ -113,7 +114,7 @@ router.post('/export-xlsx', requireRole(['admin', 'leader']), async (req: AuthRe
       where: { deletedAt: null },
       include: {
         reports: {
-          where: { deletedAt: null },
+          where: { deletedAt: null, ...orderHoursWhere },
           select: { hours: true },
         },
       },

@@ -1,0 +1,57 @@
+name: WTT CI
+on:
+  pull_request:
+    branches: [development, main]
+  push:
+    branches: [development, main]
+permissions:
+  contents: read
+concurrency:
+  group: wtt-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  qa:
+    name: WTT QA
+    # Only reviewed same-repository PRs; forks cannot initialize service containers.
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association))
+    env:
+      DOCKER_HOST: unix:///var/run/docker.sock
+    runs-on: [self-hosted, Linux, X64, wtt]
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: wtt_disposable_test_only
+          POSTGRES_DB: wtt_accounting_test
+        ports:
+          - '127.0.0.1::5432'
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - name: Verify dedicated WTT runner and system Docker
+        run: |
+          test "$(id -un)" = cloud
+          test "$RUNNER_NAME" = ai-node-wtt
+          test "$DOCKER_HOST" = unix:///var/run/docker.sock
+          case "$GITHUB_WORKSPACE" in
+            /home/cloud/actions-runner-wtt/_work/*) ;;
+            *) echo 'Wrong WTT workspace'; exit 1 ;;
+          esac
+          options="$(docker info --format '{{json .SecurityOptions}}')"
+          case "$options" in *rootless*) exit 1 ;; esac
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .node-version
+      - name: Full local-equivalent QA
+        env:
+          QA_DATABASE_PORT: ${{ job.services.postgres.ports['5432'] }}
+        run: ./scripts/qa.sh

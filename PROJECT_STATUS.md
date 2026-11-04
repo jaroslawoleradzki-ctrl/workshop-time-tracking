@@ -3,12 +3,14 @@
 ## Stan bieżący
 
 - Projekt: Workshop Time Tracking
-- Aktualna wersja repozytorium: `0.6.1`
-- Aktualna wersja produkcyjna: `0.6.0` (deployment v0.6.1 nie został wykonany)
-- Aktualna wersja development: `0.6.1`
+- Aktualna wersja repozytorium: `0.6.3`
+- Aktualna wersja produkcyjna: `0.6.0` (deployment v0.6.1 i późniejszych wydań nie został wykonany)
+- Aktualna wersja development: `0.6.3`
 - Gałąź produkcyjna: `main`
-- Gałąź integracyjna: `development` (`0.6.1`); poprawka z `fix/v0.6.1-client-feedback` została scalona
-- Stan prac: v0.6.1 zaakceptowana i scalona do `main`; produkcja pozostaje na `0.6.0` do ręcznego deploymentu.
+- Gałąź integracyjna: `development` (`0.6.3`)
+- Stan prac: przygotowanie wydania v0.6.3; produkcja pozostaje na `0.6.0` do osobnego, ręcznego deploymentu.
+
+Zakres v0.6.3 obejmuje poprawki rozliczania nieobecności i rodzajów czasu pracy, korekty raportów oraz eksportów, migrację klasyfikacji `OK`, a także bezpieczne pomijanie seeda wyłącznie w DEV przez `SKIP_DB_SEED=true`. Dodano wspólną kontrolę QA z izolowaną bazą PostgreSQL oraz GitHub Actions na dedykowanym runnerze. Nie wykonano wdrożenia produkcyjnego.
 
 Poprawka v0.6.1: NN i inne nieobecności nie zwiększają czasu przepracowanego. NN pozostaje widoczne, lecz nie uczestniczy w godzinach zleceń, KPI pracy ani obu sumach kontroli rozliczenia. Raport pracowników pokazuje osobną sumę okresu ponad podziałem zmian. Pomoc przewija się w głównej treści, również przy niskim viewporcie tabletu. Nie zmieniono schematu bazy. Weryfikacja po integracji: backend 225/225 testów, frontend 138/138, build obu projektów, lint, `docs:validate` 21/21. Development stack przebudowano na istniejącym wolumenie `workshop-time-tracking-dev_pgdata`; API health i baza są zdrowe, `/api/version` zwraca `0.6.1`, frontend odpowiada HTTP 200 na porcie 8085. Ręczna akceptacja funkcjonalna została udzielona. Ryzyko: niestandardowe kody nieobecności inne niż NN zachowują dotychczasową semantykę rozliczenia. Szczegóły: `V0.6.1_CLIENT_FEEDBACK_FIX_REPORT.md`.
 
@@ -365,3 +367,17 @@ Indeks dokumentów znajduje się w `README.md`.
 ## Rozpoczęcie kolejnej pracy
 
 Przed następną zmianą należy wykonać procedurę z `docs/session-start.md`, sprawdzić aktualność tego pliku i zaktualizować go, jeżeli zmieniły się wersja, zakończony zakres, wyniki weryfikacji lub znane ryzyka.
+
+## Poprawka rozliczeń i QA — gałąź zadania 2026-11
+
+Na izolowanej gałęzi `fix/work-time-accounting-2026-11` zaimplementowano kategorie czasu, korektę słownika OK, ochronę przed podwójnym naliczaniem oraz wspólne lokalne QA/workflow self-hosted. Nie wykonano merge ani deploymentu. Status zakończenia, wyniki testów i blokady rejestracji osobnego runnera są zapisane w `docs/reviews/WORK_TIME_ACCOUNTING_FIX_REPORT_2026-11.md`. Wynik lokalnego QA nie oznacza sukcesu GitHub Actions.
+
+Poprawka preflight runnera: obsłużono null w Docker IPAM.Config, dodano testy diagnostyki sieci do wspólnego QA. Nie wykonano instalacji systemowej ani rejestracji runnera w tej kontynuacji.
+
+Rootless Docker WTT działa jako UID 1001 (potwierdzenie administratora i osobne procesy). Skrypt przygotowania uzupełniono o bezpieczne ponawianie i uprawnienia katalogów; 16 testów preflight PASS, pełne lokalne QA PASS. Rejestracja runnera nadal wymaga testu izolacji z uprawnieniami administratora i zatwierdzenia polityki GitHub. FINNARO bez zmian.
+
+Weryfikacja izolacji: poprawiono test dostępu do systemowego Docker Engine i dodano kontrole administratora przed/po. Pełny wynik pozostaje BLOCKED z powodu wymaganej autoryzacji sudo; FINNARO active. Nie rejestrowano WTT i nie zmieniano polityk GitHub.
+
+Decyzja CI 2026-11-04: przyjęto systemowy Docker i osobny runner WTT jako cloud; zaakceptowano współdzielenie uprawnień hosta. Rootless nie jest już ścieżką CI, pozostaje bez zmian. Runner ai-node-wtt zarejestrowano; pełne lokalne QA PASS, rzeczywisty Actions do potwierdzenia po uruchomieniu osobnej usługi. FINNARO bez zmian.
+
+CI WTT potwierdzone 2026-11-04: ai-node-wtt ONLINE, osobna user service wtt-system-runner.service active/enabled. Run 41833334661 dla PR #4 zakończony success na runnerze WTT; lokalne i GitHub QA PASS (30 skryptów, 239 backend, 143 frontend oraz integracje/migracje/build/lint/Prisma/actionlint). FINNARO active bez zmian. Wymagane niezależne review, brak merge i deploymentu. Autostart skonfigurowany przez linger; restart hosta nie był wykonywany.

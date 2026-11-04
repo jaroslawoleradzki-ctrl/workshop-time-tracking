@@ -27,6 +27,8 @@ Uzupełnij wszystkie wymagane wartości. Dla sekretów używaj znaków bezpieczn
 
 Brak wymaganej wartości zatrzymuje `docker compose config` i `docker compose up` z komunikatem wskazującym jej nazwę. `APP_VERSION` pozostaje śledzoną, literalną wartością wydania w `docker-compose.yml`, a `NODE_ENV=production` jest ustawiane wyłącznie w finalnym etapie `backend/Dockerfile`.
 
+Development Compose ustawia `SKIP_DB_SEED=true` wyłącznie dla usługi `backend` (`worktime-dev-api`). Entry point nadal wykonuje `prisma migrate deploy` i uruchamia API, pomijając tylko seed. W pozostałych konfiguracjach brak tej zmiennej zachowuje dotychczasowe zachowanie i uruchamia seed.
+
 ### Istniejący wolumen PostgreSQL
 
 `WTT_POSTGRES_VOLUME` musi wskazywać dokładną nazwę wolumenu zawierającego dane. Zmiana tej wartości może podłączyć pusty lub inny wolumen. Ustawienie nowych wartości `WTT_POSTGRES_USER`, `WTT_POSTGRES_PASSWORD` lub `WTT_POSTGRES_DB` nie zmienia danych dostępowych zapisanych w już zainicjalizowanym PostgreSQL; przy migracji istniejącej instalacji należy zachować dotychczasowe wartości. Rotacja danych dostępowych jest osobną operacją bazodanową.

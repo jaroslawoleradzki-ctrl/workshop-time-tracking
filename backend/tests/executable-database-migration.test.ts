@@ -10,16 +10,18 @@ import app from '../src/app';
 import prisma from '../src/utils/prisma';
 import { TEST_JWT_SECRET } from './setup-env';
 
-const CONTAINER_NAME = 'wtt-disposable-migration-test-pg';
-const DB_PORT = '5438';
+const CONTAINER_NAME = `wtt-disposable-migration-${process.pid}`;
+let DB_PORT = '';
+let UPGRADE_URL = '';
+let FRESH_URL = '';
 const DB_USER = 'postgres';
 const DB_PASS = 'postgres';
 
 const UPGRADE_DB = 'test_upgrade_db';
 const FRESH_DB = 'test_fresh_db';
 
-const UPGRADE_URL = `postgresql://${DB_USER}:${DB_PASS}@localhost:${DB_PORT}/${UPGRADE_DB}?schema=public`;
-const FRESH_URL = `postgresql://${DB_USER}:${DB_PASS}@localhost:${DB_PORT}/${FRESH_DB}?schema=public`;
+
+
 
 let hasDocker = false;
 
@@ -31,6 +33,7 @@ describe('Executable Database Migration and Production Seed Tests (v0.5.4)', () 
       execSync('docker --version', { stdio: 'ignore' });
       hasDocker = true;
     } catch {
+      if (process.env.WTT_QA_REQUIRED) throw new Error('Docker required by full QA');
       console.warn('Docker not available; skipping executable database migration tests.');
       return;
     }
@@ -42,10 +45,13 @@ describe('Executable Database Migration and Production Seed Tests (v0.5.4)', () 
 
     // Spin up a disposable postgres container
     execSync(
-      `docker run --name ${CONTAINER_NAME} -e POSTGRES_PASSWORD=${DB_PASS} -p ${DB_PORT}:5432 -d postgres:16-alpine`,
+      `docker run --name ${CONTAINER_NAME} -e POSTGRES_PASSWORD=${DB_PASS} -p 127.0.0.1::5432 -d postgres:16-alpine`,
       { stdio: 'ignore' },
     );
 
+    DB_PORT = execSync(`docker port ${CONTAINER_NAME} 5432/tcp`, { encoding: 'utf8' }).trim().split(':').pop()!;
+    UPGRADE_URL = `postgresql://${DB_USER}:${DB_PASS}@127.0.0.1:${DB_PORT}/${UPGRADE_DB}?schema=public`;
+    FRESH_URL = `postgresql://${DB_USER}:${DB_PASS}@127.0.0.1:${DB_PORT}/${FRESH_DB}?schema=public`;
     // Wait for PostgreSQL to be ready
     let ready = false;
     for (let i = 0; i < 30; i++) {
@@ -133,14 +139,15 @@ describe('Executable Database Migration and Production Seed Tests (v0.5.4)', () 
         { code: 'L4', name: 'Zwolnienie chorobowe', requiresOrder: false, isAbsence: true, isSystem: true },
       ];
       for (const st of standardTypes) {
-        await prismaUpgrade.workTimeType.create({ data: st });
+        await prismaUpgrade.workTimeType.create({ data: st, select: { code: true } });
       }
 
       // 3. Insert all 9 colliding types as custom pre-upgrade records (is_system=false):
       // WKU, OP, NN, NU, NUN, NUP, UB, UO, UPP
       for (const code of ALL_COLLIDING_CODES) {
         await prismaUpgrade.workTimeType.create({
-          data: {
+          select: { code: true },
+        data: {
             code,
             name: `Custom ${code}`,
             requiresOrder: false,
@@ -152,6 +159,7 @@ describe('Executable Database Migration and Production Seed Tests (v0.5.4)', () 
 
       // 4. Insert an unrelated custom type (XYZ)
       await prismaUpgrade.workTimeType.create({
+        select: { code: true },
         data: {
           code: 'XYZ',
           name: 'Projekt specjalny XYZ',
@@ -161,6 +169,7 @@ describe('Executable Database Migration and Production Seed Tests (v0.5.4)', () 
         },
       });
 
+      await prismaUpgrade.workTimeType.create({ data: { code: 'OK', name: 'Oddanie krwi', requiresOrder: false, isAbsence: false }, select: { code: true } });
       // 5. Insert historical user, employee, order, and reports referencing custom types
       const user = await prismaUpgrade.user.create({
         data: {
@@ -229,7 +238,7 @@ describe('Executable Database Migration and Production Seed Tests (v0.5.4)', () 
       await prismaUpgrade.workTimeReport.createMany({ data: reportRows });
 
       // Capture BEFORE state for comparison
-      const beforeTypes = await prismaUpgrade.workTimeType.findMany();
+      const beforeTypes = await prismaUpgrade.workTimeType.findMany({ select: { code: true, name: true, requiresOrder: true, isAbsence: true, isSystem: true, updatedAt: true } });
       beforeTypesMap = new Map(
         beforeTypes.map((t) => [
           t.code,
@@ -273,7 +282,9 @@ describe('Executable Database Migration and Production Seed Tests (v0.5.4)', () 
         await prismaUpgrade.$queryRaw`
           SELECT migration_name, rolled_back_at FROM "_prisma_migrations" ORDER BY started_at ASC;
         `;
-      expect(postMigrations).toHaveLength(12);
+      expect(postMigrations).toHaveLength(13);
+      expect(await prismaUpgrade.workTimeType.findUnique({ where: { code: 'OK' } })).toMatchObject({ accountingCategory: 'ABSENCE', isAbsence: true, requiresOrder: false });
+      expect(await prismaUpgrade.workTimeType.count({ where: { code: { not: 'OK' }, accountingCategory: { not: null } } })).toBe(0);
       const hardeningMigration = postMigrations.find((m) =>
         m.migration_name.includes('20260908120000_canonical_work_time_types_hardening'),
       );
@@ -377,7 +388,7 @@ describe('Executable Database Migration and Production Seed Tests (v0.5.4)', () 
       const updateWkuRes = await request(app)
         .put('/api/work-time-types/WKU')
         .set('Authorization', `Bearer ${authToken}`)
-        .send({ name: 'Custom WKU Updated', requiresOrder: true, isAbsence: true });
+        .send({ name: 'Custom WKU Updated', requiresOrder: true, isAbsence: false });
       expect(updateWkuRes.status).toBe(200);
       expect(updateWkuRes.body.requiresOrder).toBe(true);
       expect(updateWkuRes.body.name).toBe('Custom WKU Updated');
@@ -414,7 +425,7 @@ describe('Executable Database Migration and Production Seed Tests (v0.5.4)', () 
       const createTempRes = await request(app)
         .post('/api/work-time-types')
         .set('Authorization', `Bearer ${authToken}`)
-        .send({ code: 'TMPDEL', name: 'Temporary Custom Type', requiresOrder: false, isAbsence: false });
+        .send({ code: 'TMPDEL', name: 'Temporary Custom Type', accountingCategory: 'OFF_ORDER_WORK' });
       expect(createTempRes.status).toBe(201);
       expect(createTempRes.body.isSystem).toBe(false);
 
@@ -431,7 +442,7 @@ describe('Executable Database Migration and Production Seed Tests (v0.5.4)', () 
 
       const backendRoot = resolve(__dirname, '..');
       const beforeRepeatWku = await prismaUpgrade.workTimeType.findUnique({ where: { code: 'WKU' } });
-      const beforeTypes = await prismaUpgrade.workTimeType.findMany();
+      const beforeTypes = await prismaUpgrade.workTimeType.findMany({ select: { code: true, name: true, requiresOrder: true, isAbsence: true, isSystem: true, updatedAt: true } });
 
       // Repeated execution of production deployment sequence
       execSync('npx prisma migrate deploy', {

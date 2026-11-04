@@ -42,9 +42,16 @@ model Employee {
   @@map("employees")
 }
 
+enum AccountingCategory {
+  ORDER_WORK
+  ABSENCE
+  OFF_ORDER_WORK
+}
+
 model WorkTimeType {
   code          String           @id @db.VarChar(10)
   name          String           @db.VarChar(100)
+  accountingCategory AccountingCategory? @map("accounting_category")
   requiresOrder Boolean          @default(false) @map("requires_order")
   isAbsence     Boolean          @default(false) @map("is_absence")
   isSystem      Boolean          @default(false) @map("is_system")

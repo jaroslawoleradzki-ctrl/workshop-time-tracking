@@ -1,3 +1,4 @@
+import { isAbsenceType, isOffOrderType } from '../utils/work-time-accounting';
 import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { Router, Response } from 'express';
@@ -281,7 +282,10 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     // missing value is accepted and stored as null. A valid historical value
     // supplied by an API client is still accepted; invalid values are rejected.
     let validatedShift: 'FIRST' | 'SECOND' | 'THIRD' | null = null;
-    if (type.isAbsence) {
+    if (orderId && (isAbsenceType(type) || isOffOrderType(type))) {
+      return res.status(400).json({ code: 'ORDER_NOT_ALLOWED', message: 'Ten rodzaj czasu nie może mieć zlecenia' });
+    }
+    if (isAbsenceType(type)) {
       if (workShift !== null && workShift !== undefined && workShift !== '') {
         return res.status(400).json({
           message: 'Wybór zmiany jest niedozwolony dla nieobecności.',
@@ -426,7 +430,10 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
     // missing value preserves the entry's existing shift; historical shift data
     // must not be silently destroyed. A valid value is applied; invalid rejected.
     let validatedShift: 'FIRST' | 'SECOND' | 'THIRD' | null = oldReport.workShift;
-    if (type.isAbsence) {
+    if (orderId && (isAbsenceType(type) || isOffOrderType(type))) {
+      return res.status(400).json({ code: 'ORDER_NOT_ALLOWED', message: 'Ten rodzaj czasu nie może mieć zlecenia' });
+    }
+    if (isAbsenceType(type)) {
       if (workShift !== null && workShift !== undefined && workShift !== '') {
         return res.status(400).json({
           message: 'Wybór zmiany jest niedozwolony dla nieobecności.',
