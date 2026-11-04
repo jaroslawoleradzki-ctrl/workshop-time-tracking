@@ -19,6 +19,7 @@ OK miało flagi false/false, więc raport pracownika widział godziny pracy bez 
 - Formularz ma wymagany wybór kategorii przy tworzeniu. Etykieta NULL to „Dotychczasowe zasady rozliczania”. Zmiana kategorii w edycji wymaga potwierdzenia ostrzeżenia o historii. Flagi zwracane przez backend nadal sterują istniejącym formularzem raportowania, kalendarzem i wyborem zlecenia.
 - Wspólny predykat `orderHoursWhere` jest używany przez raport zleceń, jego XLSX/JSON/CSV, bazę zleceń, eksport bazy i orderowe statystyki dashboardu. Nieobecności, NN i jawne OFF_ORDER_WORK nie zwiększają tych sum.
 - Kontrola rozliczenia dodaje osobne `offOrderHours` wyłącznie dla jawnej kategorii OFF_ORDER_WORK. Typy NULL / false / false (np. SZK) zachowują dotychczasową semantykę, w tym diagnostykę ujemnego wkładu. Nieobecność z historycznym order_id jest rozliczona tylko w absencjach. Nowy zapis/edycja takiej nieobecności ze zleceniem jest odrzucany; kopiowanie tworzy nowy rekord bez zlecenia, nie zmieniając źródła.
+- Dzienne sumy ewidencji w formularzu i ostrzeżenia limitów nadal sumują każdy zaraportowany rekord raz; nie są sumami pracy na zleceniach. Raport szczegółowy i kont zachowują surowe wiersze ewidencji.
 - Zakres procentu/odchylenia zleceń pozostaje narastający według reguł v0.5.7. Zadanie nie zmienia planowania zleceń ani kalendarza.
 
 ## Weryfikacja 16 godzin na kopii klienta
@@ -103,7 +104,7 @@ Odczyt GitHub API nie wykazał rulesetów. `ops/ci-runner/branch-ruleset.json` j
 
 ## CI execution results
 
-**Nie ma wyniku PASS GitHub Actions.** Workflow jest przygotowany do uruchomienia na PR, ale nie ma zarejestrowanego dedykowanego runnera z etykietą `wtt`. Wynik lokalnego QA nie jest wynikiem Actions. Aktualny stan workflow można sprawdzić w [GitHub Actions WTT CI](https://github.com/jaroslawoleradzki-ctrl/workshop-time-tracking/actions/workflows/ci.yml). Po rejestracji bezpiecznej instancji administrator musi odczytać rzeczywisty job i jego logi oraz potwierdzić PASS. Do tego czasu pełne kryterium zakończenia pozostaje niespełnione.
+**Nie ma wyniku PASS GitHub Actions.** Gałąź została wypchnięta po zatwierdzeniu commita przez właściciela; utworzono [draft PR #4](https://github.com/jaroslawoleradzki-ctrl/workshop-time-tracking/pull/4). Pierwszy rzeczywisty [run 41812403287](https://github.com/jaroslawoleradzki-ctrl/workshop-time-tracking/actions/runs/41812403287) dla commita `0e61c44` został zaobserwowany w stanie **queued**, bez conclusion i bez wykonanych testów CI. Kolejne push mogą anulować poprzednią kolejkę zgodnie z concurrency; wymagany jest zielony run dla najnowszego HEAD PR. Workflow jest przygotowany do uruchomienia na PR, ale nie ma zarejestrowanego dedykowanego runnera z etykietą `wtt`. Wynik lokalnego QA nie jest wynikiem Actions. Aktualny stan workflow można sprawdzić w [GitHub Actions WTT CI](https://github.com/jaroslawoleradzki-ctrl/workshop-time-tracking/actions/workflows/ci.yml). Po rejestracji bezpiecznej instancji administrator musi odczytać rzeczywisty job i jego logi oraz potwierdzić PASS. Do tego czasu pełne kryterium zakończenia pozostaje niespełnione.
 
 ## Remaining risks
 
