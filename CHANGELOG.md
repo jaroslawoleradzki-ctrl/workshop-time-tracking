@@ -3,6 +3,22 @@
 Wszystkie istotne zmiany w projekcie będą dokumentowane w tym pliku.
 Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.6.3] - 2026-11-04
+
+### Fixed
+- Nieobecności nie zwiększają godzin zleceń w raportach, eksportach, bazie zleceń ani dashboardzie.
+- Typ `OK` jest klasyfikowany jako nieobecność poprzez celowaną migrację słownika, bez zmiany historycznych wpisów czasu.
+- Raportowanie i rozliczenie czasu pracy uwzględniają kategorię rodzaju czasu, w tym pracę poza zleceniem i kontrolę sum.
+
+### Added
+- Jawne kategorie dla nowych rodzajów czasu pracy oraz walidacja ich flag.
+- Opcja `SKIP_DB_SEED=true` pomija seed przy uruchamianiu środowiska DEV; migracje i standardowy start API pozostają aktywne. Ustawienie jest skonfigurowane wyłącznie w `docker-compose.homelab-dev.yml`.
+- Wspólny skrypt QA, testy PostgreSQL i migracji oraz workflow CI dla dedykowanego runnera `ai-node-wtt`.
+
+### Changed
+- Kontrola jakości obejmuje przygotowanie świeżej, izolowanej bazy testowej, walidację migracji, dokumentacji i zależności.
+- Uzupełniono instrukcję runnera CI oraz ochrony gałęzi.
+
 ## [0.6.2] - 2026-10-05
 
 ### Changed
@@ -37,18 +53,6 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 - Po przejściu z Pomocy do zwykłej zakładki jej hash jest usuwany, a odświeżenie zachowuje wybraną zakładkę; poprawne głębokie odnośniki do Pomocy pozostają obsługiwane.
 - Walidacja dokumentacyjnych zrzutów wykrywa niezgodności rozdziałów, manifestu i plików, a seed dokumentacyjny zapisuje stałe identyfikatory i daty.
-
-## [Unreleased]
-
-### Fixed
-- OK jest klasyfikowane jako nieobecność poprzez celowaną migrację słownika, bez zmian historycznych wpisów czasu.
-- Nieobecności nie zwiększają godzin zleceń w raportach, eksportach, bazie zleceń i dashboardzie.
-- Entry point obsługuje `SKIP_DB_SEED=true`, pomijając seed przy zachowaniu migracji i standardowego startu API.
-
-### Added
-- Jawne kategorie nowych rodzajów czasu, walidacja flag oraz składnik pracy poza zleceniem w kontroli.
-- Wspólny skrypt QA, testy PostgreSQL i migracji, jawna kontrola zależności i workflow dla dedykowanego self-hosted runnera WTT; instrukcja administracyjna ochrony gałęzi.
-
 
 ## [0.5.9] - 2026-09-18
 
