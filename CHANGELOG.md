@@ -43,6 +43,7 @@ Format jest oparty na [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 - OK jest klasyfikowane jako nieobecność poprzez celowaną migrację słownika, bez zmian historycznych wpisów czasu.
 - Nieobecności nie zwiększają godzin zleceń w raportach, eksportach, bazie zleceń i dashboardzie.
+- Entry point obsługuje `SKIP_DB_SEED=true`, pomijając seed przy zachowaniu migracji i standardowego startu API.
 
 ### Added
 - Jawne kategorie nowych rodzajów czasu, walidacja flag oraz składnik pracy poza zleceniem w kontroli.
